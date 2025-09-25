@@ -24,7 +24,8 @@ def _ensure_settings():
 def _get_vector_store():
     if settings.vector_backend.lower() == "faiss":
         return get_faiss_vector_store()
-    return get_chroma_vector_store()
+    else:
+        return get_chroma_vector_store()
 
 def _load_or_create_index():
     global _index
@@ -32,17 +33,23 @@ def _load_or_create_index():
         return _index
 
     _ensure_settings()
-    vector_store = _get_vector_store()
-
     persist_dir = Path(settings.storage_dir) / "li_storage"
-    storage_context = StorageContext.from_defaults(
-        persist_dir=str(persist_dir),
-        vector_store=vector_store
-    )
-    try:
+
+    if persist_dir.exists():
+        # ✅ QUAN TRỌNG: truyền vector_store khi load để KHÔNG đọc SimpleVectorStore JSON
+        vector_store = _get_vector_store()
+        storage_context = StorageContext.from_defaults(
+            persist_dir=str(persist_dir),
+            vector_store=vector_store
+        )
         _index = load_index_from_storage(storage_context=storage_context)
-    except Exception:
+    else:
+        # Lần đầu: tạo vector_store rỗng, build index rỗng, persist skeleton
+        vector_store = _get_vector_store()
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
         _index = VectorStoreIndex.from_documents([], storage_context=storage_context)
+        storage_context.persist(persist_dir=str(persist_dir))
+
     return _index
 
 def _get_cross_encoder() -> Optional["CrossEncoder"]:

@@ -1,3 +1,4 @@
+from operator import index
 from typing import List
 from pathlib import Path
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext, Settings, Document
