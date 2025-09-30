@@ -1,16 +1,55 @@
-version: '3.9'
+version: '3.8'
+
 services:
-  rag:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    working_dir: /app/rag_service
+  opensearch:
+    image: opensearchproject/opensearch:2.12.0
+    container_name: vietnamese-rag-opensearch
+    environment:
+      # Cluster settings
+      - cluster.name=vietnamese-rag-cluster
+      - node.name=vietnamese-rag-node
+      - discovery.type=single-node
+      
+      # Security (disabled for development)
+      - plugins.security.disabled=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      
+      # Performance settings
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - bootstrap.memory_lock=true
+      
+      # Vietnamese plugin
+      - plugins.mandatory=analysis-icu
+      
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+        
     ports:
-      - "8000:8000"
-    env_file:
-      - ../rag_service/.env
+      - "9200:9200"  # REST API
+      - "9600:9600"  # Performance Analyzer
+      
     volumes:
-      - ../rag_service:/app/rag_service
-      - model_cache:/root/.cache/huggingface
+      - opensearch-data:/usr/share/opensearch/data
+      
+    networks:
+      - rag-network
+      
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
 volumes:
-  model_cache:
+  opensearch-data:
+    driver: local
+
+networks:
+  rag-network:
+    driver: bridge

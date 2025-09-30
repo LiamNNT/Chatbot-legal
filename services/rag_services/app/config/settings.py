@@ -32,6 +32,21 @@ class Settings(BaseSettings):
     # --- ChromaDB Specific Settings ---
     chroma_persist_dir: str = "./storage/chroma" # Directory for ChromaDB persistence
 
+    # --- OpenSearch Settings for BM25 ---
+    opensearch_host: str = "localhost"
+    opensearch_port: int = 9200
+    opensearch_index: str = "rag_documents"
+    opensearch_username: str = "admin"
+    opensearch_password: str = "admin"
+    opensearch_use_ssl: bool = False
+    opensearch_verify_certs: bool = False
+
+    # --- Hybrid Search Settings ---
+    use_hybrid_search: bool = True  # Enable hybrid (vector + BM25) search
+    bm25_weight: float = 0.5       # Weight for BM25 scores in fusion
+    vector_weight: float = 0.5      # Weight for vector scores in fusion
+    rrf_rank_constant: int = 60     # RRF rank constant (typically 60)
+
     # --- Logging Configuration ---
     log_level: str = "INFO"
 

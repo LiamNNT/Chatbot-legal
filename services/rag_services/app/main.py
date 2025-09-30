@@ -19,6 +19,7 @@ from app.api.v1.routes.health import router as health_router
 from app.api.v1.routes.embed import router as embed_router
 from app.api.v1.routes.search import router as search_router
 from app.api.v1.routes.admin import router as admin_router
+from app.api.v1.routes.opensearch import router as opensearch_router
 
 app = FastAPI(title="RAG Service", version="0.1.0")
 
@@ -40,6 +41,7 @@ app.include_router(health_router, prefix="/v1")
 app.include_router(embed_router, prefix="/v1")
 app.include_router(search_router, prefix="/v1")
 app.include_router(admin_router, prefix="/v1")
+app.include_router(opensearch_router, prefix="/v1")
 
 
 # --- Root Endpoint ---
