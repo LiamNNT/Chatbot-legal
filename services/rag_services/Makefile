@@ -45,12 +45,23 @@ install:
 start:
 	@echo "🚀 Starting Vietnamese Hybrid RAG services..."
 	@echo "🏗️  Architecture: Ports & Adapters (Clean Architecture)"
-	@echo "📂 Starting OpenSearch..."
-	cd docker && docker-compose up -d opensearch
-	@echo "⏳ Waiting for OpenSearch to be ready..."
-	@sleep 15
+	@echo "📂 Checking OpenSearch..."
+	@if curl -s http://localhost:9200/_cluster/health > /dev/null 2>&1; then \
+		echo "✅ OpenSearch already running"; \
+	else \
+		echo "📂 Starting OpenSearch..."; \
+		cd docker && docker-compose up -d opensearch || (echo "⚠️  Cleaning existing container..." && docker rm -f vietnamese-rag-opensearch 2>/dev/null && docker-compose up -d opensearch); \
+		echo "⏳ Waiting for OpenSearch to be ready..."; \
+		sleep 15; \
+	fi
 	@echo "🤖 Starting RAG service..."
-	python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+	@if pgrep -f "uvicorn app.main:app" > /dev/null; then \
+		echo "✅ RAG service already running"; \
+	else \
+		PYTHONPATH=. python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload & \
+		echo "⏳ Waiting for RAG service to start..."; \
+		sleep 5; \
+	fi
 	@echo "✅ All services started!"
 	@echo "🌐 RAG API: http://localhost:8000"
 	@echo "🔍 OpenSearch: http://localhost:9200"
@@ -85,7 +96,7 @@ status:
 # Development commands
 dev-run:
 	@echo "🛠️  Running in development mode..."
-	python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	PYTHONPATH=. python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 dev-shell:
 	@echo "🐚 Opening development shell..."
