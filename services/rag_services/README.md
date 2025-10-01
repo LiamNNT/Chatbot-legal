@@ -2,6 +2,8 @@
 
 Complete Hybrid Retrieval-Augmented Generation system combining **BM25 (OpenSearch) + Vector Search + Cross-Encoder Reranking** with Vietnamese language support.
 
+**🏗️ Architecture**: Clean **Ports & Adapters** (Hexagonal Architecture) for maximum maintainability and testability.
+
 ## 🎯 Features
 
 ### Core Search Capabilities
@@ -188,7 +190,7 @@ Filter documents by metadata fields:
 ```
 
 Available values:
-- **faculty**: `CNTT`, `KHTN`, `CTDA`
+- **faculty**: `CNTT`, `KHTN`, `KHMT`
 - **doc_type**: `regulation`, `syllabus`, `guide`
 - **year**: `2023`, `2024`
 - **subject**: Various academic subjects
@@ -293,24 +295,68 @@ make sample-data
 
 ## 🏗️ Architecture
 
+This system is built using **Clean Architecture (Ports & Adapters)** for maximum maintainability:
+
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   User Query    │───▶│  Hybrid Engine   │───▶│   Fused Results │
-│   (Vietnamese)  │    │                  │    │   (Ranked)      │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                               │
-                    ┌──────────┼──────────┐
-                    │          │          │
-            ┌───────▼──────┐   │   ┌─────▼────────┐
-            │ BM25 Search  │   │   │ Vector Search│
-            │ (OpenSearch) │   │   │ (Embeddings) │
-            └──────────────┘   │   └──────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │  Cross-Encoder      │
-                    │  Reranking          │
-                    │  (Optional)         │
-                    └─────────────────────┘
+┌─────────────────────┐
+│     API Layer       │ ← FastAPI REST endpoints
+│                     │
+└─────────┬───────────┘
+          │
+┌─────────▼───────────┐
+│   Adapters Layer    │ ← Framework integration
+│  • API Facade      │   (API ↔ Domain bridge)
+│  • Schema Mappers  │   (Request/Response conversion) 
+│  • Integration     │   (Sync/Async handling)
+└─────────┬───────────┘
+          │
+┌─────────▼───────────┐
+│   Core Domain       │ ← Pure business logic
+│  • Search Service  │   (No framework dependencies)
+│  • Domain Models   │   (SearchQuery, SearchResult)
+│  • Business Rules  │   (Fusion, Ranking, Filtering)
+└─────────┬───────────┘
+          │
+┌─────────▼───────────┐
+│   Ports Layer       │ ← Interfaces/Contracts
+│  • Repositories    │   (Data access abstractions)
+│  • Services        │   (External service interfaces)
+└─────────┬───────────┘
+          │
+┌─────────▼───────────┐
+│ Infrastructure      │ ← Technology implementations
+│  • LlamaIndex      │   (Vector search)
+│  • OpenSearch      │   (Keyword search)  
+│  • Cross-Encoder   │   (Reranking)
+│  • FAISS/Chroma    │   (Vector storage)
+└─────────────────────┘
+```
+
+### Key Benefits
+
+- **🎯 Framework Independence**: Core logic isolated from FastAPI, OpenSearch, etc.
+- **🧪 Easy Testing**: Mock dependencies through port interfaces
+- **🔧 High Maintainability**: Technology changes don't affect business logic  
+- **📈 Scalability**: Clear separation enables independent component scaling
+- **🔄 Extensibility**: Add new search modes or vector stores easily
+
+### Architecture Documentation
+
+- 📖 **[PORTS_AND_ADAPTERS.md](PORTS_AND_ADAPTERS.md)** - Complete architecture guide
+- 📋 **[REFACTORING_SUMMARY.md](REFACTORING_SUMMARY.md)** - Technical implementation details
+- ✅ **[MIGRATION_COMPLETE.md](MIGRATION_COMPLETE.md)** - Migration completion summary
+
+### Architecture Validation
+
+```bash
+# Test architecture compliance
+make test-migration
+
+# View architecture information  
+make arch-info
+
+# Run clean architecture demo
+make demo
 ```
 
 ## 🔍 Debugging

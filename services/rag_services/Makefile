@@ -1,14 +1,24 @@
-# Vietnamese Hybrid RAG System Makefile
-# Commands for managing the BM25 + Vector + Cross-Encoder system
+# Vietnamese Hybrid RAG System with Ports & Adapters Architecture
+# Commands for managing the Clean Architecture implementation
 
-.PHONY: help install start stop restart status clean test demo sample-data
+.PHONY: help install start stop restart status clean test demo sample-data architecture \
+        demo-clean test-arch migrate-check arch-info clean-arch start-legacy start-clean \
+        validate cleanup-project info docs opensearch-create opensearch-delete opensearch-reset \
+        opensearch-stats opensearch-health index-sample index-clear search-test perf-test \
+        clean-cache logs logs-opensearch dev-run dev-shell test-vietnamese test-components test-full
 
 # Default target
 help:
-	@echo "🚀 Vietnamese Hybrid RAG System"
-	@echo "================================="
+	@echo "🚀 Vietnamese Hybrid RAG System - Ports & Adapters Architecture"
+	@echo "================================================================"
 	@echo ""
-	@echo "Available commands:"
+	@echo "🏗️  Architecture Commands:"
+	@echo "  🎯 demo           - Demo Ports & Adapters architecture"
+	@echo "  🧪 test-arch      - Test architecture components"
+	@echo "  � arch-info      - Show architecture information"
+	@echo "  � test-migration - Run comprehensive migration tests"
+	@echo ""
+	@echo "📦 Service Management:"
 	@echo "  📦 install        - Install Python dependencies"
 	@echo "  🚀 start          - Start all services (OpenSearch + RAG)"
 	@echo "  ⏹️  stop           - Stop all services"
@@ -16,11 +26,12 @@ help:
 	@echo "  📊 status         - Check service status"
 	@echo "  🧹 clean          - Clean up containers and volumes"
 	@echo ""
+	@echo "🧪 Testing & Demo:"
 	@echo "  📚 sample-data    - Create sample Vietnamese documents"
 	@echo "  🧪 test-vietnamese - Test Vietnamese search capabilities"
-	@echo "  🎯 demo           - Run complete hybrid search demo"
 	@echo "  🔬 test-full      - Run complete test pipeline"
 	@echo ""
+	@echo "📂 Index Management:"
 	@echo "  📂 opensearch-*   - OpenSearch index management"
 	@echo "  ❓ help           - Show this help message"
 
@@ -33,15 +44,17 @@ install:
 # Service management
 start:
 	@echo "🚀 Starting Vietnamese Hybrid RAG services..."
+	@echo "🏗️  Architecture: Ports & Adapters (Clean Architecture)"
 	@echo "📂 Starting OpenSearch..."
 	cd docker && docker-compose up -d opensearch
 	@echo "⏳ Waiting for OpenSearch to be ready..."
 	@sleep 15
 	@echo "🤖 Starting RAG service..."
-	python app/main.py &
+	python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 	@echo "✅ All services started!"
 	@echo "🌐 RAG API: http://localhost:8000"
 	@echo "🔍 OpenSearch: http://localhost:9200"
+	@echo "🏛️  Architecture docs: http://localhost:8000/docs"
 
 start-dev:
 	@echo "🚀 Starting development environment..."
@@ -52,7 +65,7 @@ start-dev:
 
 stop:
 	@echo "⏹️  Stopping services..."
-	pkill -f "python app/main.py" || true
+	pkill -f "uvicorn app.main:app" || true
 	cd docker && docker-compose down
 	@echo "✅ All services stopped!"
 
@@ -72,7 +85,7 @@ status:
 # Development commands
 dev-run:
 	@echo "🛠️  Running in development mode..."
-	python app/main.py
+	python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 dev-shell:
 	@echo "🐚 Opening development shell..."
@@ -92,13 +105,45 @@ test-components:
 	@echo "🧪 Testing system components without Docker..."
 	python scripts/test_without_docker.py
 
-# Complete system demo
+# Architecture demo
 demo:
-	@echo "🚀 Running complete hybrid search demo..."
-	python scripts/demo_hybrid_search.py
+	@echo "🏗️  Running Ports & Adapters architecture demo..."
+	python scripts/demo_clean_architecture.py
+
+test-arch:
+	@echo "🧪 Testing architecture components..."
+	@echo "📦 Testing DI Container..."
+	python -c "from core.container import get_container; c = get_container(); print('✅ Container OK')"
+	@echo "🔍 Testing Core Domain..."
+	python -c "from core.domain.search_service import SearchService; print('✅ Domain Service OK')"
+	@echo "🔌 Testing Adapters..."
+	python -c "from adapters.api_facade import get_search_facade; print('✅ API Facade OK')"
+	@echo "✅ All architecture components working!"
+
+test-migration:
+	@echo "🧪 Running comprehensive migration tests..."
+	python scripts/validate_migration_readiness.py
+
+arch-info:
+	@echo "🏗️  Architecture Information"
+	@echo "============================="
+	@echo "📚 Documentation:"
+	@echo "   📖 Architecture Guide: PORTS_AND_ADAPTERS.md"
+	@echo "   📋 Refactoring Summary: REFACTORING_SUMMARY.md"
+	@echo ""
+	@echo "🏛️  Architecture Layers:"
+	@echo "   🎯 Core Domain: core/domain/"
+	@echo "   🔌 Ports: core/ports/"
+	@echo "   🏗️  Adapters: adapters/"
+	@echo "   🌐 API Layer: app/api/"
+	@echo ""
+	@echo "🔧 Configuration:"
+	@echo "   VECTOR_BACKEND=${VECTOR_BACKEND:-faiss}"
+	@echo "   USE_HYBRID_SEARCH=${USE_HYBRID_SEARCH:-true}"
+	@echo "   Architecture: Ports & Adapters (Clean Architecture)"
 
 # Full test pipeline
-test-full: sample-data test-vietnamese demo
+test-full: sample-data test-vietnamese demo test-migration
 	@echo "✅ Complete testing pipeline finished!"
 
 # OpenSearch management
@@ -148,6 +193,15 @@ clean-cache:
 	find . -type d -name "__pycache__" -delete
 	@echo "✅ Cache cleaned!"
 
+clean-arch:
+	@echo "🧹 Cleaning architecture artifacts..."
+	@echo "🗑️  Removing Python cache..."
+	find . -type f -name "*.pyc" -delete
+	find . -type d -name "__pycache__" -delete
+	@echo "🗑️  Resetting DI container..."
+	python -c "from core.container import reset_container; reset_container(); print('✅ Container reset')" 2>/dev/null || echo "ℹ️  Container not initialized"
+	@echo "✅ Architecture cleanup complete!"
+
 # Logs
 logs:
 	@echo "📋 Showing service logs..."
@@ -169,8 +223,44 @@ info:
 	@echo "🐍 Python: $(shell python --version)"
 	@echo "🐳 Docker: $(shell docker --version 2>/dev/null || echo 'Not installed')"
 	@echo "📁 Project: $(shell pwd)"
-	@echo "📦 Dependencies:"
-	@pip list | grep -E "(opensearch|faiss|sentence|transformers)" || echo "   No key dependencies found"
+	@echo "🏗️  Architecture: Ports & Adapters (Clean Architecture)"
+	@echo "📦 Key Dependencies:"
+	@pip list | grep -E "(opensearch|faiss|sentence|transformers|llama-index)" || echo "   No key dependencies found"
+	@echo ""
+	@echo "📂 Project Structure:"
+	@echo "   🎯 Core: $(shell find core -name "*.py" 2>/dev/null | wc -l) files"
+	@echo "   🔌 Adapters: $(shell find adapters -name "*.py" 2>/dev/null | wc -l) files"
+	@echo "   🌐 API: $(shell find app -name "*.py" 2>/dev/null | wc -l) files"
+	@echo "   📝 Scripts: $(shell find scripts -name "*.py" 2>/dev/null | wc -l) files"
+
+# Validation and cleanup
+validate:
+	@echo "✅ Validating project structure..."
+	@echo "📂 Checking core architecture files..."
+	@test -f core/container.py && echo "   ✅ DI Container: OK" || echo "   ❌ DI Container: Missing"
+	@test -f core/domain/search_service.py && echo "   ✅ Domain Service: OK" || echo "   ❌ Domain Service: Missing"
+	@test -f core/ports/repositories.py && echo "   ✅ Repository Ports: OK" || echo "   ❌ Repository Ports: Missing"
+	@echo "🔌 Checking adapter implementations..."
+	@test -f adapters/api_facade.py && echo "   ✅ API Facade: OK" || echo "   ❌ API Facade: Missing"
+	@test -f adapters/llamaindex_vector_adapter.py && echo "   ✅ Vector Adapter: OK" || echo "   ❌ Vector Adapter: Missing"
+	@echo "📚 Checking documentation..."
+	@test -f PORTS_AND_ADAPTERS.md && echo "   ✅ Architecture Docs: OK" || echo "   ❌ Architecture Docs: Missing"
+	@test -f REFACTORING_SUMMARY.md && echo "   ✅ Summary Docs: OK" || echo "   ❌ Summary Docs: Missing"
+	@echo "✅ Validation complete!"
+
+cleanup-project:
+	@echo "🧹 Cleaning up project files..."
+	@echo "🗑️  Removing Python cache..."
+	find . -type f -name "*.pyc" -delete
+	find . -type d -name "__pycache__" -delete
+	@echo "🗑️  Removing temporary files..."
+	find . -name "*.tmp" -delete 2>/dev/null || true
+	find . -name "*.log" -delete 2>/dev/null || true
+	find . -name "*~" -delete 2>/dev/null || true
+	@echo "🗑️  Removing OS specific files..."
+	find . -name ".DS_Store" -delete 2>/dev/null || true
+	find . -name "Thumbs.db" -delete 2>/dev/null || true
+	@echo "✅ Project cleanup complete!"
 
 # Documentation
 docs:
@@ -181,8 +271,18 @@ docs:
 	@echo "📊 Health Check: http://localhost:8000/v1/health"
 	@echo "🧪 Test endpoint: make search-test"
 	@echo ""
-	@echo "🚀 Quick Start:"
+	@echo "🏗️  Architecture Documentation:"
+	@echo "  📖 Ports & Adapters Guide: PORTS_AND_ADAPTERS.md"
+	@echo "  📋 Refactoring Summary: REFACTORING_SUMMARY.md"
+	@echo "  🎯 Demo Script: scripts/demo_clean_architecture.py"
+	@echo ""
+	@echo "🚀 Quick Start (Clean Architecture):"
 	@echo "  1. make install"
-	@echo "  2. make start"
+	@echo "  2. make start-clean"
 	@echo "  3. make sample-data"
-	@echo "  4. make demo"
+	@echo "  4. make demo-clean"
+	@echo ""
+	@echo "🔧 Environment Variables:"
+	@echo "  USE_CLEAN_ARCHITECTURE=true|false (default: true)"
+	@echo "  VECTOR_BACKEND=faiss|chroma (default: faiss)"
+	@echo "  USE_HYBRID_SEARCH=true|false (default: true)"
