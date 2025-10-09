@@ -62,8 +62,10 @@ class SearchService:
             
             # Apply reranking if requested and available
             if query.use_rerank and self.reranking_service and self.reranking_service.is_available():
-                results = await self.reranking_service.rerank(query.text, results)
-                logger.info(f"Applied reranking to {len(results)} results")
+                # Use more candidates for reranking to improve accuracy
+                rerank_top_k = min(len(results), query.top_k * 2)  # Get 2x more candidates for reranking
+                results = await self.reranking_service.rerank(query.text, results, top_k=rerank_top_k)
+                logger.info(f"Applied reranking to {len(results)} results (top_k={rerank_top_k})")
             
             # Apply highlighting if requested and available
             if query.highlight_matches and self.highlighting_service:

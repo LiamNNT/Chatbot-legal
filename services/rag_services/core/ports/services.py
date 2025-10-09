@@ -5,7 +5,7 @@
 # These abstractions decouple the core domain from specific service implementations.
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from ..domain.models import SearchResult, DocumentChunk
 
 
@@ -27,13 +27,51 @@ class RerankingService(ABC):
     """Port for reranking/cross-encoder operations."""
     
     @abstractmethod
-    async def rerank(self, query: str, results: List[SearchResult]) -> List[SearchResult]:
-        """Rerank search results based on query-result relevance."""
+    async def rerank(
+        self, 
+        query: str, 
+        results: List[SearchResult],
+        top_k: Optional[int] = None
+    ) -> List[SearchResult]:
+        """
+        Rerank search results based on query-result relevance.
+        
+        Args:
+            query: The search query
+            results: List of search results to rerank
+            top_k: Number of top results to return after reranking
+            
+        Returns:
+            List of reranked search results with updated scores and metadata
+        """
+        pass
+    
+    @abstractmethod
+    async def compute_relevance_scores(
+        self, 
+        query: str, 
+        texts: List[str]
+    ) -> List[float]:
+        """
+        Compute relevance scores between query and texts.
+        
+        Args:
+            query: The search query
+            texts: List of texts to score
+            
+        Returns:
+            List of relevance scores
+        """
         pass
     
     @abstractmethod
     def is_available(self) -> bool:
         """Check if the reranking service is available."""
+        pass
+    
+    @abstractmethod
+    def get_model_info(self) -> dict:
+        """Get information about the reranking model."""
         pass
 
 

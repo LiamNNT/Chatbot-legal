@@ -74,6 +74,17 @@ class SearchQuery:
 
 
 @dataclass
+class RerankingMetadata:
+    """Metadata for reranking operations."""
+    original_rank: int
+    original_score: float
+    rerank_score: float
+    confidence: Optional[float] = None
+    model_name: Optional[str] = None
+    processing_time_ms: Optional[int] = None
+
+
+@dataclass
 class SearchResult:
     """Represents a single search result from the domain perspective."""
     text: str
@@ -88,6 +99,7 @@ class SearchResult:
     bm25_score: Optional[float] = None
     vector_score: Optional[float] = None
     rerank_score: Optional[float] = None
+    reranking_metadata: Optional[RerankingMetadata] = None
 
 
 @dataclass

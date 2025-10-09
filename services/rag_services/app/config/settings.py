@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # --- AI Model Configuration ---
     emb_model: str = "intfloat/multilingual-e5-base" # The embedding model to use
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Optional reranker model
+    
+    # --- Reranking Configuration ---
+    use_reranking: bool = True  # Enable reranking with cross-encoder
+    rerank_batch_size: int = 16  # Batch size for reranking operations
+    rerank_max_length: int = 512  # Maximum input length for reranker
+    rerank_top_k: int = 20  # Number of initial candidates to retrieve for reranking
+    vietnamese_rerank_model: str = ""  # Optional Vietnamese-specific model
 
     # --- ChromaDB Specific Settings ---
     chroma_persist_dir: str = "./storage/chroma" # Directory for ChromaDB persistence

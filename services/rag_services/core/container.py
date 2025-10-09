@@ -14,7 +14,8 @@ from core.ports.services import RerankingService, FusionService
 
 from adapters.llamaindex_vector_adapter import LlamaIndexVectorAdapter
 from adapters.opensearch_keyword_adapter import OpenSearchKeywordAdapter
-from adapters.service_adapters import CrossEncoderRerankingAdapter, HybridFusionAdapter
+from adapters.service_adapters import HybridFusionAdapter
+from adapters.cross_encoder_reranker import create_reranking_service
 
 from app.config.settings import settings
 
@@ -69,13 +70,25 @@ class DIContainer:
     
     def get_reranking_service(self) -> Optional[RerankingService]:
         """Get or create the reranking service."""
-        if not settings.rerank_model:
+        if not settings.use_reranking or not settings.rerank_model:
             return None
         
         if self._reranking_service is None:
             try:
-                self._reranking_service = CrossEncoderRerankingAdapter(settings.rerank_model)
-                logger.info(f"Created CrossEncoder reranking service: {settings.rerank_model}")
+                # Use our new enhanced cross-encoder reranking service
+                self._reranking_service = create_reranking_service(
+                    model_name=settings.rerank_model,
+                    multilingual=True,
+                    vietnamese_model_name=settings.vietnamese_rerank_model if settings.vietnamese_rerank_model else None,
+                    batch_size=settings.rerank_batch_size,
+                    max_length=settings.rerank_max_length
+                )
+                logger.info(f"Created enhanced CrossEncoder reranking service: {settings.rerank_model}")
+                
+                # Log reranking configuration
+                model_info = self._reranking_service.get_model_info()
+                logger.info(f"Reranking service configuration: {model_info}")
+                
             except Exception as e:
                 logger.warning(f"Could not create reranking service: {e}")
                 return None
