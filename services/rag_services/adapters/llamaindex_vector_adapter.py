@@ -15,6 +15,7 @@ from core.ports.repositories import VectorSearchRepository
 from core.domain.models import DocumentChunk, SearchQuery, SearchResult, DocumentMetadata, SearchMode
 from store.vector.faiss_store import get_faiss_vector_store
 from store.vector.chroma_store import get_chroma_vector_store
+from .mappers.llamaindex_mapper import LlamaIndexMapper
 
 logger = logging.getLogger(__name__)
 
@@ -81,33 +82,8 @@ class LlamaIndexVectorAdapter(VectorSearchRepository):
         try:
             index = self._get_index()
             
-            # Convert domain chunks to LlamaIndex documents
-            from llama_index.core import Document as LlamaDocument
-            
-            documents = []
-            for chunk in chunks:
-                # Convert domain metadata to LlamaIndex format
-                metadata = {
-                    "doc_id": chunk.metadata.doc_id,
-                    "chunk_id": chunk.metadata.chunk_id or "",
-                    "title": chunk.metadata.title or "",
-                    "page": chunk.metadata.page,
-                    "doc_type": chunk.metadata.doc_type,
-                    "faculty": chunk.metadata.faculty,
-                    "year": chunk.metadata.year,
-                    "subject": chunk.metadata.subject,
-                    "language": chunk.metadata.language.value if chunk.metadata.language else "vi",
-                    "section": chunk.metadata.section,
-                    "subsection": chunk.metadata.subsection,
-                    "chunk_index": chunk.chunk_index,
-                    **chunk.metadata.extra
-                }
-                
-                doc = LlamaDocument(
-                    text=chunk.text,
-                    metadata={k: v for k, v in metadata.items() if v is not None}
-                )
-                documents.append(doc)
+            # Convert domain chunks to LlamaIndex documents using mapper
+            documents = LlamaIndexMapper.domain_chunks_to_llama_documents(chunks)
             
             # Add documents to index
             for doc in documents:
