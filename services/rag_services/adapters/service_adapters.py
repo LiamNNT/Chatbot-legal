@@ -10,7 +10,7 @@ from sentence_transformers import CrossEncoder
 
 from core.ports.services import RerankingService, FusionService
 from core.domain.models import SearchResult
-from retrieval.fusion import HybridFusionEngine
+from core.domain.fusion_service import FusionAlgorithms
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +90,18 @@ class HybridFusionAdapter(FusionService):
     """
     Adapter for search result fusion using RRF (Reciprocal Rank Fusion).
     
-    This adapter wraps the existing HybridFusionEngine to implement
-    the FusionService port from the core domain.
+    This adapter uses pure domain logic from FusionAlgorithms to implement
+    the FusionService port, following clean architecture principles.
     """
     
     def __init__(self, rrf_constant: int = 60):
-        self.fusion_engine = HybridFusionEngine(rrf_rank_constant=rrf_constant)
+        """
+        Initialize the fusion adapter.
+        
+        Args:
+            rrf_constant: RRF constant k (typically 60)
+        """
+        self.rrf_constant = rrf_constant
     
     async def fuse_results(
         self,
@@ -105,110 +111,42 @@ class HybridFusionAdapter(FusionService):
         keyword_weight: float = 0.5,
         rrf_constant: int = 60
     ) -> List[SearchResult]:
-        """Fuse results from different search methods using RRF."""
+        """
+        Fuse results from different search methods using RRF.
+        
+        This adapter delegates to pure domain logic in FusionAlgorithms,
+        maintaining clean separation between domain and infrastructure.
+        
+        Args:
+            vector_results: Results from vector search
+            keyword_results: Results from keyword/BM25 search
+            vector_weight: Weight for vector results (default 0.5)
+            keyword_weight: Weight for keyword results (default 0.5)
+            rrf_constant: RRF constant k (default from initialization)
+            
+        Returns:
+            List of fused search results
+        """
         try:
-            # Convert domain results to the format expected by HybridFusionEngine
-            from retrieval.fusion import SearchResult as FusionSearchResult, create_search_result
-            
-            # Convert vector results
-            vector_fusion_results = []
-            for result in vector_results:
-                fusion_result = create_search_result(
-                    doc_id=result.metadata.doc_id,
-                    chunk_id=result.metadata.chunk_id or "",
-                    text=result.text,
-                    metadata=self._convert_metadata_to_dict(result.metadata),
-                    score=result.score,
-                    source="vector"
-                )
-                vector_fusion_results.append(fusion_result)
-            
-            # Convert keyword results
-            keyword_fusion_results = []
-            for result in keyword_results:
-                fusion_result = create_search_result(
-                    doc_id=result.metadata.doc_id,
-                    chunk_id=result.metadata.chunk_id or "",
-                    text=result.text,
-                    metadata=self._convert_metadata_to_dict(result.metadata),
-                    score=result.score,
-                    source="bm25"
-                )
-                keyword_fusion_results.append(fusion_result)
-            
-            # Perform fusion
-            fused_fusion_results = self.fusion_engine.reciprocal_rank_fusion(
-                bm25_results=keyword_fusion_results,
-                vector_results=vector_fusion_results,
-                bm25_weight=keyword_weight,
-                vector_weight=vector_weight
+            # Use pure domain logic - no conversion needed!
+            fused_results = FusionAlgorithms.reciprocal_rank_fusion(
+                vector_results=vector_results,
+                keyword_results=keyword_results,
+                vector_weight=vector_weight,
+                keyword_weight=keyword_weight,
+                rrf_constant=rrf_constant or self.rrf_constant
             )
             
-            # Convert back to domain format
-            fused_results = []
-            for fusion_result in fused_fusion_results:
-                domain_result = self._convert_fusion_result_to_domain(fusion_result)
-                fused_results.append(domain_result)
+            logger.info(
+                f"Fused {len(vector_results)} vector + {len(keyword_results)} keyword "
+                f"results into {len(fused_results)} results using domain RRF algorithm"
+            )
             
-            logger.info(f"Fused {len(vector_results)} vector + {len(keyword_results)} keyword results into {len(fused_results)} results")
             return fused_results
             
         except Exception as e:
             logger.error(f"Error in result fusion: {e}")
             # Return combined results as fallback
-            return (vector_results + keyword_results)[:len(vector_results)]
-    
-    def _convert_metadata_to_dict(self, metadata) -> dict:
-        """Convert domain metadata to dictionary format."""
-        result = {
-            "doc_id": metadata.doc_id,
-            "chunk_id": metadata.chunk_id,
-            "title": metadata.title,
-            "page": metadata.page,
-            "doc_type": metadata.doc_type,
-            "faculty": metadata.faculty,
-            "year": metadata.year,
-            "subject": metadata.subject,
-            "language": metadata.language.value if metadata.language else "vi",
-            "section": metadata.section,
-            "subsection": metadata.subsection,
-        }
-        result.update(metadata.extra)
-        return {k: v for k, v in result.items() if v is not None}
-    
-    def _convert_fusion_result_to_domain(self, fusion_result) -> SearchResult:
-        """Convert fusion result back to domain format."""
-        from core.domain.models import DocumentMetadata, DocumentLanguage
-        
-        metadata_dict = fusion_result.metadata or {}
-        
-        language = DocumentLanguage.VIETNAMESE
-        if metadata_dict.get("language") == "en":
-            language = DocumentLanguage.ENGLISH
-        
-        metadata = DocumentMetadata(
-            doc_id=fusion_result.doc_id,
-            chunk_id=fusion_result.chunk_id,
-            title=metadata_dict.get("title"),
-            page=metadata_dict.get("page"),
-            doc_type=metadata_dict.get("doc_type"),
-            faculty=metadata_dict.get("faculty"),
-            year=metadata_dict.get("year"),
-            subject=metadata_dict.get("subject"),
-            language=language,
-            section=metadata_dict.get("section"),
-            subsection=metadata_dict.get("subsection"),
-            extra={k: v for k, v in metadata_dict.items() 
-                  if k not in ["doc_id", "chunk_id", "title", "page", "doc_type",
-                               "faculty", "year", "subject", "language", "section", "subsection"]}
-        )
-        
-        return SearchResult(
-            text=fusion_result.text,
-            metadata=metadata,
-            score=fusion_result.score,
-            source_type="fused",
-            rank=fusion_result.rank,
-            bm25_score=getattr(fusion_result, 'original_bm25_score', None),
-            vector_score=getattr(fusion_result, 'original_vector_score', None)
-        )
+            combined = vector_results + keyword_results
+            combined.sort(key=lambda x: x.score, reverse=True)
+            return combined[:max(len(vector_results), len(keyword_results))]

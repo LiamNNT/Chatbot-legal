@@ -22,7 +22,12 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # --- Vector Store Configuration ---
-    vector_backend: str = "faiss"  # Can be 'faiss' or 'chroma'
+    # Weaviate settings
+    weaviate_url: str = "http://localhost:8080"  # Weaviate server URL
+    weaviate_api_key: str = ""  # Optional API key for authentication
+    weaviate_grpc_port: int = 50051  # gRPC port for Weaviate
+    
+    # Legacy settings (deprecated)
     storage_dir: str = "./storage" # Directory to store indices and other data
 
     # --- AI Model Configuration ---

@@ -1,3 +1,10 @@
+# DEPRECATED: This file is no longer used.
+# 
+# The system has been migrated to Weaviate vector database.
+# Please use store/vector/weaviate_store.py instead.
+#
+# See WEAVIATE_MIGRATION.md for migration details.
+
 # store/vector/faiss_store.py
 #
 # Description:

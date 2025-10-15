@@ -1,3 +1,10 @@
+# DEPRECATED: This adapter is no longer used.
+# 
+# The system has been migrated to Weaviate vector database.
+# Please use adapters/weaviate_vector_adapter.py instead.
+#
+# See WEAVIATE_MIGRATION.md for migration details.
+
 # adapters/llamaindex_vector_adapter.py
 #
 # Description:
