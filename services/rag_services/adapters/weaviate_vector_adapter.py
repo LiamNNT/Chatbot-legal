@@ -245,8 +245,8 @@ class WeaviateVectorAdapter(VectorSearchRepository):
                 if filters:
                     search_builder = search_builder.where(filters)
             
-            # Execute search
-            response = search_builder.do()
+            # Execute search (v4 API - no .do() needed)
+            response = search_builder
             
             # Convert results to domain format
             results = []

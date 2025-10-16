@@ -22,13 +22,15 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # --- Vector Store Configuration ---
+    vector_backend: str = "weaviate"  # Vector store backend: faiss, chroma, or weaviate
+    storage_dir: str = "./storage"  # Directory to store indices and other data (for faiss/chroma)
+    
     # Weaviate settings
     weaviate_url: str = "http://localhost:8080"  # Weaviate server URL
     weaviate_api_key: str = ""  # Optional API key for authentication
+    weaviate_class_name: str = "ChatbotUit"  # Weaviate class name (PascalCase)
+    weaviate_use_cloud: bool = False  # true = cloud, false = local
     weaviate_grpc_port: int = 50051  # gRPC port for Weaviate
-    
-    # Legacy settings (deprecated)
-    storage_dir: str = "./storage" # Directory to store indices and other data
 
     # --- AI Model Configuration ---
     emb_model: str = "intfloat/multilingual-e5-base" # The embedding model to use

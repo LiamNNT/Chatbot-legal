@@ -33,23 +33,32 @@ def get_weaviate_client(
         Connected Weaviate client
     """
     try:
+        # Parse URL to extract host
+        host = url.replace("http://", "").replace("https://", "")
+        # Remove port if it's in the host
+        if ":" in host:
+            host = host.split(":")[0]
+        
+        # Determine if we're using HTTPS
+        use_https = url.startswith("https://")
+        
         # Create client configuration
-        if api_key:
+        if api_key and api_key.strip():  # Check for non-empty API key
             auth_config = Auth.api_key(api_key)
             client = weaviate.connect_to_custom(
-                http_host=url.replace("http://", "").replace("https://", ""),
+                http_host=host,
                 http_port=8080,
-                http_secure=False,
-                grpc_host=url.replace("http://", "").replace("https://", ""),
+                http_secure=use_https,
+                grpc_host=host,
                 grpc_port=50051,
-                grpc_secure=False,
+                grpc_secure=use_https,
                 auth_credentials=auth_config,
                 skip_init_checks=False
             )
         else:
             # Connect without authentication (for self-hosted development)
             client = weaviate.connect_to_local(
-                host=url.replace("http://", "").replace("https://", ""),
+                host=host,
                 port=8080,
                 grpc_port=50051,
                 skip_init_checks=False
