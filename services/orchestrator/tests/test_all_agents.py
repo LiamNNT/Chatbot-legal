@@ -6,6 +6,12 @@ Comprehensive test for all agents with free models.
 import asyncio
 import sys
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file first
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(env_path)
 
 # Add the app directory to Python path
 sys.path.append('/home/kien/Kien/study/SE363.Q11/Chatbot-UIT/services/orchestrator')

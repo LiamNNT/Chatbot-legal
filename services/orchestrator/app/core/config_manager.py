@@ -55,9 +55,10 @@ class ConfigurationManager:
             config_path: Path to the configuration file. If None, uses default.
         """
         if config_path is None:
-            # Default to config directory relative to this file
+            # Default to config directory relative to project root
+            # app/core/config_manager.py -> ../../config/agents_config.yaml
             current_dir = Path(__file__).parent
-            config_path = current_dir / "agents_config.yaml"
+            config_path = current_dir.parent.parent / "config" / "agents_config.yaml"
         
         self.config_path = Path(config_path)
         self._config_data: Optional[Dict[str, Any]] = None
