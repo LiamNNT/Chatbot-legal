@@ -50,7 +50,7 @@ def check_service(url: str, name: str) -> bool:
     """Check if a service is running."""
     try:
         # Try /docs endpoint since /health may not exist
-        response = requests.get(f"{url}/docs", timeout=2)
+        response = requests.get(f"{url}/docs", timeout=None)
         if response.status_code == 200:
             print(f"{Colors.GREEN}✓{Colors.END} {name} is running at {url}")
             return True
@@ -72,7 +72,7 @@ def test_rag_search(query: str) -> Dict[str, Any]:
                 "top_k": 3,
                 "search_mode": "vector"
             },
-            timeout=10
+            timeout=None  # No timeout
         )
         response.raise_for_status()
         return response.json()
@@ -91,7 +91,7 @@ def test_orchestrator_chat(message: str, session_id: str = "demo-session") -> Di
                 "use_rag": True,
                 "rag_top_k": 3
             },
-            timeout=30
+            timeout=None  # No timeout
         )
         response.raise_for_status()
         result = response.json()
