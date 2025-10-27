@@ -6,6 +6,7 @@
 
 import json
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from opensearchpy import OpenSearch
 from opensearchpy.exceptions import NotFoundError, RequestError
@@ -239,8 +240,8 @@ class OpenSearchClient:
                 "language": language,
                 "metadata": self._enrich_metadata(metadata or {}),
                 "char_spans": char_spans or [],
-                "created_at": "now",
-                "updated_at": "now"
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.utcnow().isoformat() + "Z"
             }
             
             # Use doc_id + chunk_id as the unique document ID
@@ -315,6 +316,10 @@ class OpenSearchClient:
             actions = []
             for doc in documents:
                 elasticsearch_doc_id = f"{doc['doc_id']}_{doc['chunk_id']}"
+                
+                # Extract metadata fields
+                metadata = doc.get("metadata", {})
+                
                 action = {
                     "_index": self.index_name,
                     "_id": elasticsearch_doc_id,
@@ -322,8 +327,16 @@ class OpenSearchClient:
                         "doc_id": doc["doc_id"],
                         "chunk_id": doc["chunk_id"],
                         "text": doc["text"],
-                        "metadata": doc.get("metadata", {}),
-                        "created_at": "now"
+                        "title": doc.get("title", metadata.get("title", "")),
+                        "doc_type": doc.get("doc_type", metadata.get("doc_type", "document")),
+                        "faculty": doc.get("faculty", metadata.get("faculty", "general")),
+                        "year": doc.get("year", metadata.get("year")),
+                        "subject": doc.get("subject", metadata.get("subject", "")),
+                        "language": doc.get("language", metadata.get("language", "vi")),
+                        "metadata": self._enrich_metadata(metadata),
+                        "char_spans": doc.get("char_spans", []),
+                        "created_at": datetime.utcnow().isoformat() + "Z",
+                        "updated_at": datetime.utcnow().isoformat() + "Z"
                     }
                 }
                 actions.append(action)
@@ -337,8 +350,8 @@ class OpenSearchClient:
                 request_timeout=60
             )
             
-            logger.info(f"Bulk indexed: {len(success)} successful, {len(failed) if isinstance(failed, list) else 0} failed")
-            return len(success), len(failed) if isinstance(failed, list) else 0
+            logger.info(f"Bulk indexed: {success} successful, {len(failed) if isinstance(failed, list) else failed} failed")
+            return success, len(failed) if isinstance(failed, list) else failed
             
         except Exception as e:
             logger.error(f"Error in bulk indexing: {e}")
