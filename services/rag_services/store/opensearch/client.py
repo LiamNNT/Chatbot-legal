@@ -395,20 +395,17 @@ class OpenSearchClient:
                                                 "query": query,
                                                 "fields": [
                                                     "text^1.0", 
-                                                    "title^1.5",
-                                                    "text.standard^0.8"
+                                                    "title^1.5"
                                                 ],
                                                 "type": "best_fields",
-                                                "fuzziness": "AUTO",
-                                                "analyzer": "vietnamese_search_analyzer"
+                                                "fuzziness": "AUTO"
                                             }
                                         },
                                         {
                                             "match_phrase": {
                                                 "text": {
                                                     "query": query,
-                                                    "boost": 1.2,
-                                                    "analyzer": "vietnamese_search_analyzer"
+                                                    "boost": 1.2
                                                 }
                                             }
                                         }

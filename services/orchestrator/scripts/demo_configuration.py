@@ -128,7 +128,7 @@ async def demo_agent_factory():
         mock_port,
         temperature=0.8,  # More creative
         max_tokens=1500,  # More verbose
-        model="anthropic/claude-3.5-haiku:beta"  # Different model
+        model="google/gemma-3-27b-it:free"  # Different model
     )
     
     print(f"   ✅ Custom planner created:")

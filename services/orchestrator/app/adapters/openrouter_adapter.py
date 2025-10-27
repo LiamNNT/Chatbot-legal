@@ -36,7 +36,7 @@ class OpenRouterAdapter(AgentPort):
         self,
         api_key: str,
         base_url: str = "https://openrouter.ai/api/v1",
-        default_model: str = "openai/gpt-3.5-turbo",
+        default_model: str = "google/gemma-3-27b-it:free",
         timeout: Optional[int] = 30,
         max_retries: int = 3
     ):
@@ -305,15 +305,8 @@ class OpenRouterAdapter(AgentPort):
         if self._supported_models is None:
             # Common OpenRouter models - in production, fetch from API
             self._supported_models = [
-                "openai/gpt-4",
-                "openai/gpt-4-turbo",
-                "openai/gpt-3.5-turbo",
-                "anthropic/claude-3-opus",
-                "anthropic/claude-3-sonnet",
-                "anthropic/claude-3-haiku",
-                "google/gemini-pro",
-                "meta-llama/llama-2-70b-chat",
-                "mistralai/mixtral-8x7b-instruct"
+                "google/gemma-3-27b-it:free",
+
             ]
         
         return self._supported_models.copy()
