@@ -17,7 +17,7 @@ DOCUMENT_COLLECTION = "VietnameseDocument"
 
 
 def get_weaviate_client(
-    url: str = "http://localhost:8080",
+    url: str = "http://localhost:8090",
     api_key: Optional[str] = None,
     timeout: int = 30
 ) -> weaviate.WeaviateClient:
@@ -33,11 +33,15 @@ def get_weaviate_client(
         Connected Weaviate client
     """
     try:
-        # Parse URL to extract host
+        # Parse URL to extract host and port
         host = url.replace("http://", "").replace("https://", "")
-        # Remove port if it's in the host
+        port = 8090  # Default port
+        
+        # Extract port if it's in the URL
         if ":" in host:
-            host = host.split(":")[0]
+            host_parts = host.split(":")
+            host = host_parts[0]
+            port = int(host_parts[1])
         
         # Determine if we're using HTTPS
         use_https = url.startswith("https://")
@@ -47,7 +51,7 @@ def get_weaviate_client(
             auth_config = Auth.api_key(api_key)
             client = weaviate.connect_to_custom(
                 http_host=host,
-                http_port=8080,
+                http_port=port,
                 http_secure=use_https,
                 grpc_host=host,
                 grpc_port=50051,
@@ -59,7 +63,7 @@ def get_weaviate_client(
             # Connect without authentication (for self-hosted development)
             client = weaviate.connect_to_local(
                 host=host,
-                port=8080,
+                port=port,
                 grpc_port=50051,
                 skip_init_checks=False
             )

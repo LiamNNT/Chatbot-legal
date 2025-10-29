@@ -6,8 +6,8 @@ services:
     container_name: vietnamese-rag-weaviate
     restart: on-failure:0
     ports:
-      - "8080:8080"  # Weaviate gRPC endpoint
-      - "50051:50051"  # Weaviate HTTP endpoint
+      - "8090:8080"  # Weaviate HTTP endpoint (changed from 8080 to avoid conflict)
+      - "50051:50051"  # Weaviate gRPC endpoint
     environment:
       # Query defaults
       QUERY_DEFAULTS_LIMIT: 25
@@ -22,8 +22,8 @@ services:
       # Default vectorizer module - none, we'll use custom embeddings
       DEFAULT_VECTORIZER_MODULE: 'none'
       
-      # Enable modules
-      ENABLE_MODULES: 'text2vec-transformers,backup-filesystem'
+      # Disable all modules - use minimal setup
+      # ENABLE_MODULES: ''
       
       # Cluster configuration
       CLUSTER_HOSTNAME: 'node1'

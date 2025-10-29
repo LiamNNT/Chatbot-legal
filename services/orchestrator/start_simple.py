@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Load .env file properly
 env_file = Path(__file__).parent / ".env"
 if env_file.exists():
-    with open(env_file) as f:
+    with open(env_file, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:
