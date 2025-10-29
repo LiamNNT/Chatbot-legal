@@ -7,6 +7,7 @@ and high-quality responses through a multi-step pipeline.
 
 import asyncio
 import time
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -17,6 +18,8 @@ from ..agents.base import (
 from ..ports.agent_ports import AgentPort, RAGServicePort
 from ..core.domain import OrchestrationRequest, OrchestrationResponse, RAGContext
 from ..core.agent_factory import AgentFactory
+
+logger = logging.getLogger(__name__)
 
 
 class MultiAgentOrchestrator:
@@ -62,6 +65,13 @@ class MultiAgentOrchestrator:
         self.answer_agent = self.agent_factory.create_agent("answer_agent", agent_port)
         self.verifier = self.agent_factory.create_agent("verifier", agent_port)
         self.response_agent = self.agent_factory.create_agent("response_agent", agent_port)
+        
+        # Log agent configurations for debugging
+        logger.info(f"✓ Planner Agent initialized with model: {self.planner.config.model}")
+        logger.info(f"✓ Query Rewriter initialized with model: {self.query_rewriter.config.model}")
+        logger.info(f"✓ Answer Agent initialized with model: {self.answer_agent.config.model}")
+        logger.info(f"✓ Verifier Agent initialized with model: {self.verifier.config.model}")
+        logger.info(f"✓ Response Agent initialized with model: {self.response_agent.config.model}")
     
     async def process_request(self, request: OrchestrationRequest) -> OrchestrationResponse:
         """
@@ -211,7 +221,8 @@ class MultiAgentOrchestrator:
                 query=request.user_query,
                 retrieved_documents=rag_data.get("retrieved_documents", []),
                 search_metadata=rag_data.get("search_metadata"),
-                relevance_scores=rag_data.get("relevance_scores", [])
+                relevance_scores=rag_data.get("relevance_scores", []),
+                rewritten_queries=rewrite_queries  # Pass rewritten queries to Answer Agent
             )
         
         except Exception as e:
@@ -280,7 +291,7 @@ class MultiAgentOrchestrator:
             answer_input = {
                 "query": request.user_query,
                 "context_documents": rag_context.retrieved_documents if rag_context else [],
-                "rewritten_queries": [],
+                "rewritten_queries": rag_context.rewritten_queries if rag_context and rag_context.rewritten_queries else [],
                 "previous_context": ""
             }
             

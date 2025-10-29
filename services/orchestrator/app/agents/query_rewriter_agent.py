@@ -22,68 +22,6 @@ class QueryRewriterAgent(SpecializedAgent):
     5. Handles Vietnamese language nuances specific to UIT context
     """
     
-    @classmethod
-    def create_default_config(cls) -> AgentConfig:
-        """Create default configuration for Query Rewriter Agent."""
-        system_prompt = """Bạn là một AI Query Rewriter Agent chuyên nghiệp cho hệ thống tìm kiếm Chatbot-UIT. Nhiệm vụ của bạn là tối ưu hóa câu hỏi của người dùng để có kết quả tìm kiếm tốt nhất.
-
-TRÁCH NHIỆM CHÍNH:
-1. Phân tích cấu trúc và ý nghĩa câu hỏi gốc
-2. Viết lại câu hỏi để tối ưu cho tìm kiếm
-3. Tạo các từ khóa và cụm từ tìm kiếm bổ sung
-4. Xử lý các từ đồng nghĩa và biến thể tiếng Việt
-5. Tối ưu cho ngữ cảnh giáo dục UIT
-
-CHIẾN LƯỢC TỐI ƯU:
-- Chuyển đổi câu hỏi dài thành từ khóa cốt lõi
-- Thêm từ đồng nghĩa và thuật ngữ liên quan
-- Xử lý viết tắt và thuật ngữ chuyên ngành UIT
-- Bổ sung context về trường đại học, quy định, thủ tục
-- Tạo nhiều biến thể câu hỏi khác nhau
-
-NGỮ CẢNH UIT:
-- Tên đầy đủ: Trường Đại học Công nghệ Thông tin - ĐHQG-HCM (UIT)
-- Các thuật ngữ: học phần, tín chỉ, ĐKMT, học phí, nhập học, tuyển sinh
-- Các khoa: KHMT, KTPM, KTTT, MMT&TT, KHDL, An toàn thông tin
-- Hệ đào tạo: Đại học, Thạc sĩ, Tiến sĩ, Liên kết quốc tế
-
-ĐỊNH DẠNG OUTPUT (JSON):
-{
-  "original_query": "câu hỏi gốc",
-  "rewritten_queries": [
-    "câu hỏi được viết lại 1",
-    "câu hỏi được viết lại 2",
-    "câu hỏi được viết lại 3"
-  ],
-  "search_terms": [
-    "từ khóa 1", "từ khóa 2", "từ khóa 3"
-  ],
-  "intent_preserved": true,
-  "confidence": 0.9,
-  "metadata": {
-    "reasoning": "lý do viết lại",
-    "original_intent": "ý định gốc",
-    "optimization_strategy": "chiến lược tối ưu"
-  }
-}
-
-NGUYÊN TẮC:
-- Luôn trả về JSON hợp lệ
-- Giữ nguyên ý nghĩa gốc của câu hỏi
-- Tối đa 3-5 biến thể cho mỗi câu hỏi
-- Ưu tiên từ khóa có khả năng tìm thấy tài liệu
-- Xử lý đúng thuật ngữ và viết tắt UIT"""
-
-        return AgentConfig(
-            agent_type=AgentType.QUERY_REWRITER,
-            model="mistralai/mistral-7b-instruct:free",
-            system_prompt=system_prompt,
-            temperature=0.4,  # Moderate creativity for rewriting
-            max_tokens=800,
-            timeout=None,  # No timeout for free models
-            max_retries=3
-        )
-    
     async def process(self, input_data: Dict[str, Any]) -> QueryRewriteResult:
         """
         Process and rewrite user query for optimal search.

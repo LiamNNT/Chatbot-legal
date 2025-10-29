@@ -144,7 +144,7 @@ class OpenSearchClient:
                         "vietnamese_analyzer": {
                             "type": "custom",
                             "char_filter": ["vietnamese_char_filter"],
-                            "tokenizer": "icu_tokenizer",
+                            "tokenizer": "standard",  # Changed from icu_tokenizer to standard
                             "filter": [
                                 "lowercase",
                                 "ascii_folding", 
@@ -155,7 +155,7 @@ class OpenSearchClient:
                         "vietnamese_search_analyzer": {
                             "type": "custom",
                             "char_filter": ["vietnamese_char_filter"],
-                            "tokenizer": "icu_tokenizer",
+                            "tokenizer": "standard",  # Changed from icu_tokenizer to standard
                             "filter": [
                                 "lowercase",
                                 "ascii_folding",

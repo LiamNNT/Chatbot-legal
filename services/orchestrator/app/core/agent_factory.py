@@ -231,21 +231,16 @@ class ConfigurableAgentFactory(AgentFactory):
 
 class StaticAgentFactory(AgentFactory):
     """
-    Factory that creates agents using static/hardcoded configurations.
+    Factory that creates agents using configuration from YAML.
     
-    This factory is useful for testing or when dynamic configuration
-    is not needed. It uses the default configurations from agent classes.
+    This factory is a lightweight wrapper around ConfigurableAgentFactory.
+    It's kept for backward compatibility but delegates to ConfigurableAgentFactory.
     """
     
-    def __init__(self):
+    def __init__(self, config_manager: Optional[ConfigurationManager] = None):
         """Initialize the static factory."""
-        self.agent_classes = {
-            "planner": PlannerAgent,
-            "query_rewriter": QueryRewriterAgent,
-            "answer_agent": AnswerAgent,
-            "verifier": VerifierAgent,
-            "response_agent": ResponseAgent,
-        }
+        self.config_manager = config_manager or get_config_manager()
+        self.configurable_factory = ConfigurableAgentFactory(self.config_manager)
     
     def create_agent(
         self, 
@@ -254,7 +249,7 @@ class StaticAgentFactory(AgentFactory):
         config_overrides: Optional[Dict[str, Any]] = None
     ) -> SpecializedAgent:
         """
-        Create agent using default configuration.
+        Create agent using configuration from YAML.
         
         Args:
             agent_id: Agent type identifier
@@ -262,27 +257,14 @@ class StaticAgentFactory(AgentFactory):
             config_overrides: Optional configuration overrides
             
         Returns:
-            Agent instance with default configuration
+            Agent instance configured from YAML
         """
-        agent_class = self.agent_classes.get(agent_id)
-        if not agent_class:
-            raise ValueError(f"Unknown agent type: {agent_id}")
-        
-        # Get default configuration
-        default_config = agent_class.create_default_config()
-        
-        # Apply overrides if provided
-        if config_overrides:
-            if "model" in config_overrides:
-                default_config.model = config_overrides["model"]
-            if "temperature" in config_overrides:
-                default_config.temperature = config_overrides["temperature"]
-            if "max_tokens" in config_overrides:
-                default_config.max_tokens = config_overrides["max_tokens"]
-            if "system_prompt" in config_overrides:
-                default_config.system_prompt = config_overrides["system_prompt"]
-        
-        return agent_class(config=default_config, agent_port=agent_port)
+        # Delegate to ConfigurableAgentFactory
+        return self.configurable_factory.create_agent(
+            agent_id=agent_id,
+            agent_port=agent_port,
+            config_overrides=config_overrides
+        )
 
 
 # Global factory instance

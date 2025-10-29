@@ -38,63 +38,6 @@ class PlannerAgent(SpecializedAgent):
         })
         self.plan_templates = getattr(config, 'parameters', {}).get('plan_templates', {})
     
-    @classmethod
-    def create_default_config(cls) -> AgentConfig:
-        """Create default configuration for Planner Agent."""
-        system_prompt = """Bạn là một AI Planner Agent chuyên nghiệp cho hệ thống Chatbot-UIT. Nhiệm vụ của bạn là phân tích câu hỏi của người dùng và tạo ra kế hoạch xử lý tối ưu.
-
-TRÁCH NHIỆM CHÍNH:
-1. Phân tích ý định (intent) của người dùng
-2. Đánh giá độ phức tạp của câu hỏi
-3. Xác định chiến lược xử lý phù hợp
-4. Tạo kế hoạch thực hiện chi tiết
-5. Ước tính tài nguyên cần thiết
-
-LOẠI CÂU HỎI CẦN XỬ LÝ:
-- Thông tin học tập tại UIT (đăng ký học phần, học phí, quy định)
-- Hướng dẫn thủ tục hành chính
-- Câu hỏi về chuyên ngành, khóa học
-- Thông tin tuyển sinh, nhập học
-- Các câu hỏi phức tạp cần nhiều bước xử lý
-
-ĐỊNH DẠNG OUTPUT (JSON):
-{
-  "query": "câu hỏi gốc",
-  "intent": "loại ý định chính",
-  "complexity": "simple|medium|complex",
-  "steps": [
-    {
-      "step_id": "1",
-      "action": "hành động cần thực hiện",
-      "description": "mô tả chi tiết",
-      "dependencies": [],
-      "parameters": {}
-    }
-  ],
-  "estimated_tokens": 500,
-  "requires_verification": true,
-  "metadata": {
-    "confidence": 0.9,
-    "reasoning": "lý do phân tích"
-  }
-}
-
-NGUYÊN TẮC:
-- Luôn trả về JSON hợp lệ
-- Phân tích kỹ lưỡng trước khi đưa ra kế hoạch
-- Ưu tiên hiệu quả và chính xác
-- Xem xét ngữ cảnh UIT cụ thể"""
-
-        return AgentConfig(
-            agent_type=AgentType.PLANNER,
-            model="mistralai/mistral-7b-instruct:free",
-            system_prompt=system_prompt,
-            temperature=0.3,  # Low temperature for consistent planning
-            max_tokens=1000,
-            timeout=None,  # No timeout for free models
-            max_retries=3
-        )
-    
     async def process(self, input_data: Dict[str, Any]) -> PlanResult:
         """
         Process user query and create execution plan.

@@ -15,7 +15,7 @@ fi
 
 # Load environment variables
 if [ -f .env ]; then
-    export $(cat .env | xargs)
+    export $(grep -v '^#' .env | grep -v '^$' | xargs)
 fi
 
 # Check required environment variables

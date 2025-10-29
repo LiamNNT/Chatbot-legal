@@ -103,6 +103,7 @@ class RAGContext:
     retrieved_documents: List[Dict[str, Any]]
     search_metadata: Optional[Dict[str, Any]] = None
     relevance_scores: Optional[List[float]] = None
+    rewritten_queries: Optional[List[str]] = None  # Queries from query rewriter
 
 
 @dataclass
