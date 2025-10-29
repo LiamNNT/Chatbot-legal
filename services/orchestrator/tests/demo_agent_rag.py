@@ -111,7 +111,7 @@ def demo_rag_only():
     print_section("DEMO 1: Test RAG Service Trực Tiếp")
     
     queries = [
-        "Chương trình đào tạo Khoa học Máy tính 2024",
+        "Mục tiêu chung của chương trình giáo dục đại học của Trường",
         "Điều kiện tốt nghiệp ngành KHMT",
         "Các học phần bắt buộc"
     ]
@@ -135,7 +135,7 @@ def demo_orchestrator_with_rag():
     # Các câu hỏi test
     questions = [
         {
-            "query": "Chương trình đào tạo Khoa học Máy tính năm 2024 có gì?",
+            "query": "Mục tiêu chung của chương trình giáo dục đại học của Trường là gì?",
             "description": "Câu hỏi về thông tin chung - agent nên dùng RAG"
         },
         {
