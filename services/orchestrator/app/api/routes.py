@@ -82,7 +82,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             documents = [
                 DocumentInfo(
                     title=doc.get("title", "Untitled"),
-                    content=doc.get("content", ""),
+                    # RAG service returns 'text' field, fallback to 'content'
+                    content=doc.get("text", doc.get("content", "")),
                     score=doc.get("score", 0.0),
                     metadata=doc.get("metadata", {})
                 )
@@ -176,7 +177,8 @@ async def simple_chat(request: ChatRequest) -> ChatResponse:
             documents = [
                 DocumentInfo(
                     title=doc.get("title", "Untitled"),
-                    content=doc.get("content", ""),
+                    # RAG service returns 'text' field, fallback to 'content'
+                    content=doc.get("text", doc.get("content", "")),
                     score=doc.get("score", 0.0),
                     metadata=doc.get("metadata", {})
                 )

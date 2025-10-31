@@ -232,27 +232,41 @@ class WeaviateVectorAdapter(VectorSearchRepository):
             # Generate query embedding
             query_vector = self._embed_text(query.text)
             
-            # Build Weaviate query
-            search_builder = self._collection.query.near_vector(
-                near_vector=query_vector,
-                limit=query.top_k,
-                return_metadata=MetadataQuery(distance=True, score=True)
-            )
-            
             # Apply filters if provided
+            filters = None
             if query.filters:
                 filters = self._build_filters(query.filters)
-                if filters:
-                    search_builder = search_builder.where(filters)
             
-            # Execute search (v4 API - no .do() needed)
-            response = search_builder
+            # Build and execute Weaviate query
+            # Weaviate v4 API: pass vector directly, filters are applied separately
+            # Must specify return_properties to get the text content
+            return_props = ["text", "doc_id", "chunk_id", "chunk_index", "title", 
+                          "page", "doc_type", "faculty", "year", "subject", 
+                          "section", "subsection", "language", "metadata_json"]
             
-            # Convert results to domain format
+            # Execute query - in v4, filters are NOT supported in near_vector() directly
+            # If filters are needed, we need to use a different approach
+            # For now, query without filters (can post-filter results if needed)
+            response = self._collection.query.near_vector(
+                near_vector=query_vector,
+                limit=query.top_k,
+                return_metadata=MetadataQuery(distance=True, score=True),
+                return_properties=return_props
+            )
+            
+            # Post-filter results if filters were specified
             results = []
             for i, obj in enumerate(response.objects):
-                result = self._weaviate_object_to_result(obj, rank=i + 1)
+                # Apply filters manually if needed
+                if filters and not self._matches_filters(obj, query.filters):
+                    continue
+                    
+                result = self._weaviate_object_to_result(obj, rank=len(results) + 1)
                 results.append(result)
+                
+                # Stop when we have enough results
+                if len(results) >= query.top_k:
+                    break
             
             logger.info(f"Vector search returned {len(results)} results")
             return results
@@ -260,6 +274,49 @@ class WeaviateVectorAdapter(VectorSearchRepository):
         except Exception as e:
             logger.error(f"Error in vector search: {e}")
             return []
+    
+    def _matches_filters(self, obj, search_filters) -> bool:
+        """
+        Check if object matches search filters (for post-filtering).
+        
+        Args:
+            obj: Weaviate object
+            search_filters: Domain search filters
+            
+        Returns:
+            True if object matches filters
+        """
+        if not search_filters:
+            return True
+            
+        props = obj.properties
+        
+        # Check doc_types
+        if search_filters.doc_types:
+            if props.get("doc_type") not in search_filters.doc_types:
+                return False
+        
+        # Check faculties
+        if search_filters.faculties:
+            if props.get("faculty") not in search_filters.faculties:
+                return False
+        
+        # Check subjects
+        if search_filters.subjects:
+            if props.get("subject") not in search_filters.subjects:
+                return False
+        
+        # Check years
+        if search_filters.years:
+            if props.get("year") not in search_filters.years:
+                return False
+        
+        # Check language
+        if search_filters.language:
+            if props.get("language") != search_filters.language.value:
+                return False
+        
+        return True
     
     def _build_filters(self, search_filters) -> Optional[dict]:
         """

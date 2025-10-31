@@ -198,7 +198,7 @@ def start_docker_services(project_root: Path):
         print_error("Failed to start Docker services")
         sys.exit(1)
 
-def start_rag_service(project_root: Path):
+def start_rag_service(project_root: Path, debug_mode: bool = False):
     """Start RAG Service"""
     global processes
     
@@ -226,13 +226,21 @@ def start_rag_service(project_root: Path):
     
     print_info(f"Using Python: {python_exe}")
     print_info("Starting RAG Service on port 8000...")
+    if debug_mode:
+        print_info("🐛 DEBUG MODE ENABLED - Detailed logging")
     print_info("Logs will appear below (Ctrl+C to stop all services)...")
     print()
+    
+    # Set environment variable for debug mode
+    env = os.environ.copy()
+    if debug_mode:
+        env['LOG_LEVEL'] = 'DEBUG'
     
     # Start RAG service - no output capture, show logs in terminal
     proc = subprocess.Popen(
         [python_exe, "start_server.py"],
-        cwd=rag_dir
+        cwd=rag_dir,
+        env=env
     )
     processes.append(proc)
     
@@ -263,7 +271,7 @@ def start_rag_service(project_root: Path):
     print_info("  python start_server.py")
     sys.exit(1)
 
-def start_orchestrator_service(project_root: Path):
+def start_orchestrator_service(project_root: Path, debug_mode: bool = False):
     """Start Orchestrator Service"""
     global processes
     
@@ -289,6 +297,8 @@ def start_orchestrator_service(project_root: Path):
     
     print_info(f"Using Python: {python_exe}")
     print_info("Starting Orchestrator Service on port 8001...")
+    if debug_mode:
+        print_info("🐛 DEBUG MODE ENABLED - Detailed agent I/O logging")
     print()
     
     # Load environment variables
@@ -302,6 +312,13 @@ def start_orchestrator_service(project_root: Path):
                     if '=' in line:
                         key, value = line.split('=', 1)
                         env[key.strip()] = value.strip()
+    
+    # Set debug log level if requested
+    if debug_mode:
+        env['LOG_LEVEL'] = 'DEBUG'
+    
+    # Disable timeout for Answer Agent (deepseek model can be slow)
+    env['OPENROUTER_TIMEOUT'] = 'none'
     
     # Start Orchestrator service - no output capture, show logs in terminal
     proc = subprocess.Popen(
@@ -420,7 +437,11 @@ def main():
     parser = argparse.ArgumentParser(description='Start Chatbot-UIT Backend Services')
     parser.add_argument('--skip-docker', action='store_true', help='Skip Docker services startup')
     parser.add_argument('--stop', action='store_true', help='Stop all services')
+    parser.add_argument('--no-debug', action='store_true', help='Disable debug logging (debug is enabled by default)')
     args = parser.parse_args()
+    
+    # Debug mode is ON by default, use --no-debug to turn it off
+    debug_mode = not args.no_debug
     
     # Get project root
     project_root = Path(__file__).parent.absolute()
@@ -438,6 +459,12 @@ def main():
     
     print_info(f"Project root: {project_root}")
     print_info(f"Python: {sys.executable}")
+    
+    # Show debug mode status
+    if debug_mode:
+        print_success("🐛 Debug mode: ENABLED (use --no-debug to disable)")
+    else:
+        print_info("Debug mode: DISABLED (default is enabled)")
     
     # Check conda environment
     if not check_conda_env():
@@ -461,10 +488,10 @@ def main():
             print_info("Skipping Docker services (--skip-docker)")
         
         # Start RAG service
-        start_rag_service(project_root)
+        start_rag_service(project_root, debug_mode=debug_mode)
         
         # Start Orchestrator service
-        start_orchestrator_service(project_root)
+        start_orchestrator_service(project_root, debug_mode=debug_mode)
         
         # Print summary
         print_summary()

@@ -149,15 +149,58 @@ class SpecializedAgent(ABC):
         Returns:
             Agent response
         """
+        # Import ConversationContext here to avoid circular dependency
+        from ..core.domain import ConversationContext
+        import logging
+        import os
+        
+        logger = logging.getLogger(__name__)
+        
+        # Log input if debug mode is enabled
+        if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+            logger.debug(f"\n{'='*80}")
+            logger.debug(f"🔵 AGENT INPUT - {self.config.agent_type.value.upper()}")
+            logger.debug(f"{'='*80}")
+            logger.debug(f"System Prompt Length: {len(self.config.system_prompt)} chars")
+            logger.debug(f"System Prompt Preview: {self.config.system_prompt[:200]}...")
+            logger.debug(f"User Prompt: {prompt[:500]}..." if len(prompt) > 500 else f"User Prompt: {prompt}")
+            logger.debug(f"Model: {self.config.model}")
+            logger.debug(f"Temperature: {self.config.temperature}")
+            logger.debug(f"Max Tokens: {self.config.max_tokens}")
+            if context:
+                logger.debug(f"Context keys: {list(context.keys())}")
+            logger.debug(f"{'='*80}\n")
+        
+        # Create conversation context with system prompt from agent config
+        conversation_context = ConversationContext(
+            session_id="agent_session",
+            messages=[],
+            system_prompt=self.config.system_prompt,  # ✅ FIX: Include system prompt!
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens
+        )
+        
         request = AgentRequest(
             prompt=prompt,
+            context=conversation_context,  # ✅ FIX: Pass context with system prompt!
             model=self.config.model,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             metadata={"agent_type": self.config.agent_type.value}
         )
         
-        return await self.agent_port.generate_response(request)
+        response = await self.agent_port.generate_response(request)
+        
+        # Log output if debug mode is enabled
+        if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+            logger.debug(f"\n{'='*80}")
+            logger.debug(f"🟢 AGENT OUTPUT - {self.config.agent_type.value.upper()}")
+            logger.debug(f"{'='*80}")
+            logger.debug(f"Response: {response.content[:500]}..." if len(response.content) > 500 else f"Response: {response.content}")
+            logger.debug(f"Tokens Used: {response.tokens_used}")
+            logger.debug(f"{'='*80}\n")
+        
+        return response
     
     def _build_system_prompt(self, user_prompt: str) -> str:
         """

@@ -21,7 +21,14 @@ conda activate chatbot-UIT
 python start_backend.py
 ```
 
-Xem chi tiết trong [BACKEND_SETUP.md](BACKEND_SETUP.md)
+**💡 Debug mode được BẬT MẶC ĐỊNH** để hiển thị chi tiết input/output của agents.
+
+Tắt debug mode (production):
+```bash
+python start_backend.py --no-debug
+```
+
+Xem chi tiết trong [BACKEND_SETUP.md](BACKEND_SETUP.md) và [DEBUG_LOGGING_GUIDE.md](DEBUG_LOGGING_GUIDE.md)
 
 ### 3. Dừng Backend
 ```bash

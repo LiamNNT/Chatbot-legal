@@ -25,7 +25,8 @@ class ContextDomainService:
         relevant_docs = []
         
         for i, doc in enumerate(rag_context.retrieved_documents[:max_docs]):
-            content = doc.get("content", "").strip()
+            # RAG service returns 'text' field, fallback to 'content'
+            content = doc.get("text", doc.get("content", "")).strip()
             
             if content and len(content) > 10:  # Filter out very short content
                 relevant_docs.append({
@@ -56,7 +57,8 @@ class ContextDomainService:
                 "document_count": 0
             }
         
-        total_content_length = sum(len(doc["content"]) for doc in documents)
+        # RAG service returns 'text' field, fallback to 'content'
+        total_content_length = sum(len(doc.get("text", doc.get("content", ""))) for doc in documents)
         average_relevance = sum(doc.get("relevance_score", 0.0) for doc in documents) / len(documents)
         
         quality_score = min(

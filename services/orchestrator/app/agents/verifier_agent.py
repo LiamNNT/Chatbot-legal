@@ -68,69 +68,23 @@ class VerifierAgent(SpecializedAgent):
         original_confidence: float
     ) -> str:
         """Build the comprehensive verification prompt."""
+        # System prompt from config contains all verification instructions
+        # Just provide the data to verify
         prompt_parts = [
-            "NHIỆM VỤ KIỂM TRA CHẤT LƯỢNG CÂU TRẢ LỜI",
-            "=" * 50,
-            "",
-            f"CÂU HỎI GỐC: {query}",
-            "",
-            f"CÂU TRẢ LỜI CẦN KIỂM TRA:",
-            f"{answer}",
-            "",
-            f"ĐỘ TIN CẬY BAN ĐẦU: {original_confidence:.2f}",
-            ""
+            f"Query: {query}",
+            f"\nAnswer to verify:\n{answer}",
+            f"\nOriginal confidence: {original_confidence:.2f}"
         ]
         
-        # Add reasoning steps if available
         if reasoning_steps:
-            prompt_parts.append("CÁC BƯỚC SUY LUẬN:")
-            for i, step in enumerate(reasoning_steps, 1):
-                prompt_parts.append(f"{i}. {step}")
-            prompt_parts.append("")
+            prompt_parts.append(f"\nReasoning: {'; '.join(reasoning_steps)}")
         
-        # Add source documents for fact-checking
         if context_documents:
-            prompt_parts.append("TÀI LIỆU NGUỒN ĐỂ KIỂM TRA:")
+            prompt_parts.append("\nSource Documents:")
             for i, doc in enumerate(context_documents, 1):
-                title = doc.get("title", f"Tài liệu {i}")
-                content = doc.get("content", "")
-                score = doc.get("score", 0.0)
-                
-                prompt_parts.append(f"[{i}] {title} (Relevance: {score:.2f})")
-                prompt_parts.append(f"Nội dung: {content[:800]}...")
-                prompt_parts.append("")
-        else:
-            prompt_parts.append("KHÔNG CÓ TÀI LIỆU NGUỒN CỤ THỂ")
-            prompt_parts.append("")
-        
-        prompt_parts.extend([
-            "YÊU CẦU KIỂM TRA:",
-            "",
-            "1. KIỂM TRA CHÍNH XÁC:",
-            "   - So sánh thông tin trong câu trả lời với tài liệu nguồn",
-            "   - Xác định các thông tin sai lệch hoặc không có căn cứ",
-            "   - Kiểm tra số liệu, ngày tháng, địa chỉ, quy định",
-            "",
-            "2. ĐÁNH GIÁ ĐẦY ĐỦ:",
-            "   - Câu trả lời có bao quát đủ các khía cạnh của câu hỏi không?",
-            "   - Có thiếu thông tin quan trọng nào không?",
-            "   - Mức độ chi tiết có phù hợp không?",
-            "",
-            "3. KIỂM TRA LOGIC:",
-            "   - Cấu trúc câu trả lời có logic không?",
-            "   - Các thông tin có nhất quán với nhau không?",
-            "   - Kết luận có phù hợp với dữ liệu không?",
-            "",
-            "4. ĐÁNH GIÁ PHÙ HỢP:",
-            "   - Có phù hợp với ngữ cảnh UIT không?",
-            "   - Ngôn ngữ có phù hợp với đối tượng sinh viên không?",
-            "   - Có giải quyết được nhu cầu thực tế không?",
-            "",
-            "5. TRẢ VỀ KẾT QUẢ:",
-            "   - Sử dụng định dạng JSON đã cho",
-            "   - Cung cấp lý do cụ thể cho mỗi đánh giá",
-            "   - Đề xuất cải thiện mang tính xây dựng"
-        ])
+                title = doc.get("title", f"Document {i}")
+                content = doc.get("content", "")[:800]  # First 800 chars for verification
+                prompt_parts.append(f"[{i}] {title}: {content}")
         
         return "\n".join(prompt_parts)
     

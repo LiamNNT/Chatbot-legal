@@ -68,82 +68,29 @@ class ResponseAgent(SpecializedAgent):
         conversation_history: List[Dict[str, Any]]
     ) -> str:
         """Build the response generation prompt."""
+        # System prompt from config contains all formatting instructions
+        # Just provide the data to format
         prompt_parts = [
-            "NHIỆM VỤ TẠO PHẢN HỒI CUỐI CÙNG",
-            "=" * 40,
-            "",
-            f"CÂU HỎI CỦA NGƯỜI DÙNG: {query}",
-            "",
-            f"THÔNG TIN ĐÃ KIỂM CHỨNG:",
-            f"{verified_answer}",
-            ""
+            f"Query: {query}",
+            f"\nVerified Answer:\n{verified_answer}"
         ]
         
-        # Add verification insights
         if verification_result:
             is_accurate = verification_result.get("is_accurate", True)
             confidence = verification_result.get("confidence", 0.5)
+            prompt_parts.append(f"\nAccuracy: {is_accurate}, Confidence: {confidence:.2f}")
+            
             issues = verification_result.get("issues_found", [])
-            suggestions = verification_result.get("suggestions", [])
-            
-            prompt_parts.append(f"ĐÁNH GIÁ CHẤT LƯỢNG:")
-            prompt_parts.append(f"- Độ chính xác: {'Cao' if is_accurate else 'Cần cải thiện'}")
-            prompt_parts.append(f"- Độ tin cậy: {confidence:.1f}/1.0")
-            
             if issues:
-                prompt_parts.append("- Vấn đề cần lưu ý:")
-                for issue in issues:
-                    prompt_parts.append(f"  * {issue}")
-            
-            if suggestions:
-                prompt_parts.append("- Gợi ý cải thiện:")
-                for suggestion in suggestions:
-                    prompt_parts.append(f"  * {suggestion}")
-            
-            prompt_parts.append("")
+                prompt_parts.append(f"Issues: {'; '.join(issues)}")
         
-        # Add user context
         if user_context:
-            prompt_parts.append("THÔNG TIN NGƯỜI DÙNG:")
-            for key, value in user_context.items():
-                prompt_parts.append(f"- {key}: {value}")
-            prompt_parts.append("")
+            prompt_parts.append(f"\nUser Context: {user_context}")
         
-        # Add conversation context
         if conversation_history:
-            prompt_parts.append("NGỮ CẢNH CUỘC TRÒ CHUYỆN:")
-            for i, msg in enumerate(conversation_history[-3:], 1):  # Last 3 messages
-                role = msg.get("role", "unknown")
-                content = msg.get("content", "")[:100]
-                prompt_parts.append(f"{i}. {role}: {content}...")
-            prompt_parts.append("")
-        
-        prompt_parts.extend([
-            "YÊU CẦU TẠO PHẢN HỒI:",
-            "",
-            "1. PHONG CÁCH:",
-            "   - Thân thiện và chuyên nghiệp",
-            "   - Phù hợp với sinh viên đại học",
-            "   - Tự nhiên như cuộc trò chuyện thực",
-            "",
-            "2. NỘI DUNG:",
-            "   - Giữ nguyên tất cả thông tin factual đã kiểm chứng",
-            "   - Cải thiện cách trình bày để dễ hiểu hơn",
-            "   - Thêm ví dụ hoặc gợi ý nếu phù hợp",
-            "   - Bao gồm lời kết và mời câu hỏi tiếp theo",
-            "",
-            "3. CẤU TRÚC:",
-            "   - Mở đầu phù hợp với ngữ cảnh",
-            "   - Nội dung chính được tổ chức rõ ràng",
-            "   - Kết thúc tích cực và hỗ trợ",
-            "",
-            "4. LƯU Ý ĐẶC BIỆT:",
-            "   - Sử dụng ngôn ngữ UIT phù hợp",
-            "   - Không bịa đặt thông tin mới",
-            "   - Tạo cảm giác hữu ích và đáng tin cậy",
-            "",
-            "5. TRẢ VỀ KẾT QUẢ JSON theo định dạng đã cho"
-        ])
+            recent = [f"{msg.get('role')}: {msg.get('content', '')[:50]}" 
+                     for msg in conversation_history[-3:]]
+            prompt_parts.append(f"\nConversation History: {'; '.join(recent)}")
         
         return "\n".join(prompt_parts)
     

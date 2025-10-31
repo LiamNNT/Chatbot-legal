@@ -65,17 +65,9 @@ class PlannerAgent(SpecializedAgent):
     
     def _build_analysis_prompt(self, query: str) -> str:
         """Build prompt for query analysis."""
-        return f"""Hãy phân tích câu hỏi sau và tạo kế hoạch xử lý chi tiết:
-
-Câu hỏi: {query}
-
-Hãy đưa ra một phân tích toàn diện về:
-1. Ý định của người dùng
-2. Độ phức tạp của câu hỏi  
-3. Các bước cần thực hiện để trả lời
-4. Tài nguyên cần thiết
-
-Trả lời bằng tiếng Việt một cách tự nhiên và chi tiết."""
+        # System prompt already contains all instructions from config
+        # Just pass the user's query directly
+        return query
     
     def _create_plan_result(self, plan_data: Dict[str, Any], original_query: str) -> PlanResult:
         """Create PlanResult from parsed JSON data."""

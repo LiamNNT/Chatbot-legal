@@ -14,11 +14,15 @@ from .api.routes import router as api_router
 from .core.container import cleanup_container
 
 # Configure logging
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, log_level),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Log the logging level
+logger.info(f"Logging level set to: {log_level}")
 
 
 @asynccontextmanager

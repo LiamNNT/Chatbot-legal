@@ -69,7 +69,7 @@ class RAGServiceAdapter(RAGServicePort):
         for attempt in range(self.max_retries):
             try:
                 async with session.post(
-                    f"{self.rag_service_url}/api/search",
+                    f"{self.rag_service_url}/v1/search",
                     json=payload
                 ) as response:
                     
@@ -77,18 +77,21 @@ class RAGServiceAdapter(RAGServicePort):
                         data = await response.json()
                         
                         # Transform response to standard format
+                        # RAG service returns 'hits' not 'results'
+                        hits = data.get("hits", [])
+                        
                         return {
                             "query": query,
-                            "retrieved_documents": data.get("results", []),
+                            "retrieved_documents": hits,
                             "search_metadata": {
-                                "total_results": len(data.get("results", [])),
+                                "total_results": data.get("total_hits", len(hits)),
                                 "search_mode": data.get("search_mode", "hybrid"),
-                                "processing_time": data.get("processing_time"),
+                                "processing_time": data.get("latency_ms"),
                                 "top_k": top_k
                             },
                             "relevance_scores": [
                                 doc.get("score", 0.0) 
-                                for doc in data.get("results", [])
+                                for doc in hits
                             ]
                         }
                     

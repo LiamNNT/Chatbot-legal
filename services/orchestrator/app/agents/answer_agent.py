@@ -83,55 +83,28 @@ class AnswerAgent(SpecializedAgent):
         previous_context: str
     ) -> str:
         """Build the comprehensive answer generation prompt."""
-        prompt_parts = [
-            f"CÂU HỎI CẦN TRẢ LỜI: {query}",
-            ""
-        ]
+        # System prompt from config already contains all instructions
+        # Just provide the data: query, documents, context
+        prompt_parts = [f"Query: {query}"]
         
-        # Add rewritten queries if available
         if rewritten_queries:
-            prompt_parts.append("CÁC BIẾN THỂ CÂU HỎI:")
-            for i, rq in enumerate(rewritten_queries, 1):
-                prompt_parts.append(f"{i}. {rq}")
-            prompt_parts.append("")
+            prompt_parts.append(f"Query Variations: {', '.join(rewritten_queries)}")
         
-        # Add previous conversation context
         if previous_context:
-            prompt_parts.append("NGỮ CẢNH CUỘC TRÒ CHUYỆN:")
-            prompt_parts.append(previous_context)
-            prompt_parts.append("")
+            prompt_parts.append(f"Context: {previous_context}")
         
-        # Add context documents
+        # Add context documents with full content
         if context_documents:
-            prompt_parts.append("TÀI LIỆU THAM KHẢO:")
+            prompt_parts.append("\nDocuments:")
             for i, doc in enumerate(context_documents, 1):
-                title = doc.get("title", f"Tài liệu {i}")
+                title = doc.get("title", f"Document {i}")
                 content = doc.get("content", "")
                 score = doc.get("score", 0.0)
-                source = doc.get("source", "Unknown")
                 
-                prompt_parts.append(f"[{i}] {title} (Score: {score:.2f}, Source: {source})")
-                prompt_parts.append(f"Nội dung: {content[:1000]}...")  # Limit content length
-                prompt_parts.append("")
-        else:
-            prompt_parts.append("KHÔNG CÓ TÀI LIỆU THAM KHẢO CỤ THỂ")
-            prompt_parts.append("")
+                prompt_parts.append(f"[{i}] {title} (Score: {score:.2f})")
+                prompt_parts.append(content)
         
-        prompt_parts.extend([
-            "NHIỆM VỤ:",
-            "1. Phân tích tất cả thông tin được cung cấp",
-            "2. Tạo câu trả lời đầy đủ, chính xác và có cấu trúc",
-            "3. Sử dụng thông tin từ tài liệu tham khảo làm bằng chứng",
-            "4. Cung cấp các bước suy luận rõ ràng",
-            "5. Trả về kết quả dạng JSON theo định dạng đã cho",
-            "",
-            "YÊU CẦU ĐẶC BIỆT:",
-            "- Ưu tiên thông tin chính thức từ UIT",
-            "- Cung cấp thông tin hành động cụ thể (các bước, thủ tục, quy định)",
-            "- Sử dụng ngôn ngữ phù hợp với sinh viên đại học",
-            "- Thừa nhận khi thông tin không đủ để trả lời đầy đủ",
-            "- Đảm bảo JSON output hợp lệ và đầy đủ"
-        ])
+        return "\n".join(prompt_parts)
         
         return "\n".join(prompt_parts)
     

@@ -62,16 +62,21 @@ class OpenRouterAdapter(AgentPort):
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
         if self._session is None or self._session.closed:
-            timeout_config = aiohttp.ClientTimeout(total=self.timeout) if self.timeout else None
-            self._session = aiohttp.ClientSession(
-                timeout=timeout_config,
-                headers={
+            # Prepare session kwargs
+            session_kwargs = {
+                "headers": {
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "https://localhost:3000",  # Required by OpenRouter
                     "X-Title": "Chatbot-UIT"  # App identification
                 }
-            )
+            }
+            
+            # Only add timeout if specified (None = no timeout)
+            if self.timeout is not None:
+                session_kwargs["timeout"] = aiohttp.ClientTimeout(total=self.timeout)
+            
+            self._session = aiohttp.ClientSession(**session_kwargs)
         return self._session
     
     def _prepare_messages(self, request: AgentRequest) -> List[Dict[str, str]]:

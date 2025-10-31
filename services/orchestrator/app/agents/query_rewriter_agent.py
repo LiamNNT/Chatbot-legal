@@ -63,40 +63,18 @@ class QueryRewriterAgent(SpecializedAgent):
         search_history: List[str]
     ) -> str:
         """Build the optimization prompt for query rewriting."""
-        prompt_parts = [
-            f"TỐI ƯU CÂU HỎI: {query}",
-            ""
-        ]
+        # System prompt from config already contains all instructions
+        # Just provide the query and minimal context
+        prompt_parts = [f"Query: {query}"]
         
         if intent:
-            prompt_parts.append(f"Ý ĐỊNH PHÁT HIỆN: {intent}")
-            prompt_parts.append("")
+            prompt_parts.append(f"Intent: {intent}")
         
         if context:
-            prompt_parts.append("THÔNG TIN NGỮ CẢNH:")
-            prompt_parts.append(f"{json.dumps(context, ensure_ascii=False, indent=2)}")
-            prompt_parts.append("")
+            prompt_parts.append(f"Context: {json.dumps(context, ensure_ascii=False)}")
         
         if search_history:
-            prompt_parts.append("LỊCH SỬ TÌM KIẾM:")
-            for i, prev_query in enumerate(search_history[-3:], 1):  # Last 3 queries
-                prompt_parts.append(f"{i}. {prev_query}")
-            prompt_parts.append("")
-        
-        prompt_parts.extend([
-            "NHIỆM VỤ:",
-            "1. Phân tích câu hỏi và xác định ý định chính",
-            "2. Viết lại câu hỏi thành 3-5 biến thể tối ưu cho tìm kiếm",
-            "3. Trích xuất từ khóa và thuật ngữ quan trọng",
-            "4. Đảm bảo phù hợp với ngữ cảnh UIT",
-            "5. Trả về kết quả dạng JSON theo định dạng đã cho",
-            "",
-            "LƯU Ý ĐẶC BIỆT:",
-            "- Xử lý thuật ngữ UIT: ĐKMT (Đăng ký môn tín), ĐHQG-HCM, etc.",
-            "- Bổ sung từ đồng nghĩa: học phần = môn học = subject",
-            "- Tối ưu cho tìm kiếm: ngắn gọn, rõ ràng, đầy đủ từ khóa",
-            "- Giữ nguyên ý nghĩa gốc của câu hỏi"
-        ])
+            prompt_parts.append(f"Search History: {', '.join(search_history[-3:])}")
         
         return "\n".join(prompt_parts)
     
@@ -202,14 +180,21 @@ class QueryRewriterAgent(SpecializedAgent):
         stop_words = {
             "là", "của", "và", "có", "trong", "với", "để", "về", "tại", "từ",
             "này", "đó", "những", "các", "một", "hai", "ba", "như", "được",
-            "sẽ", "đã", "đang", "thì", "nếu", "khi", "mà", "hay", "hoặc"
+            "sẽ", "đã", "đang", "thì", "nếu", "khi", "mà", "hay", "hoặc", "gì",
+            "nào", "khi", "thỏa", "yêu cầu"
         }
         
-        # UIT-specific important terms
+        # UIT-specific important terms (expanded for academic queries)
         important_terms = {
             "uit", "đhqg", "hcm", "đăng ký", "học phần", "môn học", "tín chỉ",
             "học phí", "nhập học", "tuyển sinh", "khoa", "ngành", "chuyên ngành",
-            "đại học", "thạc sĩ", "tiến sĩ", "quy định", "thủ tục", "hướng dẫn"
+            "đại học", "thạc sĩ", "tiến sĩ", "quy định", "thủ tục", "hướng dẫn",
+            # Academic terms
+            "khóa luận", "khoá luận", "tốt nghiệp", "điều kiện", "đtbc", "điểm",
+            "chương trình", "chuẩn", "nâng cao", "tiên tiến", "tài năng",
+            "thực tập", "doanh nghiệp", "nợ", "chấm", "bảo vệ", "hội đồng",
+            # Numeric terms
+            "6.5", "8", "10", "năm", "học kỳ", "kỳ", "đợt"
         }
         
         # Tokenize and filter

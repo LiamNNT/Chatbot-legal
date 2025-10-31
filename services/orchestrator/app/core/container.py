@@ -58,7 +58,8 @@ class ServiceContainer:
             
             base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
             default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", "openai/gpt-3.5-turbo")
-            timeout = int(os.getenv("OPENROUTER_TIMEOUT", "30"))
+            timeout_env = os.getenv("OPENROUTER_TIMEOUT", "30")
+            timeout = None if timeout_env.lower() == "none" else int(timeout_env)
             max_retries = int(os.getenv("OPENROUTER_MAX_RETRIES", "3"))
             
             self._agent_port = OpenRouterAdapter(

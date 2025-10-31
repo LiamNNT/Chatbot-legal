@@ -64,4 +64,5 @@ volumes:
 
 networks:
   rag-network:
-    driver: bridge
+    external: true
+    name: docker_rag-network

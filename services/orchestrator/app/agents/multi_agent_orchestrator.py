@@ -154,9 +154,16 @@ class MultiAgentOrchestrator:
         processing_stats: Dict[str, Any]
     ) -> Optional[PlanResult]:
         """Execute the planning step."""
+        import os
         step_start = time.time()
         
         try:
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"📋 STEP 1: PLANNING")
+                logger.debug(f"{'='*80}")
+                logger.debug(f"Query: {request.user_query}")
+            
             plan_input = {
                 "query": request.user_query,
                 "context": {},
@@ -168,11 +175,18 @@ class MultiAgentOrchestrator:
             processing_stats["plan_complexity"] = plan_result.complexity
             processing_stats["estimated_tokens"] = plan_result.estimated_tokens
             
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Plan Intent: {plan_result.intent}")
+                logger.debug(f"Plan Complexity: {plan_result.complexity}")
+                logger.debug(f"Estimated Tokens: {plan_result.estimated_tokens}")
+                logger.debug(f"{'='*80}\n")
+            
             return plan_result
         
         except Exception as e:
             processing_stats["planning_time"] = time.time() - step_start
             processing_stats["planning_error"] = str(e)
+            logger.error(f"Planning step failed: {e}")
             return None
     
     async def _execute_retrieval_step(
@@ -182,12 +196,19 @@ class MultiAgentOrchestrator:
         processing_stats: Dict[str, Any]
     ) -> Optional[RAGContext]:
         """Execute query rewriting and RAG retrieval."""
+        import os
+        
         if not request.use_rag:
             return None
         
         step_start = time.time()
         
         try:
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"🔍 STEP 2: QUERY REWRITING & RAG RETRIEVAL")
+                logger.debug(f"{'='*80}")
+            
             # Query rewriting (if plan suggests it or for complex queries)
             rewrite_queries = [request.user_query]  # Default to original query
             
@@ -197,6 +218,9 @@ class MultiAgentOrchestrator:
             )
             
             if should_rewrite:
+                if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                    logger.debug(f"Original Query: {request.user_query}")
+                
                 rewrite_input = {
                     "query": request.user_query,
                     "intent": plan_result.intent if plan_result else "",
@@ -210,16 +234,65 @@ class MultiAgentOrchestrator:
                 
                 processing_stats["query_rewrite_time"] = time.time() - step_start
                 processing_stats["rewritten_queries_count"] = len(rewrite_queries)
+                
+                if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                    logger.debug(f"Rewritten Queries ({len(rewrite_queries)}):")
+                    for i, q in enumerate(rewrite_queries, 1):
+                        logger.debug(f"  {i}. {q}")
             
             # RAG retrieval using best query
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Performing RAG retrieval with top_k={request.rag_top_k}...")
+            
             rag_data = await self._perform_rag_retrieval(rewrite_queries, request.rag_top_k)
             
             processing_stats["rag_time"] = time.time() - step_start - processing_stats.get("query_rewrite_time", 0)
             processing_stats["documents_retrieved"] = len(rag_data.get("retrieved_documents", []))
             
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Documents Retrieved: {len(rag_data.get('retrieved_documents', []))}")
+            
+            # 🔧 FIX: Map RAG service response format to answer_agent expected format
+            # RAG service returns 'text' field, but answer_agent expects 'content'
+            mapped_documents = []
+            
+            logger.info(f"Mapping {len(rag_data.get('retrieved_documents', []))} documents from RAG response")
+            
+            for idx, doc in enumerate(rag_data.get("retrieved_documents", [])):
+                try:
+                    # Extract text content (RAG returns 'text' field)
+                    text_content = doc.get("text", doc.get("content", ""))
+                    
+                    # Get metadata with fallbacks
+                    doc_metadata = doc.get("metadata", doc.get("meta", {}))
+                    
+                    mapped_doc = {
+                        "content": text_content,  # Map 'text' → 'content'
+                        "score": doc.get("score", 0.0),
+                        "metadata": doc_metadata,
+                        "title": doc.get("title", doc_metadata.get("title", f"Document {idx+1}")),
+                        "source": doc.get("source", doc_metadata.get("source", "Unknown"))
+                    }
+                    
+                    logger.debug(f"Mapped doc {idx+1}: content_length={len(text_content)}, title={mapped_doc['title']}")
+                    
+                    if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                        logger.debug(f"  Doc {idx+1}: {mapped_doc['title']} (score: {mapped_doc['score']:.4f}, {len(text_content)} chars)")
+                    
+                    mapped_documents.append(mapped_doc)
+                    
+                except Exception as map_error:
+                    logger.error(f"Error mapping document {idx+1}: {map_error}")
+                    continue
+            
+            logger.info(f"Successfully mapped {len(mapped_documents)} documents for answer_agent")
+            
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"{'='*80}\n")
+            
             return RAGContext(
                 query=request.user_query,
-                retrieved_documents=rag_data.get("retrieved_documents", []),
+                retrieved_documents=mapped_documents,  # Use mapped documents
                 search_metadata=rag_data.get("search_metadata"),
                 relevance_scores=rag_data.get("relevance_scores", []),
                 rewritten_queries=rewrite_queries  # Pass rewritten queries to Answer Agent
@@ -228,6 +301,7 @@ class MultiAgentOrchestrator:
         except Exception as e:
             processing_stats["retrieval_error"] = str(e)
             processing_stats["retrieval_time"] = time.time() - step_start
+            logger.error(f"Retrieval step failed: {e}")
             return None
     
     async def _perform_rag_retrieval(self, queries: List[str], top_k: int) -> Dict[str, Any]:
@@ -267,11 +341,13 @@ class MultiAgentOrchestrator:
         seen_contents = set()
         
         for doc in documents:
-            content = doc.get("content", "")
+            # RAG service returns 'text' field, fallback to 'content'
+            content = doc.get("text", doc.get("content", ""))
             # Simple deduplication based on first 100 characters
             content_signature = content[:100].strip().lower()
             
-            if content_signature not in seen_contents:
+            # Skip if content is empty or already seen
+            if content_signature and content_signature not in seen_contents:
                 seen_contents.add(content_signature)
                 unique_docs.append(doc)
         
@@ -285,9 +361,17 @@ class MultiAgentOrchestrator:
         processing_stats: Dict[str, Any]
     ) -> Optional[AnswerResult]:
         """Execute answer generation step."""
+        import os
         step_start = time.time()
         
         try:
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"💡 STEP 3: ANSWER GENERATION")
+                logger.debug(f"{'='*80}")
+                logger.debug(f"Query: {request.user_query}")
+                logger.debug(f"Documents: {len(rag_context.retrieved_documents) if rag_context else 0}")
+            
             answer_input = {
                 "query": request.user_query,
                 "context_documents": rag_context.retrieved_documents if rag_context else [],
@@ -300,11 +384,18 @@ class MultiAgentOrchestrator:
             processing_stats["answer_confidence"] = answer_result.confidence
             processing_stats["sources_used"] = len(answer_result.sources_used)
             
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Answer Length: {len(answer_result.answer)} chars")
+                logger.debug(f"Confidence: {answer_result.confidence}")
+                logger.debug(f"Sources Used: {len(answer_result.sources_used)}")
+                logger.debug(f"{'='*80}\n")
+            
             return answer_result
         
         except Exception as e:
             processing_stats["answer_generation_error"] = str(e)
             processing_stats["answer_generation_time"] = time.time() - step_start
+            logger.error(f"Answer generation failed: {e}", exc_info=True)  # Add full traceback
             return None
     
     async def _execute_verification_step(
@@ -315,9 +406,16 @@ class MultiAgentOrchestrator:
         processing_stats: Dict[str, Any]
     ) -> Optional[VerificationResult]:
         """Execute verification step."""
+        import os
         step_start = time.time()
         
         try:
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"✅ STEP 4: VERIFICATION")
+                logger.debug(f"{'='*80}")
+                logger.debug(f"Verifying answer...")
+            
             verification_input = {
                 "query": request.user_query,
                 "answer": answer_result.answer,
@@ -331,11 +429,19 @@ class MultiAgentOrchestrator:
             processing_stats["verification_confidence"] = verification_result.confidence
             processing_stats["issues_found"] = len(verification_result.issues_found)
             
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Verification Confidence: {verification_result.confidence}")
+                logger.debug(f"Issues Found: {len(verification_result.issues_found)}")
+                if verification_result.issues_found:
+                    logger.debug(f"Issues: {verification_result.issues_found}")
+                logger.debug(f"{'='*80}\n")
+            
             return verification_result
         
         except Exception as e:
             processing_stats["verification_error"] = str(e)
             processing_stats["verification_time"] = time.time() - step_start
+            logger.error(f"Verification failed: {e}")
             return None
     
     async def _execute_response_step(
@@ -346,9 +452,15 @@ class MultiAgentOrchestrator:
         processing_stats: Dict[str, Any]
     ) -> Optional[ResponseResult]:
         """Execute final response generation step."""
+        import os
         step_start = time.time()
         
         try:
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"🎯 STEP 5: RESPONSE FORMATTING")
+                logger.debug(f"{'='*80}")
+            
             # Use verified answer if available, otherwise use original answer
             final_answer = answer_result.answer if answer_result else "Không thể tạo câu trả lời."
             
@@ -364,11 +476,18 @@ class MultiAgentOrchestrator:
             processing_stats["response_generation_time"] = time.time() - step_start
             processing_stats["response_friendliness_score"] = response_result.user_friendliness_score
             
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Final Response Length: {len(response_result.final_response)} chars")
+                logger.debug(f"Tone: {response_result.tone}")
+                logger.debug(f"Friendliness Score: {response_result.user_friendliness_score}")
+                logger.debug(f"{'='*80}\n")
+            
             return response_result
         
         except Exception as e:
             processing_stats["response_generation_error"] = str(e)
             processing_stats["response_generation_time"] = time.time() - step_start
+            logger.error(f"Response generation failed: {e}")
             
             # Fallback response
             fallback_response = ResponseResult(
