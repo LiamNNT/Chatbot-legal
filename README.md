@@ -56,7 +56,7 @@ Khi backend chạy, các services sau sẽ khởi động:
 ## 🏗️ Architecture
 
 ```
-Frontend (Port 3000) - Bạn sẽ phát triển
+Frontend (Port 5173) - React + Tailwind CSS
        ↓
 Orchestrator (8001) - Điều phối agents
        ↓
@@ -67,25 +67,52 @@ Weaviate  OpenSearch
 (Vector)  (Keyword)
 ```
 
-## 🎨 Phát triển Frontend
+## 🎨 Quick Start - Frontend
 
-Backend API đã sẵn sàng! Bạn có thể:
+### Prerequisites
+- Node.js >= 18.x
+- Backend services running
 
-1. Tạo frontend app (React/Vue/Next.js) trong thư mục `frontend/`
-2. Gọi API tới `http://localhost:8001` (Orchestrator)
-
-Ví dụ API call:
-```javascript
-// Chat với bot
-const response = await fetch('http://localhost:8001/api/v1/chat', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    message: 'Học phí UIT là bao nhiêu?',
-    conversation_id: 'user-123'
-  })
-});
+### Start Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+# Hoặc sử dụng script:
+./start_frontend.sh
 ```
+
+Frontend sẽ chạy tại: **http://localhost:5173**
+
+### Features
+- ✅ Real-time chat interface
+- ✅ RAG context display
+- ✅ Session management
+- ✅ Customizable settings
+- ✅ System monitoring
+- ✅ Responsive design
+- ✅ Markdown support
+
+Xem thêm trong [Frontend README](frontend/README.md)
+
+## 🎯 Phát triển Full Stack
+
+### 1. Start Backend
+```bash
+conda activate chatbot-UIT
+python start_backend.py
+```
+
+### 2. Start Frontend (terminal mới)
+```bash
+cd frontend
+npm run dev
+```
+
+### 3. Truy cập
+- **Frontend**: http://localhost:5173
+- **Backend API Docs**: http://localhost:8001/docs
+- **RAG API Docs**: http://localhost:8000/docs
 
 ## 📚 Documentation
 
@@ -113,10 +140,13 @@ curl http://localhost:8001/api/v1/health
 - **LangChain** - LLM orchestration
 - **Sentence Transformers** - Embeddings
 
-### Frontend (Bạn sẽ chọn)
-- React / Vue / Next.js
-- TailwindCSS / Material-UI
-- Axios / Fetch API
+### Frontend
+- **React 19** - UI Library
+- **Vite 6** - Build tool
+- **Tailwind CSS 3.4** - Styling framework
+- **Axios** - HTTP client
+- **React Markdown** - Markdown rendering
+- **Lucide React** - Icons
 
 ## 📁 Project Structure
 
@@ -135,7 +165,14 @@ Chatbot-UIT/
 │       ├── core/
 │       ├── docker/            # Docker compose files
 │       └── retrieval/
-└── frontend/                  # 🎨 Bạn sẽ tạo ở đây
+└── frontend/                  # 🎨 React + Tailwind CSS UI
+    ├── src/
+    │   ├── components/        # UI components
+    │   ├── services/          # API integration
+    │   ├── hooks/             # Custom hooks
+    │   └── utils/             # Helper functions
+    ├── start_frontend.sh      # Frontend startup script
+    └── README.md              # Frontend documentation
 ```
 
 ## 🆘 Troubleshooting
