@@ -14,7 +14,7 @@ from app.config.settings import settings
 
 # Import OpenSearch client with error handling
 try:
-    from store.opensearch.client import get_opensearch_client
+    from infrastructure.store.opensearch.client import get_opensearch_client
     OPENSEARCH_AVAILABLE = True
 except ImportError:
     OPENSEARCH_AVAILABLE = False

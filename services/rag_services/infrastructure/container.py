@@ -96,7 +96,7 @@ class DIContainer:
         
         if self._keyword_repository is None:
             try:
-                from store.opensearch.client import get_opensearch_client
+                from infrastructure.store.opensearch.client import get_opensearch_client
                 OpenSearchKeywordAdapter = deps['OpenSearchKeywordAdapter']
                 opensearch_client = get_opensearch_client()
                 self._keyword_repository = OpenSearchKeywordAdapter(opensearch_client)

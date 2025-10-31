@@ -14,7 +14,7 @@ from weaviate.classes.query import MetadataQuery
 
 from core.ports.repositories import VectorSearchRepository
 from core.domain.models import DocumentChunk, SearchQuery, SearchResult, DocumentMetadata, DocumentLanguage
-from store.vector.weaviate_store import (
+from infrastructure.store.vector.weaviate_store import (
     get_weaviate_client,
     ensure_collection_exists,
     DOCUMENT_COLLECTION

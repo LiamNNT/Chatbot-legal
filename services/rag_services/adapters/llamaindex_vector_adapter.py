@@ -20,8 +20,8 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 from core.ports.repositories import VectorSearchRepository
 from core.domain.models import DocumentChunk, SearchQuery, SearchResult, DocumentMetadata, SearchMode
-from store.vector.faiss_store import get_faiss_vector_store
-from store.vector.chroma_store import get_chroma_vector_store
+from infrastructure.store.vector.faiss_store import get_faiss_vector_store
+from infrastructure.store.vector.chroma_store import get_chroma_vector_store
 from .mappers.llamaindex_mapper import LlamaIndexMapper
 
 logger = logging.getLogger(__name__)

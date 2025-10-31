@@ -22,8 +22,8 @@ from llama_index.core.node_parser import SentenceSplitter
 
 # Application-specific configurations and vector store handlers
 from app.config.settings import settings
-from store.vector.faiss_store import get_faiss_vector_store, persist_faiss
-from store.vector.chroma_store import get_chroma_vector_store
+from infrastructure.store.vector.faiss_store import get_faiss_vector_store, persist_faiss
+from infrastructure.store.vector.chroma_store import get_chroma_vector_store
 
 def _ensure_storage():
     """Ensures that the primary storage directory exists."""
