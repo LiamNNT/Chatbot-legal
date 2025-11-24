@@ -727,15 +727,16 @@ class Neo4jGraphAdapter(GraphRepository):
     
     async def add_nodes_batch(self, nodes: List[GraphNode]) -> List[str]:
         """
-        Batch add nodes with optimized UNWIND query.
+        Batch add nodes with optimized MERGE query (Deduplication enabled).
         
-        Much faster than individual node creation for bulk imports.
+        Uses MERGE instead of CREATE to prevent duplicate nodes.
+        Merges based on the standard ID key for each label (ma_mon, ma_khoa, etc).
         
         Args:
             nodes: List of GraphNodes to add
             
         Returns:
-            List of assigned node IDs
+            List of assigned node IDs (elementId from Neo4j)
             
         Example:
             nodes = [create_mon_hoc_node(...), create_mon_hoc_node(...)]
@@ -743,6 +744,8 @@ class Neo4jGraphAdapter(GraphRepository):
         """
         if not nodes:
             return []
+        
+        from core.domain.schema_mapper import SchemaMapper
         
         driver = self._get_driver()
         
@@ -756,22 +759,36 @@ class Neo4jGraphAdapter(GraphRepository):
         
         all_node_ids = []
         
-        # Batch insert per category
+        # Batch insert per category using MERGE
         for category, category_nodes in nodes_by_category.items():
+            # Get the standard ID key for this category
+            id_key = SchemaMapper.PROPERTY_MAPPING.get(category, {}).get("id_key", "id")
+            
             # Prepare data for UNWIND
             nodes_data = []
             for node in category_nodes:
                 props = node.properties.copy()
-                # Generate ID if not present
-                if "id" not in props and "code" not in props:
-                    import uuid
-                    props["_generated_id"] = str(uuid.uuid4())
+                
+                # Ensure ID key exists
+                if id_key not in props:
+                    # Try to extract from common keys
+                    id_value = props.get("code") or props.get("id") or props.get("name")
+                    if id_value:
+                        # Clean the ID
+                        id_value = SchemaMapper.extract_clean_id(str(id_value), category)
+                        props[id_key] = id_value
+                    else:
+                        # Generate fallback ID
+                        import uuid
+                        props[id_key] = f"auto_{str(uuid.uuid4())[:8]}"
+                
                 nodes_data.append(props)
             
+            # Use MERGE to prevent duplicates
             cypher = f"""
             UNWIND $nodes_data as node_props
-            CREATE (n:{category})
-            SET n = node_props
+            MERGE (n:{category} {{{id_key}: node_props.{id_key}}})
+            SET n += node_props
             RETURN elementId(n) as id
             """
             
@@ -782,7 +799,7 @@ class Neo4jGraphAdapter(GraphRepository):
                     for record in result:
                         all_node_ids.append(record["id"])
                 
-                logger.info(f"✓ Batch created {len(category_nodes)} nodes of type {category}")
+                logger.info(f"✓ Batch created/updated {len(category_nodes)} nodes of type {category}")
             except Exception as e:
                 logger.error(f"Error in batch node creation: {e}")
                 raise
@@ -811,7 +828,13 @@ class Neo4jGraphAdapter(GraphRepository):
         # Group by relationship type
         rels_by_type = {}
         for rel in relationships:
-            rel_type = rel.rel_type.value
+            # Handle both string and enum types
+            # Check if it has .value attribute (enum) instead of isinstance
+            if hasattr(rel.rel_type, 'value'):
+                rel_type = rel.rel_type.value
+            else:
+                rel_type = rel.rel_type
+            
             if rel_type not in rels_by_type:
                 rels_by_type[rel_type] = []
             rels_by_type[rel_type].append(rel)

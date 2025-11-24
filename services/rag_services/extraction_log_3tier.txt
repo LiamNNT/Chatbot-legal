@@ -1,0 +1,3 @@
+/home/kien/anaconda3/envs/chatbot-UIT/lib/python3.11/site-packages/weaviate/warnings.py:133: DeprecationWarning: Dep005: You are using weaviate-client version 4.9.3. The latest version is 4.18.1.
+            Consider upgrading to the latest version. See https://weaviate.io/developers/weaviate/client-libraries/python for details.
+  warnings.warn(

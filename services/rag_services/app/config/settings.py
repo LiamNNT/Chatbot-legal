@@ -61,6 +61,28 @@ class Settings(BaseSettings):
     vector_weight: float = 0.5      # Weight for vector scores in fusion
     rrf_rank_constant: int = 60     # RRF rank constant (typically 60)
 
+    # --- LLM Configuration ---
+    openai_api_key: str = ""  # OpenAI API key (or OpenRouter API key)
+    openai_base_url: str = ""  # Custom base URL (e.g., https://openrouter.ai/api/v1)
+    gemini_api_key: str = ""  # Google Gemini API key
+    llm_provider: str = "openai"  # LLM provider: openai, gemini, or openrouter
+    llm_model: str = "gpt-4o-mini"  # Model to use (for OpenRouter: anthropic/claude-3.5-sonnet, etc.)
+    llm_temperature: float = 0.0  # Temperature for LLM generation
+    llm_max_tokens: int = 2000  # Max tokens for LLM response
+
+    # --- 3-Tier Extraction Strategy ---
+    tier2_model_id: str = "x-ai/grok-4.1-fast"  # Tier 2: Entity extraction
+    tier2_temperature: float = 0.1
+    tier2_max_tokens: int = 2048
+    tier3_model_id: str = "x-ai/grok-4.1-fast"  # Tier 3: Rule extraction
+    tier3_temperature: float = 0.0
+    tier3_max_tokens: int = 4096
+
+    # --- Neo4j Graph Database ---
+    neo4j_uri: str = "bolt://localhost:7687"  # Neo4j connection URI
+    neo4j_user: str = "neo4j"  # Neo4j username
+    neo4j_password: str = "password"  # Neo4j password
+
     # --- Logging Configuration ---
     log_level: str = "INFO"
 

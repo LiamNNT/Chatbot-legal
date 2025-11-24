@@ -110,6 +110,20 @@ class WeaviateVectorAdapter(VectorSearchRepository):
         # Prepare metadata extras as JSON string
         extra_json = json.dumps(chunk.metadata.extra) if chunk.metadata.extra else "{}"
         
+        # Flatten critical metadata fields for better filtering
+        chapter = None
+        article = None
+        article_number = None
+        structure_type = None
+        filename = None
+        
+        if chunk.metadata.extra:
+            chapter = chunk.metadata.extra.get('chapter')
+            article = chunk.metadata.extra.get('article')
+            article_number = chunk.metadata.extra.get('article_number')
+            structure_type = chunk.metadata.extra.get('structure_type')
+            filename = chunk.metadata.extra.get('filename')
+        
         return {
             "text": chunk.text,
             "doc_id": chunk.metadata.doc_id,
@@ -124,6 +138,11 @@ class WeaviateVectorAdapter(VectorSearchRepository):
             "section": chunk.metadata.section or "",
             "subsection": chunk.metadata.subsection or "",
             "language": chunk.metadata.language.value if chunk.metadata.language else "vi",
+            "chapter": chapter,
+            "article": article,
+            "article_number": article_number,
+            "structure_type": structure_type,
+            "filename": filename,
             "metadata_json": extra_json
         }
     

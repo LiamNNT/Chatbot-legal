@@ -115,7 +115,7 @@ def check_conda_env() -> bool:
     return False
 
 def start_docker_services(project_root: Path):
-    """Start Docker services (OpenSearch and Weaviate)"""
+    """Start Docker services (OpenSearch, Weaviate, and Neo4j)"""
     global docker_services_started
     
     print_step("1", "4", "Starting Docker Services")
@@ -128,10 +128,11 @@ def start_docker_services(project_root: Path):
     docker_dir = project_root / "services" / "rag_services" / "docker"
     
     # Check if services are already running
-    if check_port(9200) and check_port(8090):
+    if check_port(9200) and check_port(8090) and check_port(7687):
         print_success("Docker services already running")
         print_info("  - OpenSearch: http://localhost:9200")
         print_info("  - Weaviate: http://localhost:8090")
+        print_info("  - Neo4j: bolt://localhost:7687")
         docker_services_started = True
         return
     
@@ -147,15 +148,21 @@ def start_docker_services(project_root: Path):
         cwd=docker_dir,
         check=False
     )
+    run_command(
+        ["docker-compose", "-f", "docker-compose.neo4j.yml", "down"],
+        cwd=docker_dir,
+        check=False
+    )
     time.sleep(2)
     
-    # Start both services together to share network
-    print_info("Starting OpenSearch and Weaviate...")
+    # Start all services together to share network
+    print_info("Starting OpenSearch, Weaviate, and Neo4j...")
     result = run_command(
         [
             "docker-compose",
             "-f", "docker-compose.opensearch.yml",
             "-f", "docker-compose.weaviate.yml",
+            "-f", "docker-compose.neo4j.yml",
             "up", "-d"
         ],
         cwd=docker_dir
@@ -179,7 +186,12 @@ def start_docker_services(project_root: Path):
                 check=False
             ).returncode == 0
             
-            if opensearch_healthy and weaviate_healthy:
+            neo4j_healthy = run_command(
+                ["curl", "-sf", "http://localhost:7474"],
+                check=False
+            ).returncode == 0
+            
+            if opensearch_healthy and weaviate_healthy and neo4j_healthy:
                 print_success("All Docker services are healthy!")
                 break
             
@@ -194,6 +206,8 @@ def start_docker_services(project_root: Path):
         print_info("  - OpenSearch: http://localhost:9200")
         print_info("  - OpenSearch Dashboards: http://localhost:5601")
         print_info("  - Weaviate: http://localhost:8090")
+        print_info("  - Neo4j Browser: http://localhost:7474 (neo4j/uitchatbot)")
+        print_info("  - Neo4j Bolt: bolt://localhost:7687")
     else:
         print_error("Failed to start Docker services")
         sys.exit(1)
@@ -372,10 +386,16 @@ def print_summary():
     print(f"  {Colors.GREEN}✓{Colors.NC} OpenSearch:           http://localhost:9200")
     print(f"  {Colors.GREEN}✓{Colors.NC} OpenSearch Dashboards: http://localhost:5601")
     print(f"  {Colors.GREEN}✓{Colors.NC} Weaviate:             http://localhost:8090")
+    print(f"  {Colors.GREEN}✓{Colors.NC} Neo4j Browser:        http://localhost:7474")
+    print(f"  {Colors.GREEN}✓{Colors.NC} Neo4j Bolt:           bolt://localhost:7687")
     
     print(f"\n{Colors.BOLD}API Documentation:{Colors.NC}")
     print(f"  - RAG API Docs:         http://localhost:8000/docs")
     print(f"  - Orchestrator Docs:    http://localhost:8001/docs")
+    
+    print(f"\n{Colors.BOLD}Database Credentials:{Colors.NC}")
+    print(f"  - Neo4j: neo4j / uitchatbot")
+    print(f"  - OpenSearch: admin / admin")
     
     print(f"\n{Colors.BOLD}Health Checks:{Colors.NC}")
     print(f"  curl http://localhost:8000/v1/health")
@@ -418,6 +438,11 @@ def stop_all_services(project_root: Path):
         )
         run_command(
             ["docker-compose", "-f", "docker-compose.opensearch.yml", "down"],
+            cwd=docker_dir,
+            check=False
+        )
+        run_command(
+            ["docker-compose", "-f", "docker-compose.neo4j.yml", "down"],
             cwd=docker_dir,
             check=False
         )

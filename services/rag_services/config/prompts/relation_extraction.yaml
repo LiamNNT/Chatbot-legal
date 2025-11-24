@@ -1,0 +1,180 @@
+# Relation Extraction Prompts for CatRAG
+# English prompts for extracting relationships from Vietnamese academic text
+# Optimized for OpenAI GPT-4 and Google Gemini
+
+# Main relation extraction prompt
+relation_extraction_prompt: |
+  You are an expert in analyzing academic documents from UIT (University of Information Technology) in Vietnam.
+  
+  **TASK:** Extract relationships between entities from the Vietnamese text provided below.
+  
+  **VALID ENTITY CATEGORIES (MUST USE EXACTLY):**
+  - MON_HOC (Course)
+  - KHOA (Department)
+  - NGANH (Major/Program)
+  - QUY_DINH (Regulation)
+  - DIEU_KIEN (Condition)
+  - SINH_VIEN (Student)
+  - GIANG_VIEN (Lecturer)
+  
+  **ALLOWED RELATIONSHIP TYPES:**
+  1. DIEU_KIEN_TIEN_QUYET (Prerequisite): Course A requires completing Course B first
+     - Example: "IT003 requires completing IT002 first"
+     - Entities: MON_HOC → MON_HOC
+  
+  2. DIEU_KIEN_SONG_HANH (Co-requisite): Course A and B must be taken in same semester
+     - Example: "IT004 must be taken together with IT005"
+     - Entities: MON_HOC → MON_HOC
+  
+  3. THUOC_CHUONG_TRINH (Belongs to Program): Course belongs to academic program
+     - Example: "IT003 belongs to CS Program 2023"
+     - Entities: MON_HOC → NGANH
+  
+  4. THUOC_KHOA (Belongs to Department): Course/Program belongs to department
+     - Example: "IT003 belongs to Computer Science Department"
+     - Entities: MON_HOC/NGANH → KHOA
+  
+  5. LIEN_QUAN_NOI_DUNG (Content Related): Courses have related content
+     - Example: "IT003 is related to IT004"
+     - Entities: MON_HOC → MON_HOC
+  
+  6. AP_DUNG_CHO (Applies To): Regulation applies to target group
+     - Example: "Regulation 790 applies to students from 2022"
+     - Entities: QUY_DINH → SINH_VIEN/NGANH/KHOA
+  
+  7. QUY_DINH_DIEU_KIEN (Regulates Condition): Regulation defines conditions
+     - Example: "Article 14 regulates course registration"
+     - Entities: QUY_DINH → DIEU_KIEN
+  
+  **OUTPUT FORMAT (JSON):**
+  ```json
+  [
+    {{
+      "source_entity": "IT003",
+      "source_category": "MON_HOC",
+      "relation_type": "DIEU_KIEN_TIEN_QUYET",
+      "target_entity": "IT002",
+      "target_category": "MON_HOC",
+      "confidence": 0.95,
+      "evidence": "Original text: 'Môn IT003 cần hoàn thành IT002 trước khi đăng ký'"
+    }}
+  ]
+  ```
+  
+  **IMPORTANT RULES:**
+  1. Only extract relationships with confidence >= 0.7
+  2. MUST provide evidence directly from the original text (keep Vietnamese text as-is in evidence)
+  3. Use correct relation_type from the allowed list
+  4. MUST use EXACT category names: MON_HOC, KHOA, NGANH, QUY_DINH, DIEU_KIEN, SINH_VIEN, GIANG_VIEN
+  5. NEVER use English categories like COURSE, DEPARTMENT, REGULATION - use Vietnamese categories only
+  6. Do NOT fabricate information not present in the text
+  6. If uncertain, assign lower confidence score
+  7. The input text is in Vietnamese - analyze it carefully but respond in JSON format
+  
+  **TEXT TO ANALYZE (Vietnamese):**
+  {text}
+  
+  **DETECTED ENTITIES (for reference):**
+  {entities}
+  
+  Extract ALL relationships from the text above in JSON format.
+  Return ONLY the JSON array, no additional text.
+
+# Simplified extraction for specific domains
+course_prerequisites_prompt: |
+  Extract prerequisite relationships between courses from Vietnamese text.
+  
+  Text (Vietnamese): {text}
+  
+  Find patterns like:
+  - "A cần hoàn thành B trước" (A requires completing B first)
+  - "A yêu cầu B" (A requires B)
+  - "Điều kiện tiên quyết của A là B" (Prerequisite of A is B)
+  - "Phải học B trước khi học A" (Must take B before A)
+  
+  Return JSON array:
+  ```json
+  [
+    {
+      "source_course": "IT003",
+      "prerequisite_course": "IT002",
+      "type": "required|recommended",
+      "confidence": 0.95,
+      "evidence": "..."
+    }
+  ]
+  ```
+
+regulation_application_prompt: |
+  Extract which regulations apply to which target groups from Vietnamese text.
+  
+  Text (Vietnamese): {text}
+  
+  Find patterns like:
+  - "Quy định X áp dụng cho Y" (Regulation X applies to Y)
+  - "Điều Y quy định về Z" (Article Y regulates Z)
+  - "Y phải tuân theo quy định X" (Y must follow regulation X)
+  
+  Return JSON array with relations.
+
+# Entity context template
+entity_context_template: |
+  {category}: {text} (confidence: {confidence})
+
+# Few-shot examples for better extraction
+few_shot_examples:
+  - input: |
+      Môn IT003 - Cấu trúc dữ liệu và giải thuật yêu cầu sinh viên
+      phải hoàn thành môn IT002 - Lập trình hướng đối tượng và 
+      môn IT001 - Nhập môn lập trình trước khi đăng ký.
+    output: |
+      [
+        {{
+          "source_entity": "IT003",
+          "source_category": "MON_HOC",
+          "relation_type": "DIEU_KIEN_TIEN_QUYET",
+          "target_entity": "IT002",
+          "target_category": "MON_HOC",
+          "confidence": 0.95,
+          "evidence": "yêu cầu sinh viên phải hoàn thành môn IT002"
+        }},
+        {{
+          "source_entity": "IT003",
+          "source_category": "MON_HOC",
+          "relation_type": "DIEU_KIEN_TIEN_QUYET",
+          "target_entity": "IT001",
+          "target_category": "MON_HOC",
+          "confidence": 0.95,
+          "evidence": "phải hoàn thành môn IT001 trước khi đăng ký"
+        }}
+      ]
+  
+  - input: |
+      Quy chế 790/QĐ-ĐHCNTT áp dụng cho tất cả sinh viên khóa 2022 trở đi
+      của các ngành thuộc Khoa Công nghệ Thông tin.
+    output: |
+      [
+        {{
+          "source_entity": "Quy chế 790/QĐ-ĐHCNTT",
+          "source_category": "QUY_DINH",
+          "relation_type": "AP_DUNG_CHO",
+          "target_entity": "KHOA CNTT",
+          "target_category": "KHOA",
+          "confidence": 0.90,
+          "evidence": "áp dụng cho...các ngành thuộc Khoa Công nghệ Thông tin"
+        }}
+      ]
+
+# Validation prompt
+validation_prompt: |
+  Validate whether the following extracted relations are reasonable:
+  
+  {relations}
+  
+  Evaluate:
+  1. Is the evidence accurate?
+  2. Is the relation_type correct?
+  3. Are the categories correct?
+  4. Is the confidence score reasonable?
+  
+  Return JSON with validated relations and errors (if any).

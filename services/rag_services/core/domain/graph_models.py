@@ -12,42 +12,48 @@ from enum import Enum
 
 
 class NodeCategory(str, Enum):
-    """CatRAG Node Categories"""
-    MON_HOC = "MonHoc"
-    QUY_DINH = "QuyDinh"
-    DIEU_KIEN = "DieuKien"
-    KHOA = "Khoa"
-    NGANH = "Nganh"
-    CHUONG_TRINH_DAO_TAO = "ChuongTrinhDaoTao"
-    SINH_VIEN = "SinhVien"
-    KY_HOC = "KyHoc"
-    GIANG_VIEN = "GiangVien"
-    HOC_PHI = "HocPhi"
+    """
+    CatRAG Node Categories - STANDARDIZED SCHEMA
+    
+    All values are UPPER_SNAKE_CASE to match Neo4j labels directly.
+    This fixes the previous MonHoc vs MON_HOC inconsistency.
+    """
+    MON_HOC = "MON_HOC"  # Changed from "MonHoc"
+    QUY_DINH = "QUY_DINH"  # Changed from "QuyDinh"
+    DIEU_KIEN = "DIEU_KIEN"  # Changed from "DieuKien"
+    KHOA = "KHOA"  # Changed from "Khoa"
+    NGANH = "NGANH"  # Changed from "Nganh"
+    CHUONG_TRINH_DAO_TAO = "CHUONG_TRINH_DAO_TAO"  # Changed from "ChuongTrinhDaoTao"
+    SINH_VIEN = "SINH_VIEN"  # Changed from "SinhVien"
+    KY_HOC = "KY_HOC"  # Changed from "KyHoc"
+    GIANG_VIEN = "GIANG_VIEN"  # Changed from "GiangVien"
+    HOC_PHI = "HOC_PHI"  # Changed from "HocPhi"
 
 
 class RelationshipType(str, Enum):
     """CatRAG Relationship Types"""
     # Hierarchical
-    THUOC_KHOA = "THUOC_KHOA"
-    CUA_NGANH = "CUA_NGANH"
-    THUOC_CHUONG_TRINH = "THUOC_CHUONG_TRINH"
+    THUOC_KHOA = "THUOC_KHOA"  # MON_HOC/NGANH → KHOA
+    CUA_NGANH = "CUA_NGANH"  # MON_HOC → NGANH
+    THUOC_CHUONG_TRINH = "THUOC_CHUONG_TRINH"  # MON_HOC → CHUONG_TRINH_DAO_TAO
+    QUAN_LY = "QUAN_LY"  # KHOA → NGANH/MON_HOC (management relationship)
     
     # Prerequisites (CRITICAL for routing)
-    DIEU_KIEN_TIEN_QUYET = "DIEU_KIEN_TIEN_QUYET"
-    YEU_CAU_DIEU_KIEN = "YEU_CAU_DIEU_KIEN"
-    QUY_DINH_DIEU_KIEN = "QUY_DINH_DIEU_KIEN"
+    DIEU_KIEN_TIEN_QUYET = "DIEU_KIEN_TIEN_QUYET"  # MON_HOC → MON_HOC only
+    YEU_CAU_DIEU_KIEN = "YEU_CAU_DIEU_KIEN"  # MON_HOC → DIEU_KIEN
+    QUY_DINH_DIEU_KIEN = "QUY_DINH_DIEU_KIEN"  # QUY_DINH → DIEU_KIEN
     
     # Applicability
-    AP_DUNG_CHO = "AP_DUNG_CHO"
+    AP_DUNG_CHO = "AP_DUNG_CHO"  # QUY_DINH → (SINH_VIEN/NGANH/KHOA)
     
     # Semantic
-    LIEN_QUAN_NOI_DUNG = "LIEN_QUAN_NOI_DUNG"
-    THAY_THE = "THAY_THE"
-    BO_SUNG = "BO_SUNG"
+    LIEN_QUAN_NOI_DUNG = "LIEN_QUAN_NOI_DUNG"  # MON_HOC → MON_HOC
+    THAY_THE = "THAY_THE"  # MON_HOC → MON_HOC
+    BO_SUNG = "BO_SUNG"  # MON_HOC → MON_HOC
     
     # Scheduling
-    HOC_TRONG = "HOC_TRONG"
-    DAY = "DAY"
+    HOC_TRONG = "HOC_TRONG"  # MON_HOC → KY_HOC
+    DAY = "DAY"  # GIANG_VIEN → MON_HOC
 
 
 @dataclass

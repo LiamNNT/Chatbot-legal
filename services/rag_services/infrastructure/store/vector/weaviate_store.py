@@ -172,6 +172,31 @@ def create_document_collection(client: weaviate.WeaviateClient) -> bool:
                     description="Document language (vi, en)"
                 ),
                 Property(
+                    name="chapter",
+                    data_type=DataType.TEXT,
+                    description="Chapter (Chương) for legal documents"
+                ),
+                Property(
+                    name="article",
+                    data_type=DataType.TEXT,
+                    description="Article (Điều) for legal documents"
+                ),
+                Property(
+                    name="article_number",
+                    data_type=DataType.INT,
+                    description="Article number (numeric part of Điều)"
+                ),
+                Property(
+                    name="structure_type",
+                    data_type=DataType.TEXT,
+                    description="Type: chapter, article, clause, point"
+                ),
+                Property(
+                    name="filename",
+                    data_type=DataType.TEXT,
+                    description="Original PDF filename"
+                ),
+                Property(
                     name="metadata_json",
                     data_type=DataType.TEXT,
                     description="Additional metadata as JSON string"
