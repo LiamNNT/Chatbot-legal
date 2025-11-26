@@ -15,12 +15,10 @@ from ..ports.agent_ports import AgentPort
 
 
 class AgentType(Enum):
-    """Types of specialized agents."""
-    PLANNER = "planner"
-    QUERY_REWRITER = "query_rewriter"
-    ANSWER_AGENT = "answer_agent"
-    VERIFIER = "verifier"
-    RESPONSE_AGENT = "response_agent"
+    """Types of specialized agents (optimized 3-agent pipeline)."""
+    SMART_PLANNER = "smart_planner"  # Planning + Query Rewriting
+    ANSWER_AGENT = "answer_agent"  # Answer generation
+    RESPONSE_FORMATTER = "response_formatter"  # Verification + Formatting
 
 
 @dataclass
@@ -37,39 +35,6 @@ class AgentConfig:
 
 
 @dataclass
-class PlanStep:
-    """A single step in the execution plan."""
-    step_id: str
-    action: str
-    description: str
-    dependencies: List[str]
-    parameters: Dict[str, Any]
-
-
-@dataclass
-class PlanResult:
-    """Result from the planner agent."""
-    query: str
-    intent: str
-    complexity: str  # "simple", "medium", "complex"
-    steps: List[PlanStep]
-    estimated_tokens: int
-    requires_verification: bool
-    metadata: Dict[str, Any]
-
-
-@dataclass
-class QueryRewriteResult:
-    """Result from query rewriter agent."""
-    original_query: str
-    rewritten_queries: List[str]
-    search_terms: List[str]
-    intent_preserved: bool
-    confidence: float
-    metadata: Dict[str, Any]
-
-
-@dataclass
 class AnswerResult:
     """Result from answer agent."""
     query: str
@@ -77,28 +42,6 @@ class AnswerResult:
     confidence: float
     sources_used: List[str]
     reasoning_steps: List[str]
-    metadata: Dict[str, Any]
-
-
-@dataclass
-class VerificationResult:
-    """Result from verifier agent."""
-    original_query: str
-    answer: str
-    is_accurate: bool
-    confidence: float
-    issues_found: List[str]
-    suggestions: List[str]
-    metadata: Dict[str, Any]
-
-
-@dataclass
-class ResponseResult:
-    """Result from response agent."""
-    final_response: str
-    tone: str
-    completeness_score: float
-    user_friendliness_score: float
     metadata: Dict[str, Any]
 
 

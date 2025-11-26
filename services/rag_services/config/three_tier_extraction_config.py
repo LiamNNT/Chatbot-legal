@@ -122,7 +122,7 @@ class ThreeTierConfigLoader:
     
     def get_tier2_model_id(self) -> str:
         """Get Tier 2 model ID from .env"""
-        return os.getenv("TIER2_MODEL_ID", "x-ai/grok-4.1-fast")
+        return os.getenv("TIER2_MODEL_ID", "x-ai/grok-4.1-fast:free")
     
     def get_tier2_temperature(self) -> float:
         """Get Tier 2 temperature from .env"""
@@ -175,7 +175,7 @@ class ThreeTierConfigLoader:
     
     def get_tier3_model_id(self) -> str:
         """Get Tier 3 model ID from .env"""
-        return os.getenv("TIER3_MODEL_ID", "x-ai/grok-4.1-fast")
+        return os.getenv("TIER3_MODEL_ID", "x-ai/grok-4.1-fast:free")
     
     def get_tier3_temperature(self) -> float:
         """Get Tier 3 temperature from .env"""

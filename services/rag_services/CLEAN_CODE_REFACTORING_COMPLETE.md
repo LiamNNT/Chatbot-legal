@@ -43,7 +43,7 @@
 2. **`.env`** and **`.env.openrouter`**
    - Added 3-tier model configuration section
    - `TIER2_MODEL_ID=google/gemini-2.0-flash-exp:free`
-   - `TIER3_MODEL_ID=x-ai/grok-4.1-fast`
+   - `TIER3_MODEL_ID=x-ai/grok-4.1-fast:free`
    - Temperature and max tokens for each tier
 
 3. **`scripts/build_graph_phase2_entities.py`**
@@ -65,7 +65,7 @@
 **Before**:
 ```python
 # ❌ Config mixed with code
-LLM_MODEL = "x-ai/grok-4.1-fast"
+LLM_MODEL = "x-ai/grok-4.1-fast:free"
 SYSTEM_PROMPT = """
 [50 lines of Vietnamese text in Python string]
 """
@@ -179,7 +179,7 @@ config = ThreeTierConfigLoader()
 
 # Get model config
 tier3_config = config.get_tier3_model_config()
-print(f"Using: {tier3_config.model_id}")  # x-ai/grok-4.1-fast
+print(f"Using: {tier3_config.model_id}")  # x-ai/grok-4.1-fast:free
 
 # Get prompts
 system_prompt = config.get_tier3_system_prompt()  # From YAML

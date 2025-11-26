@@ -128,7 +128,7 @@ class RAGServiceAdapter(RAGServicePort):
             session = await self._get_session()
             
             async with session.get(
-                f"{self.rag_service_url}/health"
+                f"{self.rag_service_url}/v1/health"
             ) as response:
                 return response.status == 200
         

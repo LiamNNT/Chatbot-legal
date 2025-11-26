@@ -136,7 +136,7 @@ Trả về JSON:
     TIER3_MODEL = ModelConfig(
         name="Grok 4.1 Fast",
         provider="OpenRouter", 
-        model_id="x-ai/grok-4.1-fast",
+        model_id="x-ai/grok-4.1-fast:free",
         cost_per_1m_tokens_input=0.50,  # Reasonable for complex reasoning
         cost_per_1m_tokens_output=1.50,
         max_tokens=4096,
@@ -276,7 +276,7 @@ Chỉ trích xuất NẾU văn bản chứa logic phức tạp. Nếu chỉ là 
     ENV_VARS = {
         "OPENROUTER_API_KEY": "Required for Gemini Flash & Grok",
         "TIER2_MODEL": "google/gemini-2.0-flash-exp:free",
-        "TIER3_MODEL": "x-ai/grok-4.1-fast",
+        "TIER3_MODEL": "x-ai/grok-4.1-fast:free",
         "TIER2_TEMPERATURE": "0.1",
         "TIER3_TEMPERATURE": "0.0",
         "TIER2_MAX_TOKENS": "8192",

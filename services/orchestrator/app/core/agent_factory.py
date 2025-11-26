@@ -3,17 +3,20 @@ Factory for creating specialized agents based on configuration.
 
 This module implements the Factory pattern for creating agents,
 allowing for easy configuration-driven agent instantiation.
+
+Optimized 3-Agent Pipeline:
+- SmartPlannerAgent: Planning + Query Rewriting
+- AnswerAgent: Answer generation
+- ResponseFormatterAgent: Verification + Formatting
 """
 
 from typing import Dict, Any, Optional, Type, Union, List
 from abc import ABC, abstractmethod
 
 from ..agents.base import SpecializedAgent, AgentConfig, AgentType
-from ..agents.planner_agent import PlannerAgent
-from ..agents.query_rewriter_agent import QueryRewriterAgent
 from ..agents.answer_agent import AnswerAgent
-from ..agents.verifier_agent import VerifierAgent
-from ..agents.response_agent import ResponseAgent
+from ..agents.smart_planner_agent import SmartPlannerAgent
+from ..agents.response_formatter_agent import ResponseFormatterAgent
 from ..ports.agent_ports import AgentPort
 from ..core.config_manager import ConfigurationManager, get_config_manager
 
@@ -40,13 +43,11 @@ class ConfigurableAgentFactory(AgentFactory):
     creates appropriate agent instances with injected dependencies.
     """
     
-    # Registry of available agent classes
+    # Registry of available agent classes (optimized 3-agent pipeline)
     AGENT_CLASSES: Dict[str, Type[SpecializedAgent]] = {
-        "planner": PlannerAgent,
-        "query_rewriter": QueryRewriterAgent,
+        "smart_planner": SmartPlannerAgent,
         "answer_agent": AnswerAgent,
-        "verifier": VerifierAgent,
-        "response_agent": ResponseAgent,
+        "response_formatter": ResponseFormatterAgent,
     }
     
     def __init__(self, config_manager: Optional[ConfigurationManager] = None):
@@ -112,13 +113,11 @@ class ConfigurableAgentFactory(AgentFactory):
         Returns:
             AgentConfig instance
         """
-        # Map agent type string to enum
+        # Map agent type string to enum (optimized 3-agent pipeline)
         agent_type_map = {
-            "planner": AgentType.PLANNER,
-            "query_rewriter": AgentType.QUERY_REWRITER,
+            "smart_planner": AgentType.SMART_PLANNER,
             "answer_agent": AgentType.ANSWER_AGENT,
-            "verifier": AgentType.VERIFIER,
-            "response_agent": AgentType.RESPONSE_AGENT,
+            "response_formatter": AgentType.RESPONSE_FORMATTER,
         }
         
         agent_type_str = config_data.get("agent_type", "")

@@ -71,10 +71,10 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 2000  # Max tokens for LLM response
 
     # --- 3-Tier Extraction Strategy ---
-    tier2_model_id: str = "x-ai/grok-4.1-fast"  # Tier 2: Entity extraction
+    tier2_model_id: str = "x-ai/grok-4.1-fast:free"  # Tier 2: Entity extraction
     tier2_temperature: float = 0.1
     tier2_max_tokens: int = 2048
-    tier3_model_id: str = "x-ai/grok-4.1-fast"  # Tier 3: Rule extraction
+    tier3_model_id: str = "x-ai/grok-4.1-fast:free"  # Tier 3: Rule extraction
     tier3_temperature: float = 0.0
     tier3_max_tokens: int = 4096
 

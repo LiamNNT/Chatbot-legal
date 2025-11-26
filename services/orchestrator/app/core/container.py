@@ -3,18 +3,26 @@ Dependency injection container for orchestrator service.
 
 This module provides dependency injection and service management
 following the Ports & Adapters architecture pattern.
+
+Optimized 3-Agent Pipeline:
+- SmartPlannerAgent: Planning + Query Rewriting
+- AnswerAgent: Answer generation
+- ResponseFormatterAgent: Verification + Formatting
 """
 
 import os
+import logging
 from typing import Optional, Dict, Any
 from ..core.orchestration_service import OrchestrationService
-from ..agents.multi_agent_orchestrator import MultiAgentOrchestrator
+from ..agents.optimized_orchestrator import OptimizedMultiAgentOrchestrator
 from ..ports.agent_ports import AgentPort, RAGServicePort, ConversationManagerPort
 from ..adapters.openrouter_adapter import OpenRouterAdapter
 from ..adapters.rag_adapter import RAGServiceAdapter
 from ..adapters.conversation_manager import InMemoryConversationManagerAdapter
 from ..core.config_manager import ConfigurationManager, get_config_manager
 from ..core.agent_factory import AgentFactory, ConfigurableAgentFactory, get_agent_factory
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceContainer:
@@ -23,6 +31,8 @@ class ServiceContainer:
     
     This container manages the creation and lifecycle of all services
     and their dependencies, ensuring proper separation of concerns.
+    
+    Uses optimized 3-agent pipeline for cost efficiency.
     """
     
     def __init__(self, config_path: Optional[str] = None):
@@ -36,7 +46,7 @@ class ServiceContainer:
         self._rag_port: Optional[RAGServicePort] = None
         self._conversation_manager: Optional[ConversationManagerPort] = None
         self._orchestration_service: Optional[OrchestrationService] = None
-        self._multi_agent_orchestrator: Optional[MultiAgentOrchestrator] = None
+        self._multi_agent_orchestrator: Optional[OptimizedMultiAgentOrchestrator] = None
         self._config_manager: Optional[ConfigurationManager] = None
         self._agent_factory: Optional[AgentFactory] = None
         
@@ -149,12 +159,14 @@ class ServiceContainer:
             self._agent_factory = ConfigurableAgentFactory(self.get_config_manager())
         return self._agent_factory
     
-    def get_multi_agent_orchestrator(self) -> MultiAgentOrchestrator:
+    def get_multi_agent_orchestrator(self) -> OptimizedMultiAgentOrchestrator:
         """
         Get or create the multi-agent orchestrator instance.
         
+        Uses OptimizedMultiAgentOrchestrator (3 agents, 40% cost savings).
+        
         Returns:
-            MultiAgentOrchestrator instance with all dependencies injected
+            OptimizedMultiAgentOrchestrator instance with all dependencies injected
         """
         if self._multi_agent_orchestrator is None:
             # Get configuration from config manager
@@ -174,7 +186,11 @@ class ServiceContainer:
             else:
                 enable_planning = system_config.enable_planning
             
-            self._multi_agent_orchestrator = MultiAgentOrchestrator(
+            logger.info("=" * 60)
+            logger.info("🚀 Using OPTIMIZED orchestrator (3 agents, 40% cost savings)")
+            logger.info("=" * 60)
+            
+            self._multi_agent_orchestrator = OptimizedMultiAgentOrchestrator(
                 agent_port=self.get_agent_port(),
                 rag_port=self.get_rag_port(),
                 agent_factory=self.get_agent_factory(),
@@ -240,12 +256,12 @@ def get_orchestration_service() -> OrchestrationService:
     return container.get_orchestration_service()
 
 
-def get_multi_agent_orchestrator() -> MultiAgentOrchestrator:
+def get_multi_agent_orchestrator() -> OptimizedMultiAgentOrchestrator:
     """
     Get the multi-agent orchestrator from the global container.
     
     Returns:
-        MultiAgentOrchestrator instance
+        OptimizedMultiAgentOrchestrator instance (3 agents, 40% cost savings)
     """
     container = get_container()
     return container.get_multi_agent_orchestrator()

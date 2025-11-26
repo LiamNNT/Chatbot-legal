@@ -528,29 +528,25 @@ async def get_agents_info() -> dict:
                     "2. Query Rewriting (LongCat Flash Chat) - Optimize queries for search",
                     "3. RAG Retrieval - Get relevant context using optimized queries",
                     "4. Answer Generation (Qwen3 Coder) - Generate comprehensive answers",
-                    "5. Verification (DeepSeek R1) - Validate answer quality and accuracy",
-                    "6. Response Formatting (LongCat Flash Chat) - Create user-friendly responses"
+                    "5. Response Formatting (DeepSeek R1) - Verify and create user-friendly responses"
                 ]
             },
             "models_used": {
-                "planner": "mistralai/mistral-7b-instruct:free",
-                "query_rewriter": "meituan/longcat-flash-chat",
+                "smart_planner": "mistralai/mistral-7b-instruct:free",
                 "answer_agent": "qwen/qwen-3-coder-free",
-                "verifier": "deepseek/deepseek-r1-free",
-                "response_agent": "meituan/longcat-flash-chat"
+                "response_formatter": "deepseek/deepseek-r1-free"
             },
             "capabilities": {
-                "planning": "Analyzes query complexity and creates optimal execution strategies",
-                "query_optimization": "Rewrites queries for better search performance",
-                "rag_integration": "Retrieves relevant context from knowledge base",
+                "smart_planning": "Analyzes intent, complexity, and rewrites queries in single LLM call",
+                "rag_integration": "Retrieves relevant context from knowledge base (KG + Vector)",
                 "answer_generation": "Creates comprehensive, structured answers",
-                "quality_verification": "Validates accuracy and completeness",
-                "response_formatting": "Ensures user-friendly, conversational output"
+                "response_formatting": "Verifies accuracy and ensures user-friendly output"
             },
             "configuration": {
                 "verification_enabled": health_info.get("verification_enabled", True),
                 "planning_enabled": health_info.get("planning_enabled", True),
-                "providers": "OpenRouter API"
+                "providers": "OpenRouter API",
+                "optimization": "40% fewer LLM calls vs 5-agent pipeline"
             }
         }
     except Exception as e:
@@ -592,11 +588,9 @@ async def test_agents() -> dict:
             "response_preview": response.response[:200] + "..." if len(response.response) > 200 else response.response,
             "processing_stats": response.processing_stats,
             "agents_tested": {
-                "planner": "✅ Executed" if "planning_time" in response.processing_stats else "⚠️ Skipped",
-                "query_rewriter": "✅ Executed" if "query_rewrite_time" in response.processing_stats else "⚠️ Skipped",
+                "smart_planner": "✅ Executed" if "smart_planning_time" in response.processing_stats else "⚠️ Skipped",
                 "answer_agent": "✅ Executed" if "answer_generation_time" in response.processing_stats else "❌ Failed",
-                "verifier": "✅ Executed" if "verification_time" in response.processing_stats else "⚠️ Skipped",
-                "response_agent": "✅ Executed" if "response_generation_time" in response.processing_stats else "❌ Failed"
+                "response_formatter": "✅ Executed" if "response_formatting_time" in response.processing_stats else "❌ Failed"
             },
             "performance": {
                 "total_time": f"{response.processing_stats.get('total_time', 0):.2f}s",
