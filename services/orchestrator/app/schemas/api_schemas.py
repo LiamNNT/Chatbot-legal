@@ -54,6 +54,14 @@ class RAGContextInfo(BaseModel):
     total_documents: int = Field(..., description="Total number of documents retrieved")
     search_mode: str = Field(..., description="Search mode used")
     processing_time: Optional[float] = Field(None, description="RAG processing time in seconds")
+    
+    # Search source indicators
+    use_knowledge_graph: bool = Field(False, description="Whether Knowledge Graph was used")
+    use_vector_search: bool = Field(True, description="Whether Vector Search was used")
+    
+    # Smart planner info
+    complexity: Optional[str] = Field(None, description="Query complexity: simple/medium/complex")
+    strategy: Optional[str] = Field(None, description="RAG strategy used")
 
 
 class ProcessingStats(BaseModel):

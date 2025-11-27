@@ -36,10 +36,14 @@ class SmartPlanResult:
     hybrid_search: bool
     reranking: bool
     
-    # Metadata
+    # Metadata (required fields - no default)
     reasoning: str
     confidence: float
     metadata: Dict[str, Any]
+    
+    # Search source selection (optional fields with defaults - must come after required)
+    use_knowledge_graph: bool = False  # Whether to use Knowledge Graph
+    use_vector_search: bool = True     # Whether to use Vector Search
 
 
 class SmartPlannerAgent(SpecializedAgent):
@@ -182,6 +186,8 @@ class SmartPlannerAgent(SpecializedAgent):
         complexity_score = data.get("complexity_score", 5.0)
         complexity = data.get("complexity", self._score_to_complexity(complexity_score))
         requires_rag = data.get("requires_rag", True)
+        strategy = data.get("strategy", "standard_rag")
+        intent = data.get("intent", "informational")
         
         # Determine RAG parameters based on complexity
         if complexity == "simple" or not requires_rag:
@@ -197,21 +203,40 @@ class SmartPlannerAgent(SpecializedAgent):
             hybrid_search = data.get("hybrid_search", False)
             reranking = False
         
+        # Determine search sources based on complexity, strategy, and query content
+        # Use Knowledge Graph for:
+        # 1. Complex queries
+        # 2. Advanced RAG strategy
+        # 3. Queries about relationships between concepts/articles/regulations
+        needs_relationship_search = self._needs_knowledge_graph(original_query)
+        
+        use_knowledge_graph = (
+            requires_rag and 
+            (complexity == "complex" or 
+             strategy == "advanced_rag" or 
+             needs_relationship_search or
+             intent == "comparative")
+        )
+        # Always use vector search for RAG queries (primary source)
+        use_vector_search = requires_rag
+        
         return SmartPlanResult(
             query=original_query,
-            intent=data.get("intent", "informational"),
+            intent=intent,
             complexity=complexity,
             complexity_score=complexity_score,
             requires_rag=requires_rag,
-            strategy=data.get("strategy", "standard_rag"),
+            strategy=strategy,
             rewritten_queries=data.get("rewritten_queries", [original_query]),
             search_terms=data.get("search_terms", self._extract_keywords(original_query)),
             top_k=top_k,
             hybrid_search=hybrid_search,
             reranking=reranking,
+            use_knowledge_graph=use_knowledge_graph,
+            use_vector_search=use_vector_search,
             reasoning=data.get("reasoning", ""),
             confidence=0.85,
-            metadata={"source": "llm_response"}
+            metadata={"source": "llm_response", "kg_reason": "relationship_query" if needs_relationship_search else None}
         )
     
     def _create_fallback_result(self, query: str, response_content: str) -> SmartPlanResult:
@@ -240,9 +265,18 @@ class SmartPlannerAgent(SpecializedAgent):
             top_k, hybrid_search, reranking = 5, False, False
             strategy = "standard_rag"
         
+        # Determine search sources based on complexity and relationship queries
+        intent = self._detect_intent(query)
+        needs_relationship_search = self._needs_knowledge_graph(query)
+        use_knowledge_graph = (
+            requires_rag and 
+            (complexity == "complex" or needs_relationship_search or intent == "comparative")
+        )
+        use_vector_search = requires_rag
+        
         return SmartPlanResult(
             query=query,
-            intent=self._detect_intent(query),
+            intent=intent,
             complexity=complexity,
             complexity_score=complexity_score,
             requires_rag=requires_rag,
@@ -252,11 +286,14 @@ class SmartPlannerAgent(SpecializedAgent):
             top_k=top_k,
             hybrid_search=hybrid_search,
             reranking=reranking,
+            use_knowledge_graph=use_knowledge_graph,
+            use_vector_search=use_vector_search,
             reasoning="Fallback to rule-based analysis",
             confidence=0.6,
             metadata={
                 "fallback": True,
-                "original_response": response_content[:200]
+                "original_response": response_content[:200],
+                "kg_reason": "relationship_query" if needs_relationship_search else None
             }
         )
     
@@ -323,6 +360,59 @@ class SmartPlannerAgent(SpecializedAgent):
         # Informational (default)
         return "informational"
     
+    def _needs_knowledge_graph(self, query: str) -> bool:
+        """
+        Determine if the query would benefit from Knowledge Graph search.
+        
+        Knowledge Graph is particularly useful for:
+        - Questions about relationships between articles/regulations
+        - Questions involving multiple connected concepts  
+        - Questions that require traversing linked information
+        """
+        import re
+        query_lower = query.lower()
+        
+        # Relationship indicators - questions about connections between things
+        relationship_patterns = [
+            "mối quan hệ", "quan hệ", "liên quan", "liên kết",
+            "kết nối", "ảnh hưởng", "tác động", "phụ thuộc",
+            "dẫn đến", "gây ra", "bắt nguồn từ"
+        ]
+        
+        # Article/regulation reference patterns  
+        regulation_patterns = [
+            "khoản", "mục", "chương", "quy chế", "nghị định", "thông tư"
+        ]
+        
+        # Check for relationship keywords
+        has_relationship = any(p in query_lower for p in relationship_patterns)
+        
+        # Check for regulation/article references (excluding simple "điều" and "quy định")
+        has_regulation = any(p in query_lower for p in regulation_patterns)
+        
+        # Use regex to properly count distinct article references
+        # Pattern matches "điều X" where X is a number
+        article_pattern = r'điều\s*(\d+)'
+        article_matches = re.findall(article_pattern, query_lower)
+        unique_articles = set(article_matches)
+        has_multiple_articles = len(unique_articles) >= 2
+        
+        # Check for comparative patterns with regulations
+        comparative_regulation = (
+            (has_regulation or len(unique_articles) >= 1) and 
+            any(p in query_lower for p in ["so sánh", "khác", "giống", "với"])
+        )
+        
+        # Enable KG if:
+        # 1. Query explicitly asks about relationships
+        # 2. Query references multiple distinct articles (cross-reference)
+        # 3. Query compares regulations
+        return (
+            has_relationship or
+            has_multiple_articles or
+            comparative_regulation
+        )
+
     def _apply_rule_based_rewriting(self, query: str) -> List[str]:
         """Apply rule-based query rewriting."""
         query_lower = query.lower()

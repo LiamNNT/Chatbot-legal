@@ -36,31 +36,18 @@ apiClient.interceptors.response.use(
 
 /**
  * Chat API - Send message to chatbot
+ * Backend automatically decides RAG usage and parameters via SmartPlannerAgent
  * @param {string} query - User's message
  * @param {string} sessionId - Session ID for conversation
- * @param {Object} options - Additional options
  * @returns {Promise} API response with chatbot reply
  */
-export const sendChatMessage = async (query, sessionId, options = {}) => {
-  const {
-    useRag = true,
-    ragTopK = 5,
-    model = null,
-    temperature = 0.7,
-    maxTokens = 2000,
-    stream = false,
-  } = options;
-
+export const sendChatMessage = async (query, sessionId) => {
   try {
     const response = await apiClient.post('/chat', {
       query,
       session_id: sessionId,
-      use_rag: useRag,
-      rag_top_k: ragTopK,
-      model,
-      temperature,
-      max_tokens: maxTokens,
-      stream,
+      // Let backend decide automatically via SmartPlannerAgent
+      use_rag: true,  // Always enable, SmartPlanner will decide if actually needed
     });
     return response.data;
   } catch (error) {

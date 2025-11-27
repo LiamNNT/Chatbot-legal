@@ -91,8 +91,9 @@ class ServiceContainer:
         """
         if self._rag_port is None:
             # Get configuration from environment
-            rag_service_url = os.getenv("RAG_SERVICE_URL", "http://localhost:8001")
-            timeout = int(os.getenv("RAG_SERVICE_TIMEOUT", "30"))
+            rag_service_url = os.getenv("RAG_SERVICE_URL", "http://localhost:8000")
+            timeout_env = os.getenv("RAG_SERVICE_TIMEOUT", "60")
+            timeout = None if timeout_env.lower() == "none" else int(timeout_env)
             max_retries = int(os.getenv("RAG_SERVICE_MAX_RETRIES", "3"))
             
             self._rag_port = RAGServiceAdapter(

@@ -12,8 +12,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Collection name for document chunks
-DOCUMENT_COLLECTION = "VietnameseDocument"
+# Collection name for document chunks - matches actual data collection
+DOCUMENT_COLLECTION = "VietnameseDocumentV3"
 
 
 def get_weaviate_client(

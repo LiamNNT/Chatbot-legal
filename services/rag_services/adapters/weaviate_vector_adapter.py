@@ -259,9 +259,12 @@ class WeaviateVectorAdapter(VectorSearchRepository):
             # Build and execute Weaviate query
             # Weaviate v4 API: pass vector directly, filters are applied separately
             # Must specify return_properties to get the text content
+            # Properties match VietnameseDocumentV3 schema
             return_props = ["text", "doc_id", "chunk_id", "chunk_index", "title", 
-                          "page", "doc_type", "faculty", "year", "subject", 
-                          "section", "subsection", "language", "metadata_json"]
+                          "page", "doc_type", "faculty", "year",
+                          "language", "structure_type", "chapter", "chapter_title",
+                          "article", "article_number", "article_title",
+                          "source", "filename", "metadata_json"]
             
             # Execute query - in v4, filters are NOT supported in near_vector() directly
             # If filters are needed, we need to use a different approach

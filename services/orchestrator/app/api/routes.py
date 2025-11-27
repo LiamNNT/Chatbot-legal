@@ -90,13 +90,27 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 for doc in response.rag_context.retrieved_documents
             ]
             
+            # Get search mode from metadata
+            search_mode = "unknown"
+            if response.rag_context.search_metadata:
+                search_mode = response.rag_context.search_metadata.get("search_mode", "unknown")
+            
+            # Get KG usage info from processing stats
+            use_knowledge_graph = response.processing_stats.get("use_knowledge_graph", False)
+            use_vector_search = response.processing_stats.get("use_vector_search", True)
+            complexity = response.processing_stats.get("complexity")
+            strategy = response.processing_stats.get("strategy")
+            
             rag_context_info = RAGContextInfo(
                 query=response.rag_context.query,
                 documents=documents,
                 total_documents=len(documents),
-                search_mode=response.rag_context.search_metadata.get("search_mode", "unknown") 
-                if response.rag_context.search_metadata else "unknown",
-                processing_time=response.processing_stats.get("rag_time")
+                search_mode=search_mode,
+                processing_time=response.processing_stats.get("rag_time"),
+                use_knowledge_graph=use_knowledge_graph,
+                use_vector_search=use_vector_search,
+                complexity=complexity,
+                strategy=strategy
             )
         
         # Transform processing stats

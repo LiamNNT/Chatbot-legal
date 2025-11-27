@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Info } from 'lucide-react';
 
 const SettingsModal = ({ isOpen, onClose, settings, onSave }) => {
   const [localSettings, setLocalSettings] = useState(settings);
@@ -16,7 +16,7 @@ const SettingsModal = ({ isOpen, onClose, settings, onSave }) => {
       <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 p-4">
-          <h2 className="text-xl font-semibold">Cài đặt</h2>
+          <h2 className="text-xl font-semibold">Cài đặt giao diện</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -27,88 +27,26 @@ const SettingsModal = ({ isOpen, onClose, settings, onSave }) => {
 
         {/* Content */}
         <div className="p-4 space-y-4">
-          {/* Use RAG */}
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={localSettings.useRag}
-                onChange={(e) =>
-                  setLocalSettings({ ...localSettings, useRag: e.target.checked })
-                }
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium">Sử dụng RAG (tìm kiếm tài liệu)</span>
-            </label>
-            <p className="ml-6 text-xs text-gray-500 mt-1">
-              Tìm kiếm và sử dụng tài liệu liên quan để trả lời chính xác hơn
-            </p>
-          </div>
-
-          {/* Top K */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Số tài liệu tìm kiếm: {localSettings.ragTopK}
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={localSettings.ragTopK}
-              onChange={(e) =>
-                setLocalSettings({ ...localSettings, ragTopK: parseInt(e.target.value) })
-              }
-              className="w-full"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Số lượng tài liệu tham khảo khi tìm kiếm (1-10)
-            </p>
-          </div>
-
-          {/* Temperature */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Temperature: {localSettings.temperature}
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={localSettings.temperature}
-              onChange={(e) =>
-                setLocalSettings({ ...localSettings, temperature: parseFloat(e.target.value) })
-              }
-              className="w-full"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Độ sáng tạo của câu trả lời (0 = chính xác, 2 = sáng tạo)
-            </p>
-          </div>
-
-          {/* Max Tokens */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Độ dài tối đa: {localSettings.maxTokens}
-            </label>
-            <input
-              type="range"
-              min="500"
-              max="4000"
-              step="100"
-              value={localSettings.maxTokens}
-              onChange={(e) =>
-                setLocalSettings({ ...localSettings, maxTokens: parseInt(e.target.value) })
-              }
-              className="w-full"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Độ dài tối đa của câu trả lời (500-4000 tokens)
-            </p>
+          {/* Info about automatic system */}
+          <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
+            <div className="flex items-start gap-2">
+              <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-900">Hệ thống tự động</p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Chatbot sử dụng SmartPlannerAgent để tự động quyết định:
+                </p>
+                <ul className="text-xs text-blue-700 mt-1 ml-4 list-disc">
+                  <li>Có cần tìm kiếm tài liệu (RAG) hay không</li>
+                  <li>Sử dụng Knowledge Graph hay Vector Search</li>
+                  <li>Các siêu tham số tối ưu cho từng câu hỏi</li>
+                </ul>
+              </div>
+            </div>
           </div>
 
           {/* Show RAG Context */}
-          <div>
+          <div className="pt-2">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -118,10 +56,25 @@ const SettingsModal = ({ isOpen, onClose, settings, onSave }) => {
                 }
                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm font-medium">Hiển thị tài liệu tham khảo</span>
+              <span className="text-sm font-medium">Hiển thị ngữ cảnh truy xuất</span>
             </label>
             <p className="ml-6 text-xs text-gray-500 mt-1">
-              Hiển thị panel tài liệu được sử dụng để trả lời
+              Hiển thị panel bên phải với các tài liệu được hệ thống sử dụng để trả lời
+            </p>
+          </div>
+
+          {/* Pipeline Info */}
+          <div className="rounded-lg bg-gray-50 p-3 border border-gray-200">
+            <p className="text-sm font-medium text-gray-900 mb-2">Pipeline đang sử dụng</p>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <span className="px-2 py-1 bg-green-100 text-green-700 rounded">SmartPlanner</span>
+              <span>→</span>
+              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">AnswerAgent</span>
+              <span>→</span>
+              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">ResponseFormatter</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              3-Agent Pipeline tối ưu (tiết kiệm 40% chi phí LLM)
             </p>
           </div>
         </div>

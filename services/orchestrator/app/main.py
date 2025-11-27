@@ -9,6 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 import os
+from pathlib import Path
+
+# Load .env file before anything else
+from dotenv import load_dotenv
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path, override=True)  # Override existing env vars
 
 from .api.routes import router as api_router
 from .core.container import cleanup_container

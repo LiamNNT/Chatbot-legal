@@ -19,14 +19,10 @@ function App() {
     messagesEndRef,
   } = useChat();
 
-  // Settings state
+  // Settings state - simplified, only UI preferences
   const [settings, setSettings] = useState(() => 
     loadFromStorage('chatbot-settings', {
-      useRag: true,
-      ragTopK: 5,
-      temperature: 0.7,
-      maxTokens: 2000,
-      showRAGContext: true,
+      showRAGContext: true,  // Only UI setting, no manual parameter overrides
     })
   );
 
@@ -68,12 +64,8 @@ function App() {
   }, [messages, sessionId]);
 
   const handleSendMessage = (message) => {
-    sendMessage(message, {
-      useRag: settings.useRag,
-      ragTopK: settings.ragTopK,
-      temperature: settings.temperature,
-      maxTokens: settings.maxTokens,
-    });
+    // No manual options - SmartPlannerAgent decides everything automatically
+    sendMessage(message);
   };
 
   const handleNewSession = () => {

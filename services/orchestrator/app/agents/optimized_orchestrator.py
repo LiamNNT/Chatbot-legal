@@ -260,6 +260,18 @@ class OptimizedMultiAgentOrchestrator:
             processing_stats["rag_time"] = time.time() - step_start
             processing_stats["documents_retrieved"] = len(rag_data.get("retrieved_documents", []))
             
+            # Store search mode info from plan
+            if plan_result:
+                processing_stats["use_knowledge_graph"] = plan_result.use_knowledge_graph
+                processing_stats["use_vector_search"] = plan_result.use_vector_search
+                processing_stats["complexity"] = plan_result.complexity
+                processing_stats["strategy"] = plan_result.strategy
+            else:
+                processing_stats["use_knowledge_graph"] = False
+                processing_stats["use_vector_search"] = True
+                processing_stats["complexity"] = "medium"
+                processing_stats["strategy"] = "standard_rag"
+            
             # Map RAG response format
             mapped_documents = []
             for idx, doc in enumerate(rag_data.get("retrieved_documents", [])):
