@@ -6,6 +6,10 @@ This orchestrator uses only 3 agents instead of 5 to reduce LLM costs:
 2. Answer Agent (unchanged - core logic)
 3. Response Formatter (merged: Verifier + Response Agent)
 
+Enhanced with:
+- Filter support (doc_types, faculties, years, subjects)
+- Citation with char_spans for precise source attribution
+
 Cost savings: ~40% fewer LLM calls per request
 """
 
@@ -18,8 +22,9 @@ from datetime import datetime
 from ..agents.base import (
     AgentConfig, AgentType, AnswerResult
 )
-from ..agents.smart_planner_agent import SmartPlannerAgent, SmartPlanResult
+from ..agents.smart_planner_agent import SmartPlannerAgent, SmartPlanResult, ExtractedFilters
 from ..agents.response_formatter_agent import ResponseFormatterAgent, FormattedResponseResult
+from ..adapters.rag_adapter import RAGFilters
 from ..ports.agent_ports import AgentPort, RAGServicePort
 from ..core.domain import OrchestrationRequest, OrchestrationResponse, RAGContext
 
@@ -141,6 +146,24 @@ class OptimizedMultiAgentOrchestrator:
             processing_stats["llm_calls"] = self._count_llm_calls(processing_stats)
             processing_stats["pipeline_steps"] = self._get_pipeline_steps_info()
             
+            # Prepare detailed sources for response
+            detailed_sources_data = []
+            if answer_result and answer_result.detailed_sources:
+                for ds in answer_result.detailed_sources:
+                    detailed_sources_data.append({
+                        "title": ds.title,
+                        "doc_id": ds.doc_id,
+                        "chunk_id": ds.chunk_id,
+                        "score": ds.score,
+                        "citation_text": ds.citation_text,
+                        "char_spans": ds.char_spans,
+                        "highlighted_text": ds.highlighted_text,
+                        "doc_type": ds.doc_type,
+                        "faculty": ds.faculty,
+                        "year": ds.year,
+                        "subject": ds.subject
+                    })
+            
             return OrchestrationResponse(
                 response=response_result.final_response if response_result else "Xin lỗi, có lỗi xảy ra.",
                 session_id=request.session_id or "unknown",
@@ -153,7 +176,9 @@ class OptimizedMultiAgentOrchestrator:
                         "quality_scores": response_result.quality_scores if response_result else {},
                         "overall_score": response_result.overall_score if response_result else 0.0,
                         "needs_improvement": response_result.needs_improvement if response_result else False
-                    }
+                    },
+                    "detailed_sources": detailed_sources_data,
+                    "filters_applied": plan_result.extracted_filters.to_dict() if plan_result and plan_result.extracted_filters and not plan_result.extracted_filters.is_empty() else None
                 },
                 processing_stats=processing_stats,
                 timestamp=datetime.now()
@@ -228,7 +253,7 @@ class OptimizedMultiAgentOrchestrator:
         plan_result: Optional[SmartPlanResult],
         processing_stats: Dict[str, Any]
     ) -> Optional[RAGContext]:
-        """Execute RAG retrieval using queries from smart planner."""
+        """Execute RAG retrieval using queries and filters from smart planner."""
         import os
         step_start = time.time()
         
@@ -249,16 +274,32 @@ class OptimizedMultiAgentOrchestrator:
             if plan_result and plan_result.top_k > 0:
                 top_k = plan_result.top_k
             
+            # Get extracted filters from smart planner
+            extracted_filters = None
+            if plan_result and plan_result.extracted_filters:
+                extracted_filters = plan_result.extracted_filters
+            
+            # Use reranking from plan result
+            use_rerank = plan_result.reranking if plan_result else True
+            
             if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
                 logger.debug(f"Search queries: {search_queries}")
                 logger.debug(f"Top K: {top_k}")
                 logger.debug(f"Hybrid search: {plan_result.hybrid_search if plan_result else False}")
+                if extracted_filters and not extracted_filters.is_empty():
+                    logger.debug(f"Filters: {extracted_filters.to_dict()}")
             
-            # Perform RAG retrieval
-            rag_data = await self._perform_rag_retrieval(search_queries, top_k)
+            # Perform RAG retrieval with filters
+            rag_data = await self._perform_rag_retrieval(
+                search_queries, 
+                top_k,
+                extracted_filters=extracted_filters,
+                use_rerank=use_rerank
+            )
             
             processing_stats["rag_time"] = time.time() - step_start
             processing_stats["documents_retrieved"] = len(rag_data.get("retrieved_documents", []))
+            processing_stats["filters_applied"] = extracted_filters.to_dict() if extracted_filters and not extracted_filters.is_empty() else None
             
             # Store search mode info from plan
             if plan_result:
@@ -305,13 +346,47 @@ class OptimizedMultiAgentOrchestrator:
             logger.error(f"Retrieval step failed: {e}")
             return None
     
-    async def _perform_rag_retrieval(self, queries: List[str], top_k: int) -> Dict[str, Any]:
-        """Perform RAG retrieval with multiple queries."""
+    async def _perform_rag_retrieval(
+        self, 
+        queries: List[str], 
+        top_k: int,
+        extracted_filters: Optional[ExtractedFilters] = None,
+        use_rerank: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Perform RAG retrieval with multiple queries and optional filters.
+        
+        Args:
+            queries: List of search queries
+            top_k: Number of results per query
+            extracted_filters: Optional filters extracted from SmartPlanner
+            use_rerank: Whether to use reranking
+        
+        Returns:
+            Dictionary with retrieved documents and metadata
+        """
         all_results = []
+        
+        # Convert ExtractedFilters to RAGFilters if provided
+        rag_filters = None
+        if extracted_filters and not extracted_filters.is_empty():
+            rag_filters = RAGFilters(
+                doc_types=extracted_filters.doc_types if extracted_filters.doc_types else None,
+                faculties=extracted_filters.faculties if extracted_filters.faculties else None,
+                years=extracted_filters.years if extracted_filters.years else None,
+                subjects=extracted_filters.subjects if extracted_filters.subjects else None
+            )
         
         for query in queries:
             try:
-                result = await self.rag_port.retrieve_context(query, top_k=top_k)
+                result = await self.rag_port.retrieve_context(
+                    query, 
+                    top_k=top_k,
+                    filters=rag_filters,
+                    use_rerank=use_rerank,
+                    need_citation=True,
+                    include_char_spans=True
+                )
                 if result and result.get("retrieved_documents"):
                     all_results.extend(result["retrieved_documents"])
             except Exception:
@@ -327,7 +402,8 @@ class OptimizedMultiAgentOrchestrator:
                 "queries_used": len(queries),
                 "total_results_found": len(all_results),
                 "unique_results": len(unique_results),
-                "final_results": len(top_results)
+                "final_results": len(top_results),
+                "filters_applied": extracted_filters.to_dict() if extracted_filters else None
             },
             "relevance_scores": [doc.get("score", 0.0) for doc in top_results]
         }

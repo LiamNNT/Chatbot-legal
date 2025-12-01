@@ -6,7 +6,7 @@ following the Ports & Adapters architecture pattern.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, AsyncGenerator
+from typing import List, Optional, AsyncGenerator, Any
 from ..core.domain import (
     AgentRequest, 
     AgentResponse, 
@@ -139,19 +139,38 @@ class ConversationManagerPort(ABC):
 class RAGServicePort(ABC):
     """
     Port interface for RAG (Retrieval-Augmented Generation) services.
+    
+    Supports advanced search features:
+    - Field-specific filters (doc_types, faculties, years, subjects)
+    - Multiple search modes (vector, bm25, hybrid)
+    - Citation with character spans for precise source attribution
     """
     
     @abstractmethod
-    async def retrieve_context(self, query: str, top_k: int = 5) -> dict:
+    async def retrieve_context(
+        self, 
+        query: str, 
+        top_k: int = 5,
+        filters: Optional[Any] = None,
+        search_mode: str = "hybrid",
+        use_rerank: bool = True,
+        need_citation: bool = True,
+        include_char_spans: bool = True
+    ) -> dict:
         """
         Retrieve relevant context for a query using the RAG system.
         
         Args:
             query: The user query to search for relevant documents
             top_k: Number of top relevant documents to retrieve
+            filters: Optional RAGFilters object with doc_types, faculties, years, subjects
+            search_mode: Search mode - "vector", "bm25", or "hybrid" (default)
+            use_rerank: Whether to use reranking (default True)
+            need_citation: Whether to include citation info (default True)
+            include_char_spans: Whether to include character spans for precise citation
             
         Returns:
-            Dictionary containing retrieved documents and metadata
+            Dictionary containing retrieved documents with metadata and citations
         """
         pass
     

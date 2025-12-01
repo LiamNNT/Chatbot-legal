@@ -7,13 +7,43 @@ into a single optimized agent to reduce LLM calls.
 Merged from:
 - PlannerAgent: Query analysis, complexity scoring, execution planning
 - QueryRewriterAgent: Query optimization, abbreviation expansion, UIT context
+
+Enhanced with:
+- Filter extraction: doc_types, faculties, years, subjects
 """
 
 import json
+import re
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..agents.base import SpecializedAgent, AgentConfig, AgentType
+
+
+@dataclass
+class ExtractedFilters:
+    """Filters extracted from the query context."""
+    doc_types: List[str] = field(default_factory=list)  # e.g., ["syllabus", "regulation"]
+    faculties: List[str] = field(default_factory=list)  # e.g., ["CNTT", "KHTN"]
+    years: List[int] = field(default_factory=list)      # e.g., [2023, 2024]
+    subjects: List[str] = field(default_factory=list)   # e.g., ["SE101", "CS201"]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API payload."""
+        result = {}
+        if self.doc_types:
+            result["doc_types"] = self.doc_types
+        if self.faculties:
+            result["faculties"] = self.faculties
+        if self.years:
+            result["years"] = self.years
+        if self.subjects:
+            result["subjects"] = self.subjects
+        return result
+    
+    def is_empty(self) -> bool:
+        """Check if no filters are set."""
+        return not any([self.doc_types, self.faculties, self.years, self.subjects])
 
 
 @dataclass
@@ -44,6 +74,9 @@ class SmartPlanResult:
     # Search source selection (optional fields with defaults - must come after required)
     use_knowledge_graph: bool = False  # Whether to use Knowledge Graph
     use_vector_search: bool = True     # Whether to use Vector Search
+    
+    # Extracted filters for RAG search
+    extracted_filters: Optional[ExtractedFilters] = None
 
 
 class SmartPlannerAgent(SpecializedAgent):
@@ -220,6 +253,9 @@ class SmartPlannerAgent(SpecializedAgent):
         # Always use vector search for RAG queries (primary source)
         use_vector_search = requires_rag
         
+        # Extract filters from query context
+        extracted_filters = self._extract_filters_from_query(original_query) if requires_rag else None
+        
         return SmartPlanResult(
             query=original_query,
             intent=intent,
@@ -234,6 +270,7 @@ class SmartPlannerAgent(SpecializedAgent):
             reranking=reranking,
             use_knowledge_graph=use_knowledge_graph,
             use_vector_search=use_vector_search,
+            extracted_filters=extracted_filters,
             reasoning=data.get("reasoning", ""),
             confidence=0.85,
             metadata={"source": "llm_response", "kg_reason": "relationship_query" if needs_relationship_search else None}
@@ -274,6 +311,9 @@ class SmartPlannerAgent(SpecializedAgent):
         )
         use_vector_search = requires_rag
         
+        # Extract filters from query context
+        extracted_filters = self._extract_filters_from_query(query) if requires_rag else None
+        
         return SmartPlanResult(
             query=query,
             intent=intent,
@@ -288,6 +328,7 @@ class SmartPlannerAgent(SpecializedAgent):
             reranking=reranking,
             use_knowledge_graph=use_knowledge_graph,
             use_vector_search=use_vector_search,
+            extracted_filters=extracted_filters,
             reasoning="Fallback to rule-based analysis",
             confidence=0.6,
             metadata={
@@ -463,3 +504,95 @@ class SmartPlannerAgent(SpecializedAgent):
                 keywords.append(word)
         
         return keywords[:10]
+
+    def _extract_filters_from_query(self, query: str) -> ExtractedFilters:
+        """
+        Extract search filters from the query context.
+        
+        Detects:
+        - doc_types: quy chế, đề cương, thông báo, etc.
+        - faculties: CNTT, KHTN, MMT, etc.
+        - years: 2023, 2024, etc.
+        - subjects: SE101, CS201, etc.
+        
+        Args:
+            query: User query to extract filters from
+            
+        Returns:
+            ExtractedFilters with detected values
+        """
+        query_lower = query.lower()
+        filters = ExtractedFilters()
+        
+        # === DOC_TYPES DETECTION ===
+        doc_type_patterns = {
+            "regulation": ["quy chế", "quy định", "điều lệ", "nội quy"],
+            "syllabus": ["đề cương", "chương trình đào tạo", "ctđt", "curriculum"],
+            "announcement": ["thông báo", "công văn", "hướng dẫn"],
+            "form": ["biểu mẫu", "đơn", "form"],
+            "handbook": ["sổ tay", "cẩm nang", "hướng dẫn sinh viên"],
+        }
+        
+        for doc_type, patterns in doc_type_patterns.items():
+            if any(p in query_lower for p in patterns):
+                filters.doc_types.append(doc_type)
+        
+        # === FACULTIES DETECTION ===
+        faculty_patterns = {
+            "CNTT": ["công nghệ thông tin", "cntt", "khoa cntt", "it"],
+            "KHMT": ["khoa học máy tính", "khmt", "computer science", "cs"],
+            "HTTT": ["hệ thống thông tin", "httt", "information systems", "is"],
+            "MMT": ["mạng máy tính", "mmt", "mmtt", "truyền thông", "network"],
+            "KTMT": ["kỹ thuật máy tính", "ktmt", "computer engineering"],
+            "KHTN": ["khoa học tự nhiên", "khtn"],
+            "CTDA": ["công trình đa âm", "ctda"],
+        }
+        
+        for faculty, patterns in faculty_patterns.items():
+            if any(p in query_lower for p in patterns):
+                filters.faculties.append(faculty)
+        
+        # === YEARS DETECTION ===
+        # Extract years from patterns like "năm 2023", "2024", "khóa 2023"
+        year_patterns = [
+            r'năm\s*(\d{4})',
+            r'khóa\s*(\d{4})',
+            r'niên khóa\s*(\d{4})',
+            r'(\d{4})\s*[-–]\s*\d{4}',  # Range like 2023-2024
+            r'\b(20\d{2})\b'  # Standalone year 2000-2099
+        ]
+        
+        for pattern in year_patterns:
+            matches = re.findall(pattern, query_lower)
+            for match in matches:
+                try:
+                    year = int(match)
+                    if 2000 <= year <= 2100 and year not in filters.years:
+                        filters.years.append(year)
+                except ValueError:
+                    continue
+        
+        # === SUBJECTS DETECTION ===
+        # Pattern for subject codes like SE101, CS201, IT001
+        subject_pattern = r'\b([A-Z]{2,4}\d{3})\b'
+        subject_matches = re.findall(subject_pattern, query.upper())
+        
+        for match in subject_matches:
+            if match not in filters.subjects:
+                filters.subjects.append(match)
+        
+        # Also check for common subject name patterns
+        subject_name_patterns = {
+            "IT001": ["nhập môn lập trình", "intro to programming"],
+            "IT002": ["lập trình hướng đối tượng", "oop"],
+            "IT003": ["cấu trúc dữ liệu", "data structures"],
+            "SE100": ["nhập môn công nghệ phần mềm"],
+            "SE101": ["công nghệ phần mềm"],
+        }
+        
+        for subject_code, patterns in subject_name_patterns.items():
+            if any(p in query_lower for p in patterns):
+                if subject_code not in filters.subjects:
+                    filters.subjects.append(subject_code)
+        
+        return filters

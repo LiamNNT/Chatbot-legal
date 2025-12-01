@@ -3,11 +3,15 @@ Answer Agent implementation.
 
 This agent generates comprehensive answers based on retrieved context and user queries.
 Uses Qwen3 Coder model for structured reasoning and answer generation.
+
+Enhanced with:
+- Detailed source citations with char_spans
+- Document metadata (doc_type, faculty, year, subject)
 """
 
 import json
 from typing import Dict, Any, List
-from ..agents.base import SpecializedAgent, AgentConfig, AgentType, AnswerResult
+from ..agents.base import SpecializedAgent, AgentConfig, AgentType, AnswerResult, DetailedSource
 
 
 class AnswerAgent(SpecializedAgent):
@@ -116,7 +120,8 @@ class AnswerAgent(SpecializedAgent):
             confidence=answer_data.get("confidence", 0.5),
             sources_used=answer_data.get("sources_used", []),
             reasoning_steps=answer_data.get("reasoning_steps", []),
-            metadata=answer_data.get("metadata", {})
+            metadata=answer_data.get("metadata", {}),
+            detailed_sources=[]  # JSON response doesn't include detailed sources
         )
     
     def _create_fallback_answer(
@@ -138,6 +143,9 @@ class AnswerAgent(SpecializedAgent):
             for i, doc in enumerate(context_documents[:self.max_sources])
         ]
         
+        # Create detailed sources with citation information
+        detailed_sources = self._create_detailed_sources(context_documents[:self.max_sources])
+        
         return AnswerResult(
             query=query,
             answer=answer,
@@ -148,8 +156,76 @@ class AnswerAgent(SpecializedAgent):
                 "fallback": True,
                 "method": "text_extraction",
                 "original_length": len(response_content)
-            }
+            },
+            detailed_sources=detailed_sources
         )
+    
+    def _create_detailed_sources(self, context_documents: List[Dict[str, Any]]) -> List[DetailedSource]:
+        """
+        Create detailed source citations from context documents.
+        
+        Args:
+            context_documents: List of retrieved documents with citation data
+            
+        Returns:
+            List of DetailedSource objects with citation information
+        """
+        detailed_sources = []
+        
+        for doc in context_documents:
+            # Get basic info
+            title = doc.get("title", "Unknown")
+            score = doc.get("score", 0.0)
+            
+            # Get document ID and chunk info
+            meta = doc.get("meta", doc.get("metadata", {}))
+            doc_id = meta.get("doc_id")
+            chunk_id = meta.get("chunk_id")
+            
+            # Get citation data
+            citation = doc.get("citation", {})
+            char_spans = doc.get("char_spans", [])
+            highlighted_text = doc.get("highlighted_text", [])
+            
+            # If citation is a dict, extract char_spans from it
+            if isinstance(citation, dict):
+                if not char_spans and citation.get("char_spans"):
+                    char_spans = citation.get("char_spans", [])
+                if not highlighted_text and citation.get("highlighted_text"):
+                    highlighted_text = citation.get("highlighted_text", [])
+            
+            # Get document classification
+            doc_type = doc.get("doc_type")
+            faculty = doc.get("faculty")
+            year = doc.get("year")
+            subject = doc.get("subject")
+            
+            # Create citation text from highlighted spans or first char_span
+            citation_text = None
+            if highlighted_text:
+                citation_text = highlighted_text[0] if isinstance(highlighted_text, list) else highlighted_text
+            elif char_spans and isinstance(char_spans, list) and len(char_spans) > 0:
+                first_span = char_spans[0]
+                if isinstance(first_span, dict):
+                    citation_text = first_span.get("text", "")
+            
+            detailed_source = DetailedSource(
+                title=title,
+                doc_id=doc_id,
+                chunk_id=chunk_id,
+                score=score,
+                citation_text=citation_text,
+                char_spans=char_spans if char_spans else None,
+                highlighted_text=highlighted_text if highlighted_text else None,
+                doc_type=doc_type,
+                faculty=faculty,
+                year=year,
+                subject=subject
+            )
+            
+            detailed_sources.append(detailed_source)
+        
+        return detailed_sources
     
     def _extract_answer_from_text(self, text: str) -> str:
         """Extract the main answer from text response."""

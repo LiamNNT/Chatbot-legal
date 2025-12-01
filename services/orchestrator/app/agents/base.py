@@ -7,7 +7,7 @@ for all specialized agents in the multi-agent system.
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.domain import AgentRequest, AgentResponse
@@ -35,14 +35,34 @@ class AgentConfig:
 
 
 @dataclass
+class DetailedSource:
+    """Detailed source information with citation precision."""
+    title: str
+    doc_id: Optional[str] = None
+    chunk_id: Optional[str] = None
+    score: float = 0.0
+    # Citation details
+    citation_text: Optional[str] = None  # Exact text quoted
+    char_spans: Optional[List[Dict[str, Any]]] = None  # List of {start, end, text, type}
+    highlighted_text: Optional[List[str]] = None  # Highlighted matches
+    # Document metadata
+    doc_type: Optional[str] = None
+    faculty: Optional[str] = None
+    year: Optional[int] = None
+    subject: Optional[str] = None
+
+
+@dataclass
 class AnswerResult:
-    """Result from answer agent."""
+    """Result from answer agent with enhanced citation support."""
     query: str
     answer: str
     confidence: float
-    sources_used: List[str]
+    sources_used: List[str]  # Simple list of titles (backward compatible)
     reasoning_steps: List[str]
     metadata: Dict[str, Any]
+    # Enhanced citation data
+    detailed_sources: List[DetailedSource] = field(default_factory=list)
 
 
 class SpecializedAgent(ABC):
