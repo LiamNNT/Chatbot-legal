@@ -56,6 +56,7 @@ class AnswerAgent(SpecializedAgent):
                 - context_documents: List[Dict] - Retrieved documents
                 - rewritten_queries: Optional[List[str]] - Alternative queries
                 - previous_context: Optional[str] - Conversation context
+                - previous_feedback: Optional[str] - Feedback from ResponseFormatter for retry
         
         Returns:
             AnswerResult containing the generated answer and metadata
@@ -64,9 +65,12 @@ class AnswerAgent(SpecializedAgent):
         context_documents = input_data.get("context_documents", [])
         rewritten_queries = input_data.get("rewritten_queries", [])
         previous_context = input_data.get("previous_context", "")
+        previous_feedback = input_data.get("previous_feedback", "")  # NEW: Feedback for retry
         
         # Build the answer generation prompt
-        prompt = self._build_answer_prompt(query, context_documents, rewritten_queries, previous_context)
+        prompt = self._build_answer_prompt(
+            query, context_documents, rewritten_queries, previous_context, previous_feedback
+        )
         
         # Get response from the agent
         response = await self._make_agent_request(prompt)
@@ -84,12 +88,38 @@ class AnswerAgent(SpecializedAgent):
         query: str,
         context_documents: List[Dict[str, Any]],
         rewritten_queries: List[str],
-        previous_context: str
+        previous_context: str,
+        previous_feedback: str = ""
     ) -> str:
-        """Build the comprehensive answer generation prompt."""
-        # System prompt from config already contains all instructions
-        # Just provide the data: query, documents, context
-        prompt_parts = [f"Query: {query}"]
+        """
+        Build the comprehensive answer generation prompt.
+        
+        Args:
+            query: User's original query
+            context_documents: Retrieved documents with content
+            rewritten_queries: Alternative query formulations
+            previous_context: Conversation context
+            previous_feedback: Feedback from ResponseFormatter for improving answer (retry scenario)
+        """
+        prompt_parts = []
+        
+        # IMPORTANT: Add feedback section at the top if this is a retry
+        if previous_feedback:
+            prompt_parts.append("=" * 60)
+            prompt_parts.append("⚠️ IMPROVEMENT REQUEST - PLEASE REVISE YOUR PREVIOUS ANSWER")
+            prompt_parts.append("=" * 60)
+            prompt_parts.append("")
+            prompt_parts.append("Your previous answer was evaluated and needs improvement.")
+            prompt_parts.append("Please carefully read the feedback below and generate a better answer:")
+            prompt_parts.append("")
+            prompt_parts.append(previous_feedback)
+            prompt_parts.append("")
+            prompt_parts.append("=" * 60)
+            prompt_parts.append("Now, please provide an improved answer addressing the feedback above.")
+            prompt_parts.append("=" * 60)
+            prompt_parts.append("")
+        
+        prompt_parts.append(f"Query: {query}")
         
         if rewritten_queries:
             prompt_parts.append(f"Query Variations: {', '.join(rewritten_queries)}")

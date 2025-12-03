@@ -122,7 +122,7 @@ class HealthResponse(BaseModel):
     
     status: str = Field(..., description="Overall health status")
     timestamp: datetime = Field(..., description="Health check timestamp")
-    services: Dict[str, str] = Field(..., description="Status of individual services")
+    services: Dict[str, Any] = Field(..., description="Status of individual services")
     
     class Config:
         schema_extra = {
@@ -133,7 +133,8 @@ class HealthResponse(BaseModel):
                     "orchestrator": "healthy",
                     "agent": "healthy",
                     "rag": "healthy",
-                    "conversation_manager": "healthy"
+                    "conversation_manager": "healthy",
+                    "ircot_enabled": True
                 }
             }
         }

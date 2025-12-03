@@ -9,6 +9,9 @@ This orchestrator uses only 3 agents instead of 5 to reduce LLM costs:
 Enhanced with:
 - Filter support (doc_types, faculties, years, subjects)
 - Citation with char_spans for precise source attribution
+- Feedback loop: If quality score < threshold, AnswerAgent regenerates with feedback
+- Graph Reasoning: local, global (community), multi-hop dynamic reasoning
+- IRCoT (Interleaving Retrieval with Chain-of-Thought): Dynamic retrieval for complex queries
 
 Cost savings: ~40% fewer LLM calls per request
 """
@@ -24,11 +27,19 @@ from ..agents.base import (
 )
 from ..agents.smart_planner_agent import SmartPlannerAgent, SmartPlanResult, ExtractedFilters
 from ..agents.response_formatter_agent import ResponseFormatterAgent, FormattedResponseResult
+from ..agents.graph_reasoning_agent import GraphReasoningAgent, GraphQueryType, GraphReasoningResult
 from ..adapters.rag_adapter import RAGFilters
 from ..ports.agent_ports import AgentPort, RAGServicePort
 from ..core.domain import OrchestrationRequest, OrchestrationResponse, RAGContext
+from ..core.ircot_config import IRCoTConfig, IRCoTMode, IRCoTResult
+from ..core.ircot_service import IRCoTReasoningService
 
 logger = logging.getLogger(__name__)
+
+
+# Feedback loop configuration
+QUALITY_THRESHOLD = 7.0  # Minimum acceptable quality score
+MAX_RETRY_ATTEMPTS = 2   # Maximum number of answer regeneration attempts
 
 
 class OptimizedMultiAgentOrchestrator:
@@ -43,6 +54,9 @@ class OptimizedMultiAgentOrchestrator:
     OPTIMIZED (3 agents, 3 LLM calls):
         Smart Planner → Answer Agent → Response Formatter
     
+    Enhanced with IRCoT for complex queries:
+        Smart Planner (complexity=complex) → [IRCoT Loop: Retrieve → Reason → Retrieve...] → Answer Agent → Response Formatter
+    
     Savings:
     - 40% fewer LLM API calls
     - 25% fewer tokens
@@ -55,7 +69,9 @@ class OptimizedMultiAgentOrchestrator:
         rag_port: RAGServicePort,
         agent_factory,
         enable_verification: bool = True,  # Now built into Response Formatter
-        enable_planning: bool = True
+        enable_planning: bool = True,
+        graph_adapter = None,  # Optional Neo4j adapter for Graph Reasoning
+        ircot_config: Optional[IRCoTConfig] = None  # Optional IRCoT configuration
     ):
         """
         Initialize the optimized multi-agent orchestrator.
@@ -66,11 +82,22 @@ class OptimizedMultiAgentOrchestrator:
             agent_factory: Factory for creating configured agents
             enable_verification: Whether to include verification in formatting (always True in optimized)
             enable_planning: Whether to use planning step
+            graph_adapter: Optional Neo4j adapter for Graph Reasoning (local/global/multi_hop)
+            ircot_config: Optional IRCoT configuration for complex multi-hop queries
         """
         self.agent_port = agent_port
         self.rag_port = rag_port
         self.enable_planning = enable_planning
         self.agent_factory = agent_factory
+        self.graph_adapter = graph_adapter
+        
+        # Initialize IRCoT service
+        self.ircot_config = ircot_config or IRCoTConfig()
+        self.ircot_service = IRCoTReasoningService(
+            agent_port=agent_port,
+            rag_port=rag_port,
+            config=self.ircot_config
+        )
         
         # Initialize optimized agents using factory
         try:
@@ -90,8 +117,30 @@ class OptimizedMultiAgentOrchestrator:
             logger.warning(f"Response Formatter not found in config, using fallback: {e}")
             self.response_formatter = None
         
+        # Initialize Graph Reasoning Agent if adapter provided
+        if graph_adapter:
+            self.graph_reasoning_agent = GraphReasoningAgent(
+                graph_adapter=graph_adapter,
+                llm_port=agent_port
+            )
+            logger.info("✓ Graph Reasoning Agent initialized (local/global/multi_hop support)")
+        else:
+            self.graph_reasoning_agent = None
+            logger.info("⚠ Graph Reasoning Agent not initialized (no graph_adapter provided)")
+        
+        # Feedback loop configuration
+        self.enable_feedback_loop = True
+        self.max_answer_retries = MAX_RETRY_ATTEMPTS
+        self.min_quality_threshold = QUALITY_THRESHOLD
+        
+        # Log IRCoT status
+        if self.ircot_config.enabled:
+            logger.info(f"✓ IRCoT enabled (mode={self.ircot_config.mode.value}, max_iterations={self.ircot_config.max_iterations})")
+        else:
+            logger.info("⚠ IRCoT disabled")
+        
         logger.info("=" * 60)
-        logger.info("🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (3 Agents)")
+        logger.info("🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (3 Agents + Graph Reasoning + IRCoT)")
         logger.info("=" * 60)
     
     async def process_request(self, request: OrchestrationRequest) -> OrchestrationResponse:
@@ -103,8 +152,9 @@ class OptimizedMultiAgentOrchestrator:
         2. RAG Retrieval: Get context (no LLM)
         3. Answer Agent: Generate answer (1 LLM call)
         4. Response Formatter: Verify + format (1 LLM call)
+        5. [Optional] Feedback Loop: If quality < threshold, regenerate answer
         
-        Total: 3 LLM calls (vs 5 in original)
+        Total: 3-5 LLM calls depending on quality feedback
         
         Args:
             request: The orchestration request
@@ -113,7 +163,11 @@ class OptimizedMultiAgentOrchestrator:
             OrchestrationResponse with comprehensive results
         """
         start_time = time.time()
-        processing_stats = {"pipeline": "optimized_3_agents"}
+        processing_stats = {
+            "pipeline": "optimized_3_agents_with_feedback",
+            "retry_attempts": 0,
+            "feedback_history": []
+        }
         
         try:
             # Step 1: Smart Planning (combined planning + query rewriting)
@@ -132,12 +186,9 @@ class OptimizedMultiAgentOrchestrator:
             if request.use_rag and requires_rag:
                 rag_context = await self._execute_retrieval_step(request, plan_result, processing_stats)
             
-            # Step 3: Answer Generation
-            answer_result = await self._execute_answer_step(request, rag_context, processing_stats)
-            
-            # Step 4: Response Formatting (combined verification + formatting)
-            response_result = await self._execute_formatting_step(
-                request, answer_result, rag_context, processing_stats
+            # Step 3 & 4: Answer Generation + Formatting with Feedback Loop
+            answer_result, response_result = await self._execute_answer_with_feedback_loop(
+                request, rag_context, processing_stats
             )
             
             # Calculate total processing time
@@ -169,7 +220,7 @@ class OptimizedMultiAgentOrchestrator:
                 session_id=request.session_id or "unknown",
                 rag_context=rag_context,
                 agent_metadata={
-                    "pipeline": "optimized_3_agents",
+                    "pipeline": "optimized_3_agents_with_feedback",
                     "plan_result": plan_result.__dict__ if plan_result else None,
                     "answer_confidence": answer_result.confidence if answer_result else 0.0,
                     "formatting_result": {
@@ -178,7 +229,11 @@ class OptimizedMultiAgentOrchestrator:
                         "needs_improvement": response_result.needs_improvement if response_result else False
                     },
                     "detailed_sources": detailed_sources_data,
-                    "filters_applied": plan_result.extracted_filters.to_dict() if plan_result and plan_result.extracted_filters and not plan_result.extracted_filters.is_empty() else None
+                    "filters_applied": plan_result.extracted_filters.to_dict() if plan_result and plan_result.extracted_filters and not plan_result.extracted_filters.is_empty() else None,
+                    "feedback_loop": {
+                        "retry_attempts": processing_stats.get("retry_attempts", 0),
+                        "feedback_history": processing_stats.get("feedback_history", [])
+                    }
                 },
                 processing_stats=processing_stats,
                 timestamp=datetime.now()
@@ -253,14 +308,36 @@ class OptimizedMultiAgentOrchestrator:
         plan_result: Optional[SmartPlanResult],
         processing_stats: Dict[str, Any]
     ) -> Optional[RAGContext]:
-        """Execute RAG retrieval using queries and filters from smart planner."""
+        """
+        Execute RAG retrieval using queries and filters from smart planner.
+        
+        Enhanced with:
+        - Graph Reasoning: If use_knowledge_graph=True and graph_query_type is set
+        - IRCoT: If complexity is "complex", use iterative retrieval with chain-of-thought
+        """
         import os
         step_start = time.time()
         
+        # Check if IRCoT should be used for complex queries
+        use_ircot = (
+            plan_result and 
+            self.ircot_config.enabled and
+            self.ircot_config.should_use_ircot(
+                plan_result.complexity, 
+                plan_result.complexity_score
+            )
+        )
+        
+        if use_ircot:
+            return await self._execute_ircot_retrieval(
+                request, plan_result, processing_stats
+            )
+        
+        # Standard retrieval path
         try:
             if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
                 logger.debug(f"\n{'='*80}")
-                logger.debug(f"🔍 STEP 2: RAG RETRIEVAL")
+                logger.debug(f"🔍 STEP 2: RAG RETRIEVAL + GRAPH REASONING")
                 logger.debug(f"{'='*80}")
             
             # Use rewritten queries from smart planner, or original query
@@ -289,6 +366,55 @@ class OptimizedMultiAgentOrchestrator:
                 if extracted_filters and not extracted_filters.is_empty():
                     logger.debug(f"Filters: {extracted_filters.to_dict()}")
             
+            # === GRAPH REASONING ===
+            # Determine if we should use Knowledge Graph
+            # Priority 1: User explicitly requests via API (use_knowledge_graph=true)
+            # Priority 2: SmartPlanner recommends based on query analysis
+            should_use_graph = False
+            
+            # Check request parameter first (user override)
+            if hasattr(request, 'use_knowledge_graph') and request.use_knowledge_graph:
+                should_use_graph = True
+                logger.info("🔗 Knowledge Graph FORCED from API request")
+            # Then check planner recommendation
+            elif plan_result and plan_result.use_knowledge_graph:
+                should_use_graph = True
+                logger.info("🔗 Knowledge Graph RECOMMENDED by SmartPlanner")
+            
+            graph_context = None
+            if should_use_graph and self.graph_reasoning_agent is not None:
+                
+                # Get query type from plan or default to 'local'
+                graph_query_type_str = getattr(plan_result, 'graph_query_type', 'local') if plan_result else 'local'
+                try:
+                    graph_query_type = GraphQueryType(graph_query_type_str)
+                except ValueError:
+                    graph_query_type = GraphQueryType.LOCAL
+                
+                logger.info(f"🔗 Graph Reasoning: type={graph_query_type.value}")
+                
+                graph_start = time.time()
+                graph_result = await self.graph_reasoning_agent.reason(
+                    query=request.user_query,
+                    query_type=graph_query_type,
+                    context={
+                        "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
+                        "search_terms": plan_result.search_terms if plan_result else []
+                    }
+                )
+                processing_stats["graph_reasoning_time"] = time.time() - graph_start
+                processing_stats["graph_query_type"] = graph_query_type.value
+                processing_stats["graph_nodes_found"] = len(graph_result.nodes)
+                processing_stats["graph_paths_found"] = len(graph_result.paths)
+                processing_stats["graph_confidence"] = graph_result.confidence
+                
+                graph_context = graph_result.synthesized_context
+                
+                if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                    logger.debug(f"Graph reasoning: {len(graph_result.nodes)} nodes, {len(graph_result.paths)} paths")
+                    logger.debug(f"Graph confidence: {graph_result.confidence}")
+            
+            # === VECTOR SEARCH ===
             # Perform RAG retrieval with filters
             rag_data = await self._perform_rag_retrieval(
                 search_queries, 
@@ -301,14 +427,13 @@ class OptimizedMultiAgentOrchestrator:
             processing_stats["documents_retrieved"] = len(rag_data.get("retrieved_documents", []))
             processing_stats["filters_applied"] = extracted_filters.to_dict() if extracted_filters and not extracted_filters.is_empty() else None
             
-            # Store search mode info from plan
+            # Store search mode info - reflect actual usage, not just plan
+            processing_stats["use_knowledge_graph"] = should_use_graph
             if plan_result:
-                processing_stats["use_knowledge_graph"] = plan_result.use_knowledge_graph
                 processing_stats["use_vector_search"] = plan_result.use_vector_search
                 processing_stats["complexity"] = plan_result.complexity
                 processing_stats["strategy"] = plan_result.strategy
             else:
-                processing_stats["use_knowledge_graph"] = False
                 processing_stats["use_vector_search"] = True
                 processing_stats["complexity"] = "medium"
                 processing_stats["strategy"] = "standard_rag"
@@ -328,6 +453,18 @@ class OptimizedMultiAgentOrchestrator:
                 }
                 mapped_documents.append(mapped_doc)
             
+            # === COMBINE GRAPH CONTEXT WITH VECTOR RESULTS ===
+            # If we have graph context, prepend it as a special document
+            if graph_context:
+                graph_doc = {
+                    "content": graph_context,
+                    "score": 1.0,  # High priority
+                    "metadata": {"source_type": "graph_reasoning"},
+                    "title": "Graph Reasoning Context",
+                    "source": "Knowledge Graph"
+                }
+                mapped_documents.insert(0, graph_doc)
+            
             if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
                 logger.debug(f"Documents retrieved: {len(mapped_documents)}")
                 logger.debug(f"{'='*80}\n")
@@ -346,9 +483,176 @@ class OptimizedMultiAgentOrchestrator:
             logger.error(f"Retrieval step failed: {e}")
             return None
     
+    async def _execute_ircot_retrieval(
+        self,
+        request: OrchestrationRequest,
+        plan_result: SmartPlanResult,
+        processing_stats: Dict[str, Any]
+    ) -> Optional[RAGContext]:
+        """
+        Execute IRCoT (Interleaving Retrieval with Chain-of-Thought) for complex queries.
+        
+        IRCoT Algorithm:
+        1. Initial retrieval based on original/rewritten query
+        2. Generate CoT reasoning step
+        3. If more info needed, generate new search query from reasoning
+        4. Retrieve additional context with new query
+        5. Repeat until confident or max iterations reached
+        
+        Args:
+            request: The orchestration request
+            plan_result: Result from SmartPlanner with complexity info
+            processing_stats: Dictionary to track processing statistics
+            
+        Returns:
+            RAGContext with accumulated context from IRCoT iterations
+        """
+        import os
+        step_start = time.time()
+        
+        logger.info(f"🔄 Executing IRCoT retrieval for complex query (complexity={plan_result.complexity}, score={plan_result.complexity_score})")
+        
+        try:
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"🔄 STEP 2: IRCoT RETRIEVAL (Dynamic Multi-hop)")
+                logger.debug(f"{'='*80}")
+                logger.debug(f"Complexity: {plan_result.complexity} (score: {plan_result.complexity_score})")
+                logger.debug(f"Max iterations: {self.ircot_config.max_iterations}")
+            
+            # Get extracted filters from plan
+            extracted_filters = plan_result.extracted_filters
+            
+            # Perform IRCoT reasoning with retrieval
+            ircot_result = await self.ircot_service.reason_with_retrieval(
+                query=request.user_query,
+                initial_context=None,  # Let IRCoT handle initial retrieval
+                extracted_filters=extracted_filters
+            )
+            
+            # Record IRCoT stats
+            processing_stats["ircot_mode"] = True
+            processing_stats["ircot_time"] = time.time() - step_start
+            processing_stats["ircot_iterations"] = ircot_result.total_iterations
+            processing_stats["ircot_early_stopped"] = ircot_result.early_stopped
+            processing_stats["ircot_confidence"] = ircot_result.final_confidence
+            processing_stats["ircot_documents_accumulated"] = len(ircot_result.accumulated_context)
+            processing_stats["ircot_queries_used"] = ircot_result.get_all_search_queries()
+            
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"IRCoT iterations: {ircot_result.total_iterations}")
+                logger.debug(f"IRCoT documents accumulated: {len(ircot_result.accumulated_context)}")
+                logger.debug(f"IRCoT confidence: {ircot_result.final_confidence}")
+                logger.debug(f"IRCoT reasoning: {ircot_result.final_reasoning[:200]}...")
+            
+            # Map accumulated context to standard document format
+            mapped_documents = []
+            for idx, doc in enumerate(ircot_result.accumulated_context):
+                text_content = doc.get("text", doc.get("content", ""))
+                doc_metadata = doc.get("metadata", doc.get("meta", {}))
+                
+                mapped_doc = {
+                    "content": text_content,
+                    "score": doc.get("score", 0.0),
+                    "metadata": doc_metadata,
+                    "title": doc.get("title", doc_metadata.get("title", f"Document {idx+1}")),
+                    "source": doc.get("source", doc_metadata.get("source", "Unknown")),
+                    "ircot_iteration": doc.get("ircot_iteration", idx // self.ircot_config.retrieval_top_k + 1)
+                }
+                mapped_documents.append(mapped_doc)
+            
+            # Add IRCoT reasoning as a special context document
+            if ircot_result.final_reasoning:
+                reasoning_doc = {
+                    "content": f"[Chain-of-Thought Reasoning]\n{ircot_result.final_reasoning}",
+                    "score": 1.0,  # High priority
+                    "metadata": {"source_type": "ircot_reasoning"},
+                    "title": "IRCoT Reasoning Summary",
+                    "source": "IRCoT Chain-of-Thought"
+                }
+                mapped_documents.insert(0, reasoning_doc)
+            
+            logger.info(f"✅ IRCoT completed: {ircot_result.total_iterations} iterations, "
+                       f"{len(mapped_documents)} documents")
+            
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Final documents: {len(mapped_documents)}")
+                logger.debug(f"{'='*80}\n")
+            
+            return RAGContext(
+                query=request.user_query,
+                retrieved_documents=mapped_documents,
+                search_metadata={
+                    "ircot_mode": True,
+                    "ircot_iterations": ircot_result.total_iterations,
+                    "ircot_queries": ircot_result.get_all_search_queries(),
+                    "ircot_reasoning": ircot_result.final_reasoning,
+                    "ircot_confidence": ircot_result.final_confidence,
+                    "filters_applied": extracted_filters.to_dict() if extracted_filters else None
+                },
+                relevance_scores=[doc.get("score", 0.0) for doc in mapped_documents],
+                rewritten_queries=ircot_result.get_all_search_queries()
+            )
+            
+        except Exception as e:
+            processing_stats["ircot_error"] = str(e)
+            processing_stats["ircot_time"] = time.time() - step_start
+            logger.error(f"IRCoT retrieval failed, falling back to standard retrieval: {e}")
+            
+            # Fallback to standard retrieval
+            return await self._execute_standard_retrieval(request, plan_result, processing_stats)
+    
+    async def _execute_standard_retrieval(
+        self,
+        request: OrchestrationRequest,
+        plan_result: Optional[SmartPlanResult],
+        processing_stats: Dict[str, Any]
+    ) -> Optional[RAGContext]:
+        """Standard RAG retrieval (used as fallback from IRCoT)."""
+        import os
+        step_start = time.time()
+        
+        try:
+            search_queries = plan_result.rewritten_queries if plan_result else [request.user_query]
+            top_k = plan_result.top_k if plan_result and plan_result.top_k > 0 else request.rag_top_k
+            extracted_filters = plan_result.extracted_filters if plan_result else None
+            use_rerank = plan_result.reranking if plan_result else True
+            
+            rag_data = await self._perform_rag_retrieval(
+                search_queries, top_k, extracted_filters, use_rerank
+            )
+            
+            processing_stats["rag_time"] = time.time() - step_start
+            processing_stats["documents_retrieved"] = len(rag_data.get("retrieved_documents", []))
+            
+            mapped_documents = []
+            for idx, doc in enumerate(rag_data.get("retrieved_documents", [])):
+                text_content = doc.get("text", doc.get("content", ""))
+                doc_metadata = doc.get("metadata", doc.get("meta", {}))
+                mapped_doc = {
+                    "content": text_content,
+                    "score": doc.get("score", 0.0),
+                    "metadata": doc_metadata,
+                    "title": doc.get("title", doc_metadata.get("title", f"Document {idx+1}")),
+                    "source": doc.get("source", doc_metadata.get("source", "Unknown"))
+                }
+                mapped_documents.append(mapped_doc)
+            
+            return RAGContext(
+                query=request.user_query,
+                retrieved_documents=mapped_documents,
+                search_metadata=rag_data.get("search_metadata"),
+                relevance_scores=rag_data.get("relevance_scores", []),
+                rewritten_queries=search_queries
+            )
+        except Exception as e:
+            processing_stats["retrieval_error"] = str(e)
+            logger.error(f"Standard retrieval also failed: {e}")
+            return None
+    
     async def _perform_rag_retrieval(
         self, 
-        queries: List[str], 
+        queries: List[str],
         top_k: int,
         extracted_filters: Optional[ExtractedFilters] = None,
         use_rerank: bool = True
@@ -470,6 +774,239 @@ class OptimizedMultiAgentOrchestrator:
             logger.error(f"Answer generation failed: {e}", exc_info=True)
             return None
     
+    async def _execute_answer_with_feedback_loop(
+        self,
+        request: OrchestrationRequest,
+        rag_context: Optional[RAGContext],
+        processing_stats: Dict[str, Any]
+    ) -> tuple[Optional[AnswerResult], Optional[FormattedResponseResult]]:
+        """
+        Execute answer generation with feedback loop.
+        
+        If ResponseFormatterAgent scores the answer below QUALITY_THRESHOLD,
+        generate verbal feedback and ask AnswerAgent to regenerate.
+        
+        Args:
+            request: The orchestration request
+            rag_context: Retrieved RAG context
+            processing_stats: Dictionary to track processing statistics
+            
+        Returns:
+            Tuple of (AnswerResult, FormattedResponseResult)
+        """
+        import os
+        
+        feedback_context = ""  # Accumulated feedback from previous attempts
+        best_answer_result = None
+        best_response_result = None
+        best_score = 0.0
+        
+        for attempt in range(MAX_RETRY_ATTEMPTS + 1):
+            # Step 3: Answer Generation (with feedback if retry)
+            answer_result = await self._execute_answer_step_with_feedback(
+                request, rag_context, processing_stats, feedback_context, attempt
+            )
+            
+            if not answer_result:
+                # If answer generation failed, use previous best or return None
+                if best_answer_result:
+                    return best_answer_result, best_response_result
+                return None, None
+            
+            # Step 4: Response Formatting (quality evaluation)
+            response_result = await self._execute_formatting_step(
+                request, answer_result, rag_context, processing_stats
+            )
+            
+            if not response_result:
+                # If formatting failed, use previous best or current answer
+                if best_answer_result:
+                    return best_answer_result, best_response_result
+                return answer_result, self._create_simple_response(request.user_query, answer_result.answer)
+            
+            # Track the best result so far
+            current_score = response_result.overall_score
+            if current_score > best_score:
+                best_score = current_score
+                best_answer_result = answer_result
+                best_response_result = response_result
+            
+            # Check if quality meets threshold
+            accuracy_score = response_result.quality_scores.get("accuracy", 7)
+            
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"🔄 FEEDBACK LOOP - Attempt {attempt + 1}/{MAX_RETRY_ATTEMPTS + 1}")
+                logger.debug(f"Overall Score: {current_score:.2f}")
+                logger.debug(f"Accuracy Score: {accuracy_score}")
+                logger.debug(f"Needs Improvement: {response_result.needs_improvement}")
+                logger.debug(f"{'='*80}\n")
+            
+            # If quality is acceptable or no improvement needed, return
+            if (not response_result.needs_improvement and 
+                accuracy_score >= QUALITY_THRESHOLD and 
+                current_score >= QUALITY_THRESHOLD):
+                processing_stats["retry_attempts"] = attempt
+                return answer_result, response_result
+            
+            # If this is the last attempt, return best result
+            if attempt >= MAX_RETRY_ATTEMPTS:
+                processing_stats["retry_attempts"] = attempt
+                logger.info(f"Max retry attempts reached. Best score: {best_score:.2f}")
+                return best_answer_result, best_response_result
+            
+            # Generate feedback for next attempt
+            feedback_context = self._generate_verbal_feedback(response_result, attempt + 1)
+            
+            # Track feedback history
+            processing_stats["feedback_history"].append({
+                "attempt": attempt + 1,
+                "score": current_score,
+                "accuracy": accuracy_score,
+                "issues": response_result.issues,
+                "feedback": feedback_context
+            })
+            
+            logger.info(f"Quality below threshold (score={current_score:.2f}). Regenerating with feedback...")
+        
+        # Return best result
+        return best_answer_result, best_response_result
+    
+    async def _execute_answer_step_with_feedback(
+        self,
+        request: OrchestrationRequest,
+        rag_context: Optional[RAGContext],
+        processing_stats: Dict[str, Any],
+        feedback_context: str,
+        attempt: int
+    ) -> Optional[AnswerResult]:
+        """
+        Execute answer generation step with optional feedback from previous attempt.
+        
+        Args:
+            request: The orchestration request
+            rag_context: Retrieved RAG context
+            processing_stats: Dictionary to track processing statistics
+            feedback_context: Verbal feedback from ResponseFormatterAgent
+            attempt: Current attempt number (0-indexed)
+            
+        Returns:
+            AnswerResult or None if failed
+        """
+        import os
+        step_start = time.time()
+        
+        try:
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"\n{'='*80}")
+                logger.debug(f"💡 STEP 3: ANSWER GENERATION (Attempt {attempt + 1})")
+                logger.debug(f"{'='*80}")
+                logger.debug(f"Query: {request.user_query}")
+                logger.debug(f"Documents: {len(rag_context.retrieved_documents) if rag_context else 0}")
+                if feedback_context:
+                    logger.debug(f"Feedback: {feedback_context[:200]}...")
+            
+            # Build previous context including feedback
+            previous_context = ""
+            if feedback_context:
+                previous_context = f"""
+[FEEDBACK FROM QUALITY REVIEW - Attempt {attempt}]
+{feedback_context}
+
+Please address the above issues and improve your answer.
+"""
+            
+            answer_input = {
+                "query": request.user_query,
+                "context_documents": rag_context.retrieved_documents if rag_context else [],
+                "rewritten_queries": rag_context.rewritten_queries if rag_context else [],
+                "previous_context": previous_context
+            }
+            
+            answer_result = await self.answer_agent.process(answer_input)
+            
+            # Track timing for this attempt
+            attempt_time = time.time() - step_start
+            if attempt == 0:
+                processing_stats["answer_generation_time"] = attempt_time
+            else:
+                processing_stats[f"answer_regeneration_time_attempt_{attempt}"] = attempt_time
+            
+            processing_stats["answer_confidence"] = answer_result.confidence
+            processing_stats["sources_used"] = len(answer_result.sources_used)
+            
+            if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+                logger.debug(f"Answer Length: {len(answer_result.answer)} chars")
+                logger.debug(f"Confidence: {answer_result.confidence}")
+                logger.debug(f"Sources Used: {len(answer_result.sources_used)}")
+                logger.debug(f"{'='*80}\n")
+            
+            return answer_result
+        
+        except Exception as e:
+            processing_stats[f"answer_generation_error_attempt_{attempt}"] = str(e)
+            logger.error(f"Answer generation failed (attempt {attempt + 1}): {e}", exc_info=True)
+            return None
+    
+    def _generate_verbal_feedback(
+        self, 
+        format_result: FormattedResponseResult,
+        attempt: int
+    ) -> str:
+        """
+        Generate verbal feedback for AnswerAgent based on ResponseFormatterAgent's evaluation.
+        
+        Args:
+            format_result: The formatting/verification result
+            attempt: Current attempt number
+            
+        Returns:
+            String containing detailed feedback for improvement
+        """
+        feedback_parts = []
+        
+        # Add overall assessment
+        feedback_parts.append(f"Quality Assessment (Attempt {attempt}):")
+        feedback_parts.append(f"- Overall Score: {format_result.overall_score:.1f}/10")
+        
+        # Add specific scores
+        scores = format_result.quality_scores
+        feedback_parts.append(f"- Accuracy: {scores.get('accuracy', 'N/A')}/10")
+        feedback_parts.append(f"- Completeness: {scores.get('completeness', 'N/A')}/10")
+        feedback_parts.append(f"- Friendliness: {scores.get('friendliness', 'N/A')}/10")
+        
+        # Add issues found
+        if format_result.issues:
+            feedback_parts.append("\nIssues Found:")
+            for issue in format_result.issues:
+                feedback_parts.append(f"  ❌ {issue}")
+        
+        # Add suggestions for improvement
+        if format_result.suggestions:
+            feedback_parts.append("\nSuggestions for Improvement:")
+            for suggestion in format_result.suggestions:
+                feedback_parts.append(f"  💡 {suggestion}")
+        
+        # Add specific guidance based on low scores
+        guidance = []
+        if scores.get('accuracy', 10) < QUALITY_THRESHOLD:
+            guidance.append("- Ensure factual accuracy by double-checking information against source documents")
+            guidance.append("- Cite specific sources when making claims")
+        
+        if scores.get('completeness', 10) < QUALITY_THRESHOLD:
+            guidance.append("- Provide more comprehensive coverage of the topic")
+            guidance.append("- Address all aspects of the user's question")
+        
+        if scores.get('friendliness', 10) < QUALITY_THRESHOLD:
+            guidance.append("- Use a more friendly and approachable tone")
+            guidance.append("- Add helpful context or explanations")
+        
+        if guidance:
+            feedback_parts.append("\nImprovement Guidance:")
+            feedback_parts.extend(guidance)
+        
+        return "\n".join(feedback_parts)
+    
     async def _execute_formatting_step(
         self,
         request: OrchestrationRequest,
@@ -546,35 +1083,81 @@ class OptimizedMultiAgentOrchestrator:
         )
     
     def _count_llm_calls(self, processing_stats: Dict[str, Any]) -> int:
-        """Count number of LLM calls made."""
+        """
+        Count number of LLM calls made.
+        
+        With feedback loop enabled, this accounts for:
+        - 1 planning call
+        - N answer generation calls (where N = number of retries + 1)
+        - N formatting calls (one per answer to evaluate quality)
+        """
         calls = 0
+        
+        # Planning call
         if "planning_time" in processing_stats and "planning_error" not in processing_stats:
             calls += 1
+        
+        # Answer generation calls (including retries from feedback loop)
         if "answer_generation_time" in processing_stats and "answer_generation_error" not in processing_stats:
+            # Base call
             calls += 1
+            # Add retry calls if feedback loop was used
+            feedback_iterations = processing_stats.get("feedback_loop", {}).get("iterations", 0)
+            if feedback_iterations > 1:
+                # iterations includes the initial attempt, so retries = iterations - 1
+                calls += (feedback_iterations - 1)
+        
+        # Formatting calls (one per answer attempt)
         if "formatting_time" in processing_stats and "formatting_error" not in processing_stats:
             calls += 1
+            # Add formatting calls for retries
+            feedback_iterations = processing_stats.get("feedback_loop", {}).get("iterations", 0)
+            if feedback_iterations > 1:
+                calls += (feedback_iterations - 1)
+        
         return calls
     
     def _get_pipeline_steps_info(self) -> Dict[str, Any]:
         """Get information about pipeline steps."""
+        base_calls = 3  # Planning + Answer + Formatting
+        max_calls_with_feedback = base_calls + (self.max_answer_retries * 2) if self.enable_feedback_loop else base_calls
+        
+        # IRCoT can add additional LLM calls for reasoning
+        max_ircot_calls = self.ircot_config.max_iterations if self.ircot_config.enabled else 0
+        
         return {
-            "pipeline_type": "optimized_3_agents",
+            "pipeline_type": "optimized_3_agents_with_ircot" if self.ircot_config.enabled else "optimized_3_agents",
             "steps_enabled": {
                 "smart_planning": self.enable_planning and self.smart_planner is not None,
                 "rag_retrieval": True,
+                "ircot_retrieval": self.ircot_config.enabled,
                 "answer_generation": True,
-                "response_formatting": self.response_formatter is not None
+                "response_formatting": self.response_formatter is not None,
+                "feedback_loop": self.enable_feedback_loop
             },
             "agents_used": {
                 "smart_planner": self.smart_planner.get_agent_info() if self.smart_planner else None,
                 "answer_agent": self.answer_agent.get_agent_info(),
                 "response_formatter": self.response_formatter.get_agent_info() if self.response_formatter else None
             },
-            "cost_savings": {
-                "original_llm_calls": 5,
-                "optimized_llm_calls": 3,
-                "reduction_percentage": "40%"
+            "ircot_config": {
+                "enabled": self.ircot_config.enabled,
+                "mode": self.ircot_config.mode.value,
+                "max_iterations": self.ircot_config.max_iterations,
+                "complexity_threshold": self.ircot_config.complexity_threshold,
+                "early_stopping_enabled": self.ircot_config.early_stopping_enabled
+            },
+            "feedback_loop_config": {
+                "enabled": self.enable_feedback_loop,
+                "max_retries": self.max_answer_retries,
+                "quality_threshold": self.min_quality_threshold
+            },
+            "cost_info": {
+                "base_llm_calls": base_calls,
+                "max_llm_calls_with_feedback": max_calls_with_feedback,
+                "max_ircot_reasoning_calls": max_ircot_calls,
+                "original_pipeline_calls": 5,
+                "optimization_note": "IRCoT adds dynamic retrieval for complex queries; feedback loop trades cost for quality"
             }
         }
     
@@ -582,8 +1165,9 @@ class OptimizedMultiAgentOrchestrator:
         """Perform health check on all agents."""
         health_info = {
             "optimized_orchestrator": "healthy",
-            "pipeline_type": "optimized_3_agents",
-            "timestamp": datetime.now().isoformat()
+            "pipeline_type": "optimized_3_agents_with_ircot" if self.ircot_config.enabled else "optimized_3_agents",
+            "timestamp": datetime.now().isoformat(),
+            "ircot_enabled": self.ircot_config.enabled
         }
         
         # Check agent port connectivity

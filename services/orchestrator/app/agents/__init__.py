@@ -23,6 +23,9 @@ from .smart_planner_agent import SmartPlannerAgent, SmartPlanResult
 from .answer_agent import AnswerAgent
 from .response_formatter_agent import ResponseFormatterAgent, FormattedResponseResult
 
+# Graph Reasoning Agent
+from .graph_reasoning_agent import GraphReasoningAgent, GraphQueryType, GraphReasoningResult
+
 # Orchestrator
 from .optimized_orchestrator import OptimizedMultiAgentOrchestrator
 
@@ -39,6 +42,11 @@ __all__ = [
     "AnswerAgent",
     "ResponseFormatterAgent",
     "FormattedResponseResult",
+    
+    # Graph Reasoning
+    "GraphReasoningAgent",
+    "GraphQueryType",
+    "GraphReasoningResult",
     
     # Orchestrator
     "OptimizedMultiAgentOrchestrator",

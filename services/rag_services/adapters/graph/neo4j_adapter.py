@@ -916,8 +916,8 @@ class Neo4jGraphAdapter(GraphRepository):
             if not index_name:
                 continue
             
-            cypher = f"""
-            CALL db.index.fulltext.queryNodes($index_name, $query)
+            cypher = """
+            CALL db.index.fulltext.queryNodes($index_name, $search_text)
             YIELD node, score
             RETURN elementId(node) as id, node, score
             ORDER BY score DESC
@@ -926,7 +926,7 @@ class Neo4jGraphAdapter(GraphRepository):
             
             try:
                 with driver.session(database=self.database) as session:
-                    result = session.run(cypher, index_name=index_name, query=query, limit=limit)
+                    result = session.run(cypher, index_name=index_name, search_text=query, limit=limit)
                     
                     for record in result:
                         neo4j_node = record["node"]
@@ -1117,6 +1117,303 @@ class Neo4jGraphAdapter(GraphRepository):
         stats = await self.get_graph_stats()
         return stats.get("nodes_by_category", {})
     
+    # ========== CatRAG Schema Methods (Article, Entity, Community) ==========
+    
+    async def search_articles_by_keyword(
+        self, 
+        keywords: List[str], 
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Search Article nodes by keywords in title and content.
+        
+        For CatRAG schema with Article nodes containing 'title', 'content' fields.
+        """
+        driver = self._get_driver()
+        
+        # Build search pattern for keywords
+        # Using CONTAINS for each keyword (case-insensitive via toLower)
+        keyword_conditions = []
+        for i, kw in enumerate(keywords):
+            keyword_conditions.append(
+                f"(toLower(a.title) CONTAINS toLower($kw{i}) OR toLower(a.content) CONTAINS toLower($kw{i}))"
+            )
+        
+        where_clause = " OR ".join(keyword_conditions) if keyword_conditions else "true"
+        
+        cypher = f"""
+        MATCH (a:Article)
+        WHERE {where_clause}
+        RETURN elementId(a) as id, a.article_id as article_id, a.title as title, 
+               a.content as content, a.article_number as article_number
+        LIMIT $limit
+        """
+        
+        # Build params
+        params = {"limit": limit}
+        for i, kw in enumerate(keywords):
+            params[f"kw{i}"] = kw
+        
+        results = []
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, **params)
+                for record in result:
+                    results.append({
+                        "id": record["id"],
+                        "article_id": record["article_id"],
+                        "title": record["title"],
+                        "content": record["content"][:500] if record["content"] else "",
+                        "article_number": record["article_number"],
+                        "type": "Article"
+                    })
+            logger.info(f"Found {len(results)} articles for keywords: {keywords}")
+        except Exception as e:
+            logger.error(f"Error searching articles: {e}")
+        
+        return results
+    
+    async def search_entities_by_keyword(
+        self, 
+        keywords: List[str], 
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Search Entity nodes by name.
+        
+        For CatRAG schema with Entity nodes containing 'name', 'type', 'description' fields.
+        """
+        driver = self._get_driver()
+        
+        # Build search pattern
+        keyword_conditions = []
+        for i, kw in enumerate(keywords):
+            keyword_conditions.append(
+                f"(toLower(e.name) CONTAINS toLower($kw{i}) OR toLower(e.description) CONTAINS toLower($kw{i}))"
+            )
+        
+        where_clause = " OR ".join(keyword_conditions) if keyword_conditions else "true"
+        
+        cypher = f"""
+        MATCH (e:Entity)
+        WHERE {where_clause}
+        RETURN elementId(e) as id, e.name as name, e.type as type, 
+               e.description as description
+        LIMIT $limit
+        """
+        
+        params = {"limit": limit}
+        for i, kw in enumerate(keywords):
+            params[f"kw{i}"] = kw
+        
+        results = []
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, **params)
+                for record in result:
+                    results.append({
+                        "id": record["id"],
+                        "name": record["name"],
+                        "type": record["type"],
+                        "description": record["description"][:200] if record["description"] else "",
+                        "node_type": "Entity"
+                    })
+            logger.info(f"Found {len(results)} entities for keywords: {keywords}")
+        except Exception as e:
+            logger.error(f"Error searching entities: {e}")
+        
+        return results
+    
+    async def get_article_with_entities(
+        self, 
+        article_number: int
+    ) -> Dict[str, Any]:
+        """
+        Get an Article by its article_number along with related entities.
+        
+        Returns:
+            Dict with article info and list of entities it MENTIONS
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (a:Article {article_number: $article_number})
+        OPTIONAL MATCH (a)-[:MENTIONS]->(e:Entity)
+        RETURN a.title as title, a.content as content, a.article_number as article_number,
+               collect(DISTINCT {name: e.name, type: e.type, description: e.description}) as entities
+        """
+        
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, article_number=article_number)
+                record = result.single()
+                
+                if record:
+                    # Filter out null entities
+                    entities = [e for e in record["entities"] if e.get("name")]
+                    return {
+                        "title": record["title"],
+                        "content": record["content"],
+                        "article_number": record["article_number"],
+                        "entities": entities,
+                        "type": "Article"
+                    }
+        except Exception as e:
+            logger.error(f"Error getting article {article_number}: {e}")
+        
+        return {}
+    
+    async def get_all_communities(self) -> List[Dict[str, Any]]:
+        """
+        Get all Community nodes with their summaries.
+        
+        For GLOBAL reasoning - returns community summaries.
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (c:Community)
+        OPTIONAL MATCH (a:Article)-[:BELONGS_TO]->(c)
+        RETURN c.name as name, c.summary as summary, c.size as size,
+               c.key_entities as key_entities,
+               collect(DISTINCT a.title) as articles
+        ORDER BY c.size DESC
+        """
+        
+        results = []
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher)
+                for record in result:
+                    results.append({
+                        "name": record["name"],
+                        "summary": record["summary"],
+                        "size": record["size"],
+                        "key_entities": record["key_entities"],
+                        "articles": record["articles"][:5],  # Limit article titles
+                        "type": "Community"
+                    })
+            logger.info(f"Found {len(results)} communities")
+        except Exception as e:
+            logger.error(f"Error getting communities: {e}")
+        
+        return results
+    
+    async def find_article_path(
+        self, 
+        start_article_number: int, 
+        end_article_number: int,
+        max_depth: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Find path between two Articles via NEXT_ARTICLE or shared Entity relationships.
+        
+        For MULTI_HOP reasoning.
+        """
+        driver = self._get_driver()
+        
+        # Try NEXT_ARTICLE path first
+        cypher = """
+        MATCH (start:Article {article_number: $start_num})
+        MATCH (end:Article {article_number: $end_num})
+        MATCH path = shortestPath((start)-[:NEXT_ARTICLE*..%d]->(end))
+        RETURN [node in nodes(path) | {
+            article_number: node.article_number,
+            title: node.title
+        }] as path_nodes,
+        length(path) as path_length
+        """ % max_depth
+        
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(
+                    cypher, 
+                    start_num=start_article_number, 
+                    end_num=end_article_number
+                )
+                record = result.single()
+                
+                if record:
+                    return [{
+                        "path_nodes": record["path_nodes"],
+                        "path_length": record["path_length"],
+                        "path_type": "NEXT_ARTICLE"
+                    }]
+        except Exception as e:
+            logger.warning(f"No NEXT_ARTICLE path found: {e}")
+        
+        # Fallback: Try via shared entities
+        cypher2 = """
+        MATCH (start:Article {article_number: $start_num})
+        MATCH (end:Article {article_number: $end_num})
+        MATCH path = (start)-[:MENTIONS]->(:Entity)<-[:MENTIONS]-(end)
+        RETURN [node in nodes(path) | {
+            name: coalesce(node.title, node.name),
+            type: labels(node)[0]
+        }] as path_nodes,
+        length(path) as path_length
+        LIMIT 3
+        """
+        
+        results = []
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(
+                    cypher2, 
+                    start_num=start_article_number, 
+                    end_num=end_article_number
+                )
+                for record in result:
+                    results.append({
+                        "path_nodes": record["path_nodes"],
+                        "path_length": record["path_length"],
+                        "path_type": "SHARED_ENTITY"
+                    })
+        except Exception as e:
+            logger.error(f"Error finding article path: {e}")
+        
+        return results
+    
+    async def get_related_articles_by_entity(
+        self, 
+        entity_name: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Find Articles that MENTION a specific Entity.
+        
+        For LOCAL reasoning - "Các điều khoản nào liên quan đến X?"
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (e:Entity)
+        WHERE toLower(e.name) CONTAINS toLower($entity_name)
+        WITH e LIMIT 1
+        MATCH (a:Article)-[:MENTIONS]->(e)
+        RETURN a.article_number as article_number, a.title as title,
+               a.content as content, e.name as entity_name
+        LIMIT $limit
+        """
+        
+        results = []
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, entity_name=entity_name, limit=limit)
+                for record in result:
+                    results.append({
+                        "article_number": record["article_number"],
+                        "title": record["title"],
+                        "content": record["content"][:500] if record["content"] else "",
+                        "related_entity": record["entity_name"],
+                        "type": "Article"
+                    })
+            logger.info(f"Found {len(results)} articles mentioning '{entity_name}'")
+        except Exception as e:
+            logger.error(f"Error finding related articles: {e}")
+        
+        return results
+
     def close(self):
         """Close Neo4j driver"""
         if self._driver:

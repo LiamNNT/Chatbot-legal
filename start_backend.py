@@ -334,6 +334,16 @@ def start_orchestrator_service(project_root: Path, debug_mode: bool = False):
     # Disable timeout for Answer Agent (deepseek model can be slow)
     env['OPENROUTER_TIMEOUT'] = 'none'
     
+    # Add rag_services to PYTHONPATH for Graph Reasoning (Neo4j adapter)
+    rag_services_path = str(orchestrator_dir.parent / "rag_services")
+    existing_pythonpath = env.get('PYTHONPATH', '')
+    if existing_pythonpath:
+        env['PYTHONPATH'] = f"{orchestrator_dir}:{rag_services_path}:{existing_pythonpath}"
+    else:
+        env['PYTHONPATH'] = f"{orchestrator_dir}:{rag_services_path}"
+    
+    print_info(f"PYTHONPATH set for Graph Reasoning: {env['PYTHONPATH'][:100]}...")
+    
     # Start Orchestrator service - no output capture, show logs in terminal
     proc = subprocess.Popen(
         [

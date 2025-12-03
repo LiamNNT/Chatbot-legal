@@ -70,7 +70,20 @@ agents:
          • Medium: top_k=5, hybrid_search=false
          • Complex: top_k=7-10, hybrid_search=true
       
-      4. REWRITE QUERY (if requires_rag=true):
+      4. DETERMINE KNOWLEDGE GRAPH USAGE (use_knowledge_graph):
+         Set use_knowledge_graph=true when query involves:
+         • Specific "Điều" (Article) references: "Điều 14", "Điều 15"...
+         • Relationships between regulations/articles
+         • Course prerequisites or dependencies: "môn tiên quyết", "học trước"
+         • Paths between concepts: "mối quan hệ giữa X và Y"
+         • Multi-hop reasoning about regulations
+         
+         Set graph_query_type:
+         • "local": Single entity lookup (e.g., "Điều 14 quy định gì?")
+         • "global": Overview/summary queries (e.g., "Tổng quan về quy chế đào tạo")
+         • "multi_hop": Relationship chains (e.g., "Môn IT001 cần học trước những môn nào?")
+      
+      5. REWRITE QUERY (if requires_rag=true):
          • Expand abbreviations: HP→học phần, KHMT→Khoa học máy tính
          • Add UIT context if missing
          • Generate 1-2 optimized search queries
@@ -85,13 +98,19 @@ agents:
       ═══ EXAMPLES ═══
 
       Query: "Xin chào"
-      Output: {"intent":"social_greeting","complexity_score":0,"complexity":"simple","requires_rag":false,"strategy":"direct_response","rewritten_queries":[],"search_terms":[],"reasoning":"Greeting, no domain info needed"}
+      Output: {"intent":"social_greeting","complexity_score":0,"complexity":"simple","requires_rag":false,"use_knowledge_graph":false,"strategy":"direct_response","rewritten_queries":[],"search_terms":[],"reasoning":"Greeting, no domain info needed"}
+
+      Query: "Điều 14 quy định về vấn đề gì?"
+      Output: {"intent":"informational","complexity_score":5.0,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"local","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Nội dung Điều 14 trong quy chế đào tạo UIT","Điều 14 quy chế đào tạo đại học UIT"],"search_terms":["Điều 14","quy chế đào tạo","UIT"],"reasoning":"Specific article reference - use knowledge graph for precise lookup"}
 
       Query: "Học phí KHMT 2025?"
-      Output: {"intent":"informational","complexity_score":4.5,"complexity":"medium","requires_rag":true,"strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Học phí ngành Khoa học máy tính UIT năm 2024-2025","Mức thu học phí chương trình Computer Science UIT"],"search_terms":["học phí","khoa học máy tính","UIT","2025"],"reasoning":"Specific numerical data query, needs current tuition info"}
+      Output: {"intent":"informational","complexity_score":4.5,"complexity":"medium","requires_rag":true,"use_knowledge_graph":false,"strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Học phí ngành Khoa học máy tính UIT năm 2024-2025","Mức thu học phí chương trình Computer Science UIT"],"search_terms":["học phí","khoa học máy tính","UIT","2025"],"reasoning":"Specific numerical data query, needs current tuition info"}
+
+      Query: "Môn IT001 cần học trước những môn nào?"
+      Output: {"intent":"informational","complexity_score":6.0,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"multi_hop","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Môn tiên quyết của IT001 Nhập môn lập trình","Các môn học trước IT001"],"search_terms":["IT001","môn tiên quyết","học trước"],"reasoning":"Course prerequisite query - use knowledge graph for relationship traversal"}
 
       Query: "So sánh quy trình ĐKHP giữa SV năm 1 và năm 3"
-      Output: {"intent":"comparative","complexity_score":7.5,"complexity":"complex","requires_rag":true,"strategy":"advanced_rag","top_k":10,"hybrid_search":true,"reranking":true,"rewritten_queries":["Quy trình đăng ký học phần sinh viên năm thứ nhất UIT","Quy trình đăng ký học phần sinh viên năm thứ ba UIT","So sánh ưu tiên đăng ký học phần theo năm học"],"search_terms":["đăng ký học phần","sinh viên năm 1","sinh viên năm 3","quy trình","ưu tiên"],"reasoning":"Comparative query needs multiple aspects, policy-sensitive"}
+      Output: {"intent":"comparative","complexity_score":7.5,"complexity":"complex","requires_rag":true,"use_knowledge_graph":false,"strategy":"advanced_rag","top_k":10,"hybrid_search":true,"reranking":true,"rewritten_queries":["Quy trình đăng ký học phần sinh viên năm thứ nhất UIT","Quy trình đăng ký học phần sinh viên năm thứ ba UIT","So sánh ưu tiên đăng ký học phần theo năm học"],"search_terms":["đăng ký học phần","sinh viên năm 1","sinh viên năm 3","quy trình","ưu tiên"],"reasoning":"Comparative query needs multiple aspects, policy-sensitive"}
 
       ═══ OUTPUT FORMAT ═══
       
@@ -100,6 +119,8 @@ agents:
         "complexity_score": float (0-10),
         "complexity": "simple"|"medium"|"complex",
         "requires_rag": boolean,
+        "use_knowledge_graph": boolean,
+        "graph_query_type": "local"|"global"|"multi_hop" (only if use_knowledge_graph=true),
         "strategy": "direct_response"|"standard_rag"|"advanced_rag",
         "top_k": int (5-10, only if requires_rag),
         "hybrid_search": boolean (only if requires_rag),

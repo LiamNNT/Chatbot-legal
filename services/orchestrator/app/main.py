@@ -17,7 +17,7 @@ env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path, override=True)  # Override existing env vars
 
 from .api.routes import router as api_router
-from .core.container import cleanup_container
+from .core.container import cleanup_container, get_container
 
 # Configure logging
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
@@ -48,6 +48,17 @@ async def lifespan(app: FastAPI):
     if missing_vars:
         logger.error(f"Missing required environment variables: {missing_vars}")
         raise RuntimeError(f"Missing required environment variables: {missing_vars}")
+    
+    # Initialize multi-agent orchestrator early to verify Graph Reasoning
+    try:
+        container = get_container()
+        orchestrator = container.get_multi_agent_orchestrator()
+        if orchestrator.graph_reasoning_agent:
+            logger.info("✓ Graph Reasoning Agent is available")
+        else:
+            logger.warning("⚠ Graph Reasoning Agent is NOT available")
+    except Exception as e:
+        logger.warning(f"⚠ Could not initialize multi-agent orchestrator: {e}")
     
     logger.info("Orchestrator service started successfully")
     

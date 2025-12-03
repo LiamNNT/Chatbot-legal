@@ -8,9 +8,16 @@ Optimized 3-Agent Pipeline:
 - SmartPlannerAgent: Planning + Query Rewriting
 - AnswerAgent: Answer generation
 - ResponseFormatterAgent: Verification + Formatting
+
+Enhanced with IRCoT (Interleaving Retrieval with Chain-of-Thought):
+- Dynamic multi-hop retrieval for complex queries
+
+Enhanced with Graph Reasoning (Neo4j):
+- Local/Global/Multi-hop graph queries for relationship-based questions
 """
 
 import os
+import sys
 import logging
 from typing import Optional, Dict, Any
 from ..core.orchestration_service import OrchestrationService
@@ -21,6 +28,14 @@ from ..adapters.rag_adapter import RAGServiceAdapter
 from ..adapters.conversation_manager import InMemoryConversationManagerAdapter
 from ..core.config_manager import ConfigurationManager, get_config_manager
 from ..core.agent_factory import AgentFactory, ConfigurableAgentFactory, get_agent_factory
+from ..core.ircot_config import IRCoTConfig, IRCoTMode
+
+# Add rag_services to path for importing Neo4jGraphAdapter
+# Calculate path from this file's location
+_THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+RAG_SERVICES_PATH = os.path.normpath(os.path.join(_THIS_FILE_DIR, "..", "..", "..", "rag_services"))
+if RAG_SERVICES_PATH not in sys.path:
+    sys.path.insert(0, RAG_SERVICES_PATH)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +59,7 @@ class ServiceContainer:
         """
         self._agent_port: Optional[AgentPort] = None
         self._rag_port: Optional[RAGServicePort] = None
+        self._graph_adapter = None  # Neo4j Graph Adapter for Graph Reasoning
         self._conversation_manager: Optional[ConversationManagerPort] = None
         self._orchestration_service: Optional[OrchestrationService] = None
         self._multi_agent_orchestrator: Optional[OptimizedMultiAgentOrchestrator] = None
@@ -103,6 +119,58 @@ class ServiceContainer:
             )
         
         return self._rag_port
+    
+    def get_graph_adapter(self):
+        """
+        Get or create the Neo4j Graph Adapter for Graph Reasoning.
+        
+        Returns:
+            Neo4jGraphAdapter instance or None if Neo4j is not available
+        """
+        if self._graph_adapter is None:
+            # Check if Graph Reasoning is enabled
+            enable_graph = os.getenv("ENABLE_GRAPH_REASONING", "true").lower() == "true"
+            
+            if not enable_graph:
+                logger.info("Graph Reasoning is DISABLED by environment variable")
+                return None
+            
+            try:
+                # Log sys.path for debugging
+                logger.info(f"🔍 RAG_SERVICES_PATH: {RAG_SERVICES_PATH}")
+                logger.info(f"🔍 Path exists: {os.path.exists(RAG_SERVICES_PATH)}")
+                
+                # Import Neo4jGraphAdapter from rag_services
+                from adapters.graph.neo4j_adapter import Neo4jGraphAdapter
+                
+                # Get Neo4j configuration from environment
+                neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+                neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+                neo4j_password = os.getenv("NEO4J_PASSWORD", "uitchatbot")
+                neo4j_database = os.getenv("NEO4J_DATABASE", "neo4j")
+                
+                logger.info(f"🔗 Connecting to Neo4j: {neo4j_uri}")
+                
+                self._graph_adapter = Neo4jGraphAdapter(
+                    uri=neo4j_uri,
+                    username=neo4j_user,
+                    password=neo4j_password,
+                    database=neo4j_database
+                )
+                
+                logger.info("✓ Neo4j Graph Adapter initialized successfully")
+                
+            except ImportError as e:
+                logger.warning(f"⚠ Could not import Neo4jGraphAdapter: {e}")
+                logger.warning(f"⚠ sys.path: {sys.path[:5]}...")  # Show first 5 paths
+                logger.warning("Graph Reasoning will be DISABLED")
+                return None
+            except Exception as e:
+                logger.warning(f"⚠ Could not connect to Neo4j: {e}")
+                logger.warning("Graph Reasoning will be DISABLED")
+                return None
+        
+        return self._graph_adapter
     
     def get_conversation_manager(self) -> ConversationManagerPort:
         """
@@ -165,6 +233,8 @@ class ServiceContainer:
         Get or create the multi-agent orchestrator instance.
         
         Uses OptimizedMultiAgentOrchestrator (3 agents, 40% cost savings).
+        Enhanced with IRCoT for complex multi-hop questions.
+        Enhanced with Graph Reasoning for relationship-based queries.
         
         Returns:
             OptimizedMultiAgentOrchestrator instance with all dependencies injected
@@ -187,8 +257,21 @@ class ServiceContainer:
             else:
                 enable_planning = system_config.enable_planning
             
+            # Create IRCoT configuration from environment
+            ircot_config = self._create_ircot_config()
+            
+            # Get Graph Adapter for Graph Reasoning
+            graph_adapter = self.get_graph_adapter()
+            
             logger.info("=" * 60)
             logger.info("🚀 Using OPTIMIZED orchestrator (3 agents, 40% cost savings)")
+            if ircot_config.enabled:
+                logger.info(f"🔄 IRCoT ENABLED: max_iterations={ircot_config.max_iterations}, "
+                           f"threshold={ircot_config.complexity_threshold}")
+            if graph_adapter:
+                logger.info("🔗 Graph Reasoning ENABLED (Neo4j connected)")
+            else:
+                logger.info("⚠ Graph Reasoning DISABLED (no graph adapter)")
             logger.info("=" * 60)
             
             self._multi_agent_orchestrator = OptimizedMultiAgentOrchestrator(
@@ -196,10 +279,49 @@ class ServiceContainer:
                 rag_port=self.get_rag_port(),
                 agent_factory=self.get_agent_factory(),
                 enable_verification=enable_verification,
-                enable_planning=enable_planning
+                enable_planning=enable_planning,
+                graph_adapter=graph_adapter,
+                ircot_config=ircot_config
             )
         
         return self._multi_agent_orchestrator
+    
+    def _create_ircot_config(self) -> IRCoTConfig:
+        """
+        Create IRCoT configuration from environment variables.
+        
+        Returns:
+            IRCoTConfig instance
+        """
+        # Check if IRCoT is enabled
+        ircot_enabled = os.getenv("IRCOT_ENABLED", "true").lower() == "true"
+        
+        # Parse mode
+        mode_str = os.getenv("IRCOT_MODE", "automatic").lower()
+        if mode_str == "forced":
+            mode = IRCoTMode.FORCED
+        elif mode_str == "disabled":
+            mode = IRCoTMode.DISABLED
+        else:
+            mode = IRCoTMode.AUTOMATIC
+        
+        # Parse other settings
+        max_iterations = int(os.getenv("IRCOT_MAX_ITERATIONS", "3"))
+        complexity_threshold = float(os.getenv("IRCOT_COMPLEXITY_THRESHOLD", "6.5"))
+        early_stopping = os.getenv("IRCOT_EARLY_STOPPING", "true").lower() == "true"
+        
+        config = IRCoTConfig(
+            enabled=ircot_enabled,
+            mode=mode,
+            max_iterations=max_iterations,
+            complexity_threshold=complexity_threshold,
+            early_stopping_enabled=early_stopping
+        )
+        
+        logger.info(f"IRCoT Configuration: enabled={config.enabled}, mode={config.mode.value}, "
+                   f"max_iter={config.max_iterations}, threshold={config.complexity_threshold}")
+        
+        return config
     
     async def cleanup(self) -> None:
         """

@@ -75,6 +75,12 @@ class SmartPlanResult:
     use_knowledge_graph: bool = False  # Whether to use Knowledge Graph
     use_vector_search: bool = True     # Whether to use Vector Search
     
+    # Graph Reasoning Type: "local", "global", "multi_hop"
+    # - local: Simple 1-hop queries (prerequisites, department courses)
+    # - global: Community-based summaries for comparative/overview questions
+    # - multi_hop: Dynamic path exploration (e.g., "if I fail X, what courses are affected?")
+    graph_query_type: str = "local"
+    
     # Extracted filters for RAG search
     extracted_filters: Optional[ExtractedFilters] = None
 
@@ -253,6 +259,9 @@ class SmartPlannerAgent(SpecializedAgent):
         # Always use vector search for RAG queries (primary source)
         use_vector_search = requires_rag
         
+        # Determine graph query type for advanced reasoning
+        graph_query_type = self._determine_graph_query_type(original_query) if use_knowledge_graph else "local"
+        
         # Extract filters from query context
         extracted_filters = self._extract_filters_from_query(original_query) if requires_rag else None
         
@@ -270,10 +279,15 @@ class SmartPlannerAgent(SpecializedAgent):
             reranking=reranking,
             use_knowledge_graph=use_knowledge_graph,
             use_vector_search=use_vector_search,
+            graph_query_type=graph_query_type,
             extracted_filters=extracted_filters,
             reasoning=data.get("reasoning", ""),
             confidence=0.85,
-            metadata={"source": "llm_response", "kg_reason": "relationship_query" if needs_relationship_search else None}
+            metadata={
+                "source": "llm_response", 
+                "kg_reason": "relationship_query" if needs_relationship_search else None,
+                "graph_reasoning_type": graph_query_type
+            }
         )
     
     def _create_fallback_result(self, query: str, response_content: str) -> SmartPlanResult:
@@ -311,6 +325,9 @@ class SmartPlannerAgent(SpecializedAgent):
         )
         use_vector_search = requires_rag
         
+        # Determine graph query type for advanced reasoning
+        graph_query_type = self._determine_graph_query_type(query) if use_knowledge_graph else "local"
+        
         # Extract filters from query context
         extracted_filters = self._extract_filters_from_query(query) if requires_rag else None
         
@@ -328,13 +345,15 @@ class SmartPlannerAgent(SpecializedAgent):
             reranking=reranking,
             use_knowledge_graph=use_knowledge_graph,
             use_vector_search=use_vector_search,
+            graph_query_type=graph_query_type,
             extracted_filters=extracted_filters,
             reasoning="Fallback to rule-based analysis",
             confidence=0.6,
             metadata={
                 "fallback": True,
                 "original_response": response_content[:200],
-                "kg_reason": "relationship_query" if needs_relationship_search else None
+                "kg_reason": "relationship_query" if needs_relationship_search else None,
+                "graph_reasoning_type": graph_query_type
             }
         )
     
@@ -453,6 +472,85 @@ class SmartPlannerAgent(SpecializedAgent):
             has_multiple_articles or
             comparative_regulation
         )
+
+    def _determine_graph_query_type(self, query: str) -> str:
+        """
+        Determine the type of graph query needed for reasoning.
+        
+        Types:
+        - "local": Simple 1-hop queries (prerequisites, department courses)
+        - "global": Community-based summaries for comparative/overview questions
+        - "multi_hop": Dynamic path exploration with impact analysis
+        
+        Examples:
+        - LOCAL: "Môn IT003 cần học môn gì trước?" → prerequisite lookup
+        - GLOBAL: "So sánh cấu trúc chương trình CNTT và KHMT?" → community summaries
+        - MULTI_HOP: "Nếu tôi rớt IT001 thì tôi sẽ bị trễ môn đồ án nào?" → chain reasoning
+        """
+        query_lower = query.lower()
+        
+        # === MULTI_HOP PATTERNS ===
+        # Questions about impact/consequence/chain effects
+        multi_hop_patterns = [
+            # Conditional impact
+            r'nếu.*(rớt|trượt|không qua|fail).*thì',
+            r'nếu.*(không học|bỏ qua|skip).*thì',
+            r'(rớt|trượt).*ảnh hưởng',
+            r'(rớt|trượt).*bị trễ',
+            # Chain questions
+            r'chuỗi.*(môn|học phần)',
+            r'từ.*(cơ sở|nền tảng).*đến.*(chuyên ngành|nâng cao)',
+            r'đường đi.*học',
+            r'lộ trình.*học',
+            # Impact analysis
+            r'ảnh hưởng.*như thế nào.*tốt nghiệp',
+            r'tác động.*đến.*năm (cuối|\d)',
+        ]
+        
+        for pattern in multi_hop_patterns:
+            if re.search(pattern, query_lower):
+                return "multi_hop"
+        
+        # === GLOBAL PATTERNS ===
+        # Comparative, overview, summary questions
+        global_patterns = [
+            # Comparison
+            r'so sánh.*(chương trình|ngành|khoa)',
+            r'khác biệt.*(giữa|của).*(chương trình|ngành|khoa)',
+            r'(cntt|khmt|httt|mmt).*(vs|so với|và).*(cntt|khmt|httt|mmt)',
+            # Overview/Summary
+            r'tóm tắt.*(quy định|chương trình|môn học)',
+            r'tổng quan.*(về|của)',
+            r'liệt kê tất cả',
+            r'có bao nhiêu (môn|quy định|điều)',
+            # Categorization
+            r'phân loại.*(môn|quy định)',
+            r'nhóm.*(môn học|quy định)',
+        ]
+        
+        for pattern in global_patterns:
+            if re.search(pattern, query_lower):
+                return "global"
+        
+        # === LOCAL (DEFAULT) ===
+        # Simple lookup patterns
+        local_patterns = [
+            # Prerequisites
+            r'(tiên quyết|học trước|cần học)',
+            r'môn.*(trước|sau)',
+            # Department/Program
+            r'(thuộc|của) khoa',
+            r'môn.*(bắt buộc|tự chọn)',
+            # Single entity
+            r'^(cho biết|thông tin về)',
+        ]
+        
+        for pattern in local_patterns:
+            if re.search(pattern, query_lower):
+                return "local"
+        
+        # Default to local for simple knowledge graph queries
+        return "local"
 
     def _apply_rule_based_rewriting(self, query: str) -> List[str]:
         """Apply rule-based query rewriting."""
