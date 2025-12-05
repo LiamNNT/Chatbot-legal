@@ -161,6 +161,66 @@ export const testAgents = async () => {
   }
 };
 
+// ============================================================================
+// KG EXTRACTION API
+// ============================================================================
+
+const RAG_SERVICE_URL = import.meta.env.VITE_RAG_SERVICE_URL || 'http://localhost:8002';
+
+/**
+ * Upload PDF and start KG extraction
+ * @param {File} file - PDF file to extract
+ * @param {string} category - Document category
+ * @param {boolean} pushToNeo4j - Whether to push to Neo4j
+ * @returns {Promise} Job status
+ */
+export const uploadForExtraction = async (file, category = 'Quy chế Đào tạo', pushToNeo4j = false) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const url = new URL(`${RAG_SERVICE_URL}/v1/extraction/upload`);
+  url.searchParams.append('category', category);
+  url.searchParams.append('push_to_neo4j', pushToNeo4j);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Upload failed');
+  }
+
+  return response.json();
+};
+
+/**
+ * Get extraction job status
+ * @param {string} jobId - Job ID
+ * @returns {Promise} Job status
+ */
+export const getExtractionStatus = async (jobId) => {
+  const response = await fetch(`${RAG_SERVICE_URL}/v1/extraction/status/${jobId}`);
+  if (!response.ok) {
+    throw new Error('Failed to get status');
+  }
+  return response.json();
+};
+
+/**
+ * Get extraction result
+ * @param {string} jobId - Job ID
+ * @returns {Promise} Extraction result JSON
+ */
+export const getExtractionResult = async (jobId) => {
+  const response = await fetch(`${RAG_SERVICE_URL}/v1/extraction/result/${jobId}`);
+  if (!response.ok) {
+    throw new Error('Failed to get result');
+  }
+  return response.json();
+};
+
 export default {
   sendChatMessage,
   sendSimpleChatMessage,
@@ -169,4 +229,8 @@ export default {
   deleteConversation,
   getAgentsInfo,
   testAgents,
+  uploadForExtraction,
+  getExtractionStatus,
+  getExtractionResult,
 };
+

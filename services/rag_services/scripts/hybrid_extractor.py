@@ -13,6 +13,7 @@ Author: Legal Document Processing Team
 Date: 2024
 """
 
+import asyncio
 import base64
 import json
 import logging
@@ -204,7 +205,7 @@ class VLMConfig(BaseModel):
         if provider == VLMProvider.OPENROUTER:
             # Try multiple env var names for API key
             api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
-            model = os.getenv("VLM_MODEL", "google/gemini-flash-1.5")
+            model = os.getenv("VLM_MODEL", "openai/gpt-4.1")
             base_url = os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
         elif provider == VLMProvider.OPENAI:
             api_key = os.getenv("OPENAI_API_KEY")
@@ -1169,6 +1170,341 @@ class SemanticExtractor:
                 ))
         
         return results
+
+
+# =============================================================================
+# Parallel Semantic Extractor (Optimized Stage 2)
+# =============================================================================
+
+class ParallelSemanticExtractor:
+    """
+    Stage 2: Parallel Semantic Extraction using async LLM calls.
+    
+    Optimized version of SemanticExtractor that processes multiple articles
+    concurrently using asyncio, with rate limiting and error handling.
+    
+    Features:
+    - Concurrent processing with configurable concurrency limit (Semaphore)
+    - Automatic retry with exponential backoff
+    - Progress bar with tqdm
+    - Graceful error handling (one failure doesn't crash everything)
+    
+    Example:
+        ```python
+        config = LLMConfig.from_env()
+        extractor = ParallelSemanticExtractor(config, max_concurrency=5)
+        
+        # Async usage
+        results = await extractor.extract_batch_async(articles)
+        
+        # Sync wrapper
+        results = extractor.extract_batch(articles)
+        ```
+    """
+    
+    def __init__(
+        self, 
+        config: LLMConfig, 
+        max_concurrency: int = 5,
+        max_retries: int = 3,
+        retry_delay: float = 1.0
+    ):
+        """
+        Initialize parallel semantic extractor.
+        
+        Args:
+            config: LLM configuration
+            max_concurrency: Maximum concurrent API calls (default: 5)
+            max_retries: Maximum retry attempts for failed calls (default: 3)
+            retry_delay: Base delay between retries in seconds (default: 1.0)
+        """
+        self.config = config
+        self.max_concurrency = max_concurrency
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self._semaphore: Optional[asyncio.Semaphore] = None
+        
+        # Create sync extractor for reusing parsing logic
+        self._sync_extractor = SemanticExtractor(config)
+        
+        logger.info(
+            f"ParallelSemanticExtractor initialized: "
+            f"model={config.model}, concurrency={max_concurrency}"
+        )
+    
+    async def _call_llm_async(self, prompt: str) -> str:
+        """
+        Call LLM API asynchronously using OpenAI's async client.
+        
+        Returns:
+            Response text from LLM
+        """
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise ImportError("openai package required. Install: pip install openai")
+        
+        client = AsyncOpenAI(
+            api_key=self.config.api_key,
+            base_url=self.config.base_url if self.config.base_url else None
+        )
+        
+        response = await client.chat.completions.create(
+            model=self.config.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature
+        )
+        
+        return response.choices[0].message.content
+    
+    async def _extract_single_async(
+        self,
+        article_id: str,
+        article_title: str,
+        article_text: str,
+        pbar: Optional[Any] = None
+    ) -> SemanticExtractionResult:
+        """
+        Extract semantics from a single article with retries.
+        
+        Args:
+            article_id: Article ID
+            article_title: Article title  
+            article_text: Article content
+            pbar: Optional tqdm progress bar
+            
+        Returns:
+            SemanticExtractionResult
+        """
+        prompt = SEMANTIC_EXTRACTION_PROMPT.format(
+            article_id=article_id,
+            article_title=article_title,
+            article_text=article_text
+        )
+        
+        errors = []
+        last_error = None
+        
+        for attempt in range(self.max_retries):
+            try:
+                # Acquire semaphore to limit concurrency
+                async with self._semaphore:
+                    response_text = await self._call_llm_async(prompt)
+                
+                # Parse response (reuse sync extractor's logic)
+                raw_data = self._sync_extractor._parse_llm_response(response_text)
+                data = self._sync_extractor._post_process_extraction(raw_data, article_id)
+                
+                # Parse entities
+                nodes = []
+                for ent_data in data.get("entities", []):
+                    try:
+                        entity_type = ent_data.get("type", "").upper()
+                        if not self._sync_extractor._validate_entity_type(entity_type):
+                            continue
+                        
+                        node = SemanticNode(
+                            id=ent_data["id"],
+                            type=entity_type,
+                            text=ent_data.get("text", ""),
+                            normalized=ent_data.get("normalized"),
+                            confidence=float(ent_data.get("confidence", 0.9)),
+                            source_article_id=article_id,
+                            metadata={"article_title": article_title}
+                        )
+                        nodes.append(node)
+                    except Exception as e:
+                        errors.append(f"Entity parse error: {e}")
+                
+                # Parse relations
+                relations = []
+                for rel_data in data.get("relations", []):
+                    try:
+                        rel_type = rel_data.get("type", "").upper()
+                        if not self._sync_extractor._validate_relation_type(rel_type):
+                            continue
+                        
+                        relation = SemanticRelation(
+                            source_id=rel_data["source_id"],
+                            target_id=rel_data["target_id"],
+                            type=rel_type,
+                            confidence=float(rel_data.get("confidence", 0.9)),
+                            evidence=rel_data.get("evidence", ""),
+                            source_article_id=article_id
+                        )
+                        relations.append(relation)
+                    except Exception as e:
+                        errors.append(f"Relation parse error: {e}")
+                
+                logger.info(f"Article {article_id}: {len(nodes)} entities, {len(relations)} relations")
+                
+                if pbar:
+                    pbar.update(1)
+                
+                return SemanticExtractionResult(
+                    article_id=article_id,
+                    nodes=nodes,
+                    relations=relations,
+                    errors=errors
+                )
+                
+            except Exception as e:
+                last_error = e
+                wait_time = self.retry_delay * (2 ** attempt)  # Exponential backoff
+                
+                # Check if rate limit error
+                error_str = str(e).lower()
+                if "429" in error_str or "rate" in error_str:
+                    wait_time = wait_time * 2  # Double wait for rate limits
+                    logger.warning(
+                        f"Rate limit hit for {article_id}, "
+                        f"retry {attempt + 1}/{self.max_retries} in {wait_time:.1f}s"
+                    )
+                else:
+                    logger.warning(
+                        f"Error extracting {article_id}: {e}, "
+                        f"retry {attempt + 1}/{self.max_retries} in {wait_time:.1f}s"
+                    )
+                
+                if attempt < self.max_retries - 1:
+                    await asyncio.sleep(wait_time)
+        
+        # All retries failed
+        logger.error(f"Failed to extract {article_id} after {self.max_retries} attempts: {last_error}")
+        
+        if pbar:
+            pbar.update(1)
+        
+        return SemanticExtractionResult(
+            article_id=article_id,
+            nodes=[],
+            relations=[],
+            errors=[f"Failed after {self.max_retries} retries: {last_error}"]
+        )
+    
+    async def extract_batch_async(
+        self,
+        articles: List[Dict[str, Any]],
+        show_progress: bool = True
+    ) -> List[SemanticExtractionResult]:
+        """
+        Extract semantics from multiple articles concurrently.
+        
+        Args:
+            articles: List of article dicts with 'id', 'title', 'full_text'
+            show_progress: Whether to show tqdm progress bar
+            
+        Returns:
+            List of SemanticExtractionResult
+        """
+        if not articles:
+            return []
+        
+        # Initialize semaphore
+        self._semaphore = asyncio.Semaphore(self.max_concurrency)
+        
+        # Setup progress bar
+        pbar = None
+        if show_progress:
+            try:
+                from tqdm.asyncio import tqdm
+                pbar = tqdm(total=len(articles), desc="Semantic Extraction", unit="article")
+            except ImportError:
+                logger.warning("tqdm not installed, progress bar disabled")
+        
+        # Create tasks
+        tasks = []
+        for article in articles:
+            article_id = article.get("id", "")
+            article_title = article.get("title", "")
+            article_text = article.get("full_text", "")
+            
+            task = self._extract_single_async(
+                article_id=article_id,
+                article_title=article_title,
+                article_text=article_text,
+                pbar=pbar
+            )
+            tasks.append(task)
+        
+        # Run all tasks concurrently
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Close progress bar
+        if pbar:
+            pbar.close()
+        
+        # Process results (handle any exceptions)
+        processed_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                article_id = articles[i].get("id", f"unknown_{i}")
+                logger.error(f"Task exception for {article_id}: {result}")
+                processed_results.append(SemanticExtractionResult(
+                    article_id=article_id,
+                    nodes=[],
+                    relations=[],
+                    errors=[str(result)]
+                ))
+            else:
+                processed_results.append(result)
+        
+        # Log summary
+        total_entities = sum(len(r.nodes) for r in processed_results)
+        total_relations = sum(len(r.relations) for r in processed_results)
+        total_errors = sum(len(r.errors) for r in processed_results)
+        
+        logger.info(
+            f"Parallel extraction complete: {len(articles)} articles, "
+            f"{total_entities} entities, {total_relations} relations, "
+            f"{total_errors} errors"
+        )
+        
+        return processed_results
+    
+    def extract_batch(
+        self,
+        articles: List[Dict[str, Any]],
+        show_progress: bool = True
+    ) -> List[SemanticExtractionResult]:
+        """
+        Synchronous wrapper for extract_batch_async.
+        
+        Args:
+            articles: List of article dicts with 'id', 'title', 'full_text'
+            show_progress: Whether to show tqdm progress bar
+            
+        Returns:
+            List of SemanticExtractionResult
+        """
+        return asyncio.run(self.extract_batch_async(articles, show_progress))
+    
+    def extract_from_structure(
+        self,
+        structure_result: StructureExtractionResult,
+        show_progress: bool = True
+    ) -> List[SemanticExtractionResult]:
+        """
+        Extract semantics from Stage 1 structure result.
+        
+        Args:
+            structure_result: Result from StructureExtractor
+            show_progress: Whether to show progress bar
+            
+        Returns:
+            List of SemanticExtractionResult
+        """
+        # Convert StructureNode to dict format
+        articles = []
+        for article in structure_result.articles:
+            articles.append({
+                "id": article.id,
+                "title": article.title,
+                "full_text": article.full_text
+            })
+        
+        return self.extract_batch(articles, show_progress)
 
 
 # =============================================================================

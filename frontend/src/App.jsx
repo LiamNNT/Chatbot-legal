@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import SettingsModal from './components/SettingsModal';
 import SystemInfoModal from './components/SystemInfoModal';
+import KGExtractionPanel from './components/KGExtractionPanel';
 import { useChat } from './hooks/useChat';
 import { saveToStorage, loadFromStorage } from './utils/helpers';
 
@@ -29,6 +30,7 @@ function App() {
   // UI state
   const [showSettings, setShowSettings] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showKGExtraction, setShowKGExtraction] = useState(false);
   const [sessions, setSessions] = useState(() => 
     loadFromStorage('chatbot-sessions', [])
   );
@@ -98,6 +100,7 @@ function App() {
         onDeleteSession={handleDeleteSession}
         onShowSettings={() => setShowSettings(true)}
         onShowInfo={() => setShowInfo(true)}
+        onShowKGExtraction={() => setShowKGExtraction(true)}
       />
 
       {/* Main Chat */}
@@ -124,6 +127,11 @@ function App() {
         isOpen={showInfo}
         onClose={() => setShowInfo(false)}
       />
+
+      {/* KG Extraction Panel */}
+      {showKGExtraction && (
+        <KGExtractionPanel onClose={() => setShowKGExtraction(false)} />
+      )}
 
       {/* Error Toast (simple implementation) */}
       {error && (

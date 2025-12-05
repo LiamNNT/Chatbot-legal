@@ -20,6 +20,7 @@ from app.api.v1.routes.embed import router as embed_router
 from app.api.v1.routes.search import router as search_router
 from app.api.v1.routes.admin import router as admin_router
 from app.api.v1.routes.opensearch import router as opensearch_router
+from app.api.v1.routes.extraction import router as extraction_router  # KG Extraction Pipeline
 from app.api.endpoints.health import router as health_v2_router  # Week 2 comprehensive health checks
 
 app = FastAPI(title="RAG Service", version="0.1.0")
@@ -43,6 +44,7 @@ app.include_router(embed_router, prefix="/v1")
 app.include_router(search_router, prefix="/v1")
 app.include_router(admin_router, prefix="/v1")
 app.include_router(opensearch_router, prefix="/v1")
+app.include_router(extraction_router, prefix="/v1")  # KG Extraction Pipeline
 
 # Week 2: Comprehensive health checks for all dependencies
 app.include_router(health_v2_router, prefix="/v2")
