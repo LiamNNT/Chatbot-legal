@@ -1,0 +1,670 @@
+{
+  "extraction_time": "2025-12-05T15:18:16.689884",
+  "stage": "semantic_extraction",
+  "stats": {
+    "items_processed": 6,
+    "entities": 45,
+    "relations": 20,
+    "errors": 0
+  },
+  "entities": [
+    {
+      "id": "dieu_1_ent_1",
+      "type": "QUY_DINH",
+      "text": "Quy chế Đào tạo theo học chế tín chỉ",
+      "normalized": "Quy chế Đào tạo theo học chế tín chỉ",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_2",
+      "type": "QUY_DINH",
+      "text": "Quyết định số 790/QĐ-ĐHCNTT",
+      "normalized": "Quyết định số 790/QĐ-ĐHCNTT",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_3",
+      "type": "THOI_GIAN",
+      "text": "28 tháng 9 năm 2022",
+      "normalized": "28 tháng 9 năm 2022",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_4",
+      "type": "KY_HOC",
+      "text": "học kỳ hè",
+      "normalized": "học kỳ hè",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_5",
+      "type": "HOC_PHI",
+      "text": "HPTCHM HKHE",
+      "normalized": "HPTCHM HKHE",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_6",
+      "type": "HOC_PHI",
+      "text": "HPTCHM học kỳ hè",
+      "normalized": "HPTCHM học kỳ hè",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_7",
+      "type": "HOC_PHI",
+      "text": "HPTCHM học kỳ chính",
+      "normalized": "HPTCHM học kỳ chính",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_8",
+      "type": "SINH_VIEN",
+      "text": "sinh viên",
+      "normalized": "sinh viên",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_9",
+      "type": "HOC_PHI",
+      "text": "HPTCHL",
+      "normalized": "HPTCHL",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_10",
+      "type": "HOC_PHI",
+      "text": "HPTCCT",
+      "normalized": "HPTCCT",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_11",
+      "type": "TIN_CHI",
+      "text": "TCHPHM",
+      "normalized": "TCHPHM",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_12",
+      "type": "TIN_CHI",
+      "text": "TCHPHL",
+      "normalized": "TCHPHL",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_1_ent_13",
+      "type": "TIN_CHI",
+      "text": "TCHPCT",
+      "normalized": "TCHPCT",
+      "confidence": 1.0,
+      "source_article_id": "dieu_1",
+      "metadata": {
+        "article_title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": "dieu_2_ent_1",
+      "type": "QUY_DINH",
+      "text": "Quyết định này",
+      "normalized": "Quyết định này",
+      "confidence": 1.0,
+      "source_article_id": "dieu_2",
+      "metadata": {
+        "article_title": "Điều 2"
+      }
+    },
+    {
+      "id": "dieu_2_ent_2",
+      "type": "KHOA",
+      "text": "Phòng, Ban, Khoa, Bộ môn, đơn vị",
+      "normalized": "Phòng, Ban, Khoa, Bộ môn, đơn vị",
+      "confidence": 1.0,
+      "source_article_id": "dieu_2",
+      "metadata": {
+        "article_title": "Điều 2"
+      }
+    },
+    {
+      "id": "dieu_2_ent_3",
+      "type": "SINH_VIEN",
+      "text": "sinh viên chính quy",
+      "normalized": "sinh viên chính quy",
+      "confidence": 1.0,
+      "source_article_id": "dieu_2",
+      "metadata": {
+        "article_title": "Điều 2"
+      }
+    },
+    {
+      "id": "dieu_2_ent_4",
+      "type": "THOI_GIAN",
+      "text": "ngày ký",
+      "normalized": "ngày ký",
+      "confidence": 1.0,
+      "source_article_id": "dieu_2",
+      "metadata": {
+        "article_title": "Điều 2"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_1",
+      "type": "KY_HOC",
+      "text": "học kỳ hè",
+      "normalized": "học kỳ hè",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_2",
+      "type": "HOC_PHI",
+      "text": "HPTCHM HKHE",
+      "normalized": "HPTCHM HKHE",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_3",
+      "type": "HOC_PHI",
+      "text": "HPTCHM học kỳ hè",
+      "normalized": "HPTCHM học kỳ hè",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_4",
+      "type": "HOC_PHI",
+      "text": "HPTCHM học kỳ chính",
+      "normalized": "HPTCHM học kỳ chính",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_5",
+      "type": "HOC_PHI",
+      "text": "HPTCHL",
+      "normalized": "HPTCHL",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_6",
+      "type": "HOC_PHI",
+      "text": "HPTCCT",
+      "normalized": "HPTCCT",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_7",
+      "type": "TIN_CHI",
+      "text": "TCHPHM",
+      "normalized": "TCHPHM",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_8",
+      "type": "TIN_CHI",
+      "text": "TCHPHL",
+      "normalized": "TCHPHL",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_9",
+      "type": "TIN_CHI",
+      "text": "TCHPCT",
+      "normalized": "TCHPCT",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_10",
+      "type": "SINH_VIEN",
+      "text": "sinh viên",
+      "normalized": "sinh viên",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_11",
+      "type": "THOI_GIAN",
+      "text": "thời gian học theo thiết kế chương trình đào tạo",
+      "normalized": "thời gian học theo thiết kế chương trình đào tạo",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_4_ent_12",
+      "type": "QUY_DINH",
+      "text": "quy định học phí hiện hành",
+      "normalized": "quy định học phí hiện hành",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_4",
+      "metadata": {
+        "article_title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": "khoan_2_dieu_12_ent_1",
+      "type": "SINH_VIEN",
+      "text": "sinh viên",
+      "normalized": "sinh viên",
+      "confidence": 1.0,
+      "source_article_id": "khoan_2_dieu_12",
+      "metadata": {
+        "article_title": "Khoản 2 Điều 12"
+      }
+    },
+    {
+      "id": "khoan_2_dieu_12_ent_2",
+      "type": "MON_HOC",
+      "text": "môn học đại cương",
+      "normalized": "môn học đại cương",
+      "confidence": 1.0,
+      "source_article_id": "khoan_2_dieu_12",
+      "metadata": {
+        "article_title": "Khoản 2 Điều 12"
+      }
+    },
+    {
+      "id": "khoan_2_dieu_12_ent_3",
+      "type": "MON_HOC",
+      "text": "môn học cơ sở ngành học chung",
+      "normalized": "môn học cơ sở ngành học chung",
+      "confidence": 1.0,
+      "source_article_id": "khoan_2_dieu_12",
+      "metadata": {
+        "article_title": "Khoản 2 Điều 12"
+      }
+    },
+    {
+      "id": "khoan_2_dieu_12_ent_4",
+      "type": "DIEU_KIEN",
+      "text": "tối thiểu 70 sinh viên",
+      "normalized": "tối thiểu 70 sinh viên",
+      "confidence": 1.0,
+      "source_article_id": "khoan_2_dieu_12",
+      "metadata": {
+        "article_title": "Khoản 2 Điều 12"
+      }
+    },
+    {
+      "id": "khoan_2_dieu_12_ent_5",
+      "type": "KHOA",
+      "text": "Trường",
+      "normalized": "Trường",
+      "confidence": 1.0,
+      "source_article_id": "khoan_2_dieu_12",
+      "metadata": {
+        "article_title": "Khoản 2 Điều 12"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_14_ent_1",
+      "type": "KY_HOC",
+      "text": "học kỳ hè",
+      "normalized": "học kỳ hè",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_14",
+      "metadata": {
+        "article_title": "Mục b khoản 1 Điều 14"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_14_ent_2",
+      "type": "TIN_CHI",
+      "text": "12 tín chỉ",
+      "normalized": "12 tín chỉ",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_14",
+      "metadata": {
+        "article_title": "Mục b khoản 1 Điều 14"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_14_ent_3",
+      "type": "SINH_VIEN",
+      "text": "Sinh viên",
+      "normalized": "Sinh viên",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_14",
+      "metadata": {
+        "article_title": "Mục b khoản 1 Điều 14"
+      }
+    },
+    {
+      "id": "khoan_3_dieu_14_ent_4",
+      "type": "QUY_DINH",
+      "text": "quy định",
+      "normalized": "quy định",
+      "confidence": 1.0,
+      "source_article_id": "khoan_3_dieu_14",
+      "metadata": {
+        "article_title": "Mục b khoản 1 Điều 14"
+      }
+    },
+    {
+      "id": "khoan_1_dieu_23_ent_1",
+      "type": "SINH_VIEN",
+      "text": "Sinh viên",
+      "normalized": "Sinh viên",
+      "confidence": 1.0,
+      "source_article_id": "khoan_1_dieu_23",
+      "metadata": {
+        "article_title": "Khoản 1 Điều 23"
+      }
+    },
+    {
+      "id": "khoan_1_dieu_23_ent_2",
+      "type": "MON_HOC",
+      "text": "học phần",
+      "normalized": "học phần",
+      "confidence": 0.9,
+      "source_article_id": "khoan_1_dieu_23",
+      "metadata": {
+        "article_title": "Khoản 1 Điều 23"
+      }
+    },
+    {
+      "id": "khoan_1_dieu_23_ent_4",
+      "type": "KHOA",
+      "text": "P.ĐTĐH",
+      "normalized": "P.ĐTĐH",
+      "confidence": 1.0,
+      "source_article_id": "khoan_1_dieu_23",
+      "metadata": {
+        "article_title": "Khoản 1 Điều 23"
+      }
+    },
+    {
+      "id": "khoan_1_dieu_23_ent_5",
+      "type": "THOI_GIAN",
+      "text": "1 tháng",
+      "normalized": "1 tháng",
+      "confidence": 1.0,
+      "source_article_id": "khoan_1_dieu_23",
+      "metadata": {
+        "article_title": "Khoản 1 Điều 23"
+      }
+    },
+    {
+      "id": "khoan_1_dieu_23_ent_6",
+      "type": "KY_HOC",
+      "text": "học kỳ",
+      "normalized": "học kỳ",
+      "confidence": 0.9,
+      "source_article_id": "khoan_1_dieu_23",
+      "metadata": {
+        "article_title": "Khoản 1 Điều 23"
+      }
+    },
+    {
+      "id": "khoan_1_dieu_23_ent_7",
+      "type": "TIN_CHI",
+      "text": "số tín chỉ",
+      "normalized": "số tín chỉ",
+      "confidence": 0.9,
+      "source_article_id": "khoan_1_dieu_23",
+      "metadata": {
+        "article_title": "Khoản 1 Điều 23"
+      }
+    },
+    {
+      "id": "khoan_1_dieu_23_ent_8",
+      "type": "DIEM_SO",
+      "text": "điểm M",
+      "normalized": "điểm M",
+      "confidence": 1.0,
+      "source_article_id": "khoan_1_dieu_23",
+      "metadata": {
+        "article_title": "Khoản 1 Điều 23"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "source_id": "dieu_1_ent_4",
+      "target_id": "dieu_1_ent_5",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "confidence": 1.0,
+      "evidence": "Học phí = HPTCHM HKHE × TCHPHM + HPTCHL × TCHPHL + HPTCCT × TCHPCT",
+      "source_article_id": "dieu_1"
+    },
+    {
+      "source_id": "dieu_1_ent_8",
+      "target_id": "dieu_1_ent_4",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "Đối với học kỳ hè: Học phí = HPTCHM HKHE × TCHPHM + HPTCHL × TCHPHL + HPTCCT × TCHPCT",
+      "source_article_id": "dieu_1"
+    },
+    {
+      "source_id": "dieu_1_ent_8",
+      "target_id": "dieu_1_ent_6",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "Với sinh viên còn trong thời gian học theo thiết kế chương trình đào tạo",
+      "source_article_id": "dieu_1"
+    },
+    {
+      "source_id": "dieu_1_ent_8",
+      "target_id": "dieu_1_ent_7",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "Với sinh viên đã quá thời gian học theo thiết kế chương trình đào tạo",
+      "source_article_id": "dieu_1"
+    },
+    {
+      "source_id": "dieu_2_ent_2",
+      "target_id": "dieu_2_ent_1",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "Các Ông/Bà Trưởng các Phòng, Ban, Khoa, Bộ môn, đơn vị có liên quan và sinh viên chính quy chịu trách nhiệm thi hành Quyết định này.",
+      "source_article_id": "dieu_2"
+    },
+    {
+      "source_id": "dieu_2_ent_3",
+      "target_id": "dieu_2_ent_1",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "Các Ông/Bà Trưởng các Phòng, Ban, Khoa, Bộ môn, đơn vị có liên quan và sinh viên chính quy chịu trách nhiệm thi hành Quyết định này.",
+      "source_article_id": "dieu_2"
+    },
+    {
+      "source_id": "dieu_2_ent_1",
+      "target_id": "dieu_2_ent_4",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "confidence": 1.0,
+      "evidence": "Quyết định này có hiệu lực kể từ ngày ký.",
+      "source_article_id": "dieu_2"
+    },
+    {
+      "source_id": "khoan_3_dieu_4_ent_10",
+      "target_id": "khoan_3_dieu_4_ent_11",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "Với sinh viên còn trong thời gian học theo thiết kế chương trình đào tạo",
+      "source_article_id": "khoan_3_dieu_4"
+    },
+    {
+      "source_id": "khoan_3_dieu_4_ent_10",
+      "target_id": "khoan_3_dieu_4_ent_12",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "Với sinh viên đã quá thời gian học theo thiết kế chương trình đào tạo",
+      "source_article_id": "khoan_3_dieu_4"
+    },
+    {
+      "source_id": "khoan_2_dieu_12_ent_4",
+      "target_id": "khoan_2_dieu_12_ent_1",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "số lượng sinh viên đăng ký tối thiểu là 70 sinh viên",
+      "source_article_id": "khoan_2_dieu_12"
+    },
+    {
+      "source_id": "khoan_2_dieu_12_ent_2",
+      "target_id": "khoan_2_dieu_12_ent_5",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "các môn học đại cương và các môn học cơ sở ngành học chung toàn Trường",
+      "source_article_id": "khoan_2_dieu_12"
+    },
+    {
+      "source_id": "khoan_2_dieu_12_ent_3",
+      "target_id": "khoan_2_dieu_12_ent_5",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "các môn học cơ sở ngành học chung toàn Trường",
+      "source_article_id": "khoan_2_dieu_12"
+    },
+    {
+      "source_id": "khoan_3_dieu_14_ent_1",
+      "target_id": "khoan_3_dieu_14_ent_2",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "confidence": 1.0,
+      "evidence": "Tổng số tín chỉ đăng ký không được vượt quá 12 tín chỉ.",
+      "source_article_id": "khoan_3_dieu_14"
+    },
+    {
+      "source_id": "khoan_3_dieu_14_ent_3",
+      "target_id": "khoan_3_dieu_14_ent_4",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "Sinh viên được đăng ký học mới, học lại và cải thiện điểm nếu có nhu cầu.",
+      "source_article_id": "khoan_3_dieu_14"
+    },
+    {
+      "source_id": "khoan_1_dieu_23_ent_1",
+      "target_id": "khoan_1_dieu_23_ent_2",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "Sinh viên đã thi đạt yêu cầu một học phần",
+      "source_article_id": "khoan_1_dieu_23"
+    },
+    {
+      "source_id": "khoan_1_dieu_23_ent_2",
+      "target_id": "khoan_1_dieu_23_ent_3",
+      "type": "DIEU_KIEN_TIEN_QUYET",
+      "confidence": 0.8,
+      "evidence": "học phần thuộc trình độ đại học ở một CSDT khác",
+      "source_article_id": "khoan_1_dieu_23"
+    },
+    {
+      "source_id": "khoan_1_dieu_23_ent_1",
+      "target_id": "khoan_1_dieu_23_ent_4",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "gửi về P.ĐTĐH của Trường",
+      "source_article_id": "khoan_1_dieu_23"
+    },
+    {
+      "source_id": "khoan_1_dieu_23_ent_1",
+      "target_id": "khoan_1_dieu_23_ent_5",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "confidence": 1.0,
+      "evidence": "trong vòng 1 tháng sau khi bắt đầu học kỳ",
+      "source_article_id": "khoan_1_dieu_23"
+    },
+    {
+      "source_id": "khoan_1_dieu_23_ent_2",
+      "target_id": "khoan_1_dieu_23_ent_7",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "confidence": 0.9,
+      "evidence": "xác nhận (số tiết học, số tín chỉ và bảng điểm)",
+      "source_article_id": "khoan_1_dieu_23"
+    },
+    {
+      "source_id": "khoan_1_dieu_23_ent_2",
+      "target_id": "khoan_1_dieu_23_ent_8",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "confidence": 1.0,
+      "evidence": "Các học phần được công nhận được nhận điểm M",
+      "source_article_id": "khoan_1_dieu_23"
+    }
+  ],
+  "errors": []
+}

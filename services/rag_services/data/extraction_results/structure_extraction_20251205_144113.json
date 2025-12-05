@@ -1,0 +1,18 @@
+{
+  "extraction_time": "2025-12-05T14:41:13.841732",
+  "source": "C:\\Users\\admin\\Downloads\\Khiem\\Chatbot-UIT\\services\\rag_services\\data\\quy_dinh\\1393-qd-dhcntt_29-12-2023_cap_nhat_quy_che_dao_tao_theo_hoc_che_tin_chi_cho_he_dai_hoc_chinh_quy_images",
+  "page_count": 0,
+  "stats": {
+    "chapters": 0,
+    "articles": 0,
+    "clauses": 0,
+    "relations": 0,
+    "errors": 0
+  },
+  "document": null,
+  "chapters": [],
+  "articles": [],
+  "clauses": [],
+  "relations": [],
+  "errors": []
+}

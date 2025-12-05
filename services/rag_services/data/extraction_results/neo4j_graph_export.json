@@ -1,0 +1,1740 @@
+{
+  "exported_at": "2025-12-05T16:04:37.253566",
+  "stats": {
+    "nodes": 39,
+    "relationships": 77
+  },
+  "nodes": [
+    {
+      "id": 0,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "điểm m",
+        "created_at": "2025-12-05T09:02:22.902000000+00:00",
+        "text": "điểm M",
+        "mention_count": 1,
+        "type": "DIEM_SO"
+      }
+    },
+    {
+      "id": 120,
+      "labels": [
+        "Category"
+      ],
+      "properties": {
+        "name": "Quy chế Đào tạo",
+        "description": "Legal document category for routing",
+        "created_at": "2025-12-05T09:02:20.099000000+00:00"
+      }
+    },
+    {
+      "id": 121,
+      "labels": [
+        "Document"
+      ],
+      "properties": {
+        "page_range": [
+          1
+        ],
+        "updated_at": "2025-12-05T09:02:20.742000000+00:00",
+        "full_text": "HIỆU TRƯỞNG TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN\nCăn cứ Quyết định số 134/2006/QĐ-TTg, ngày 08 tháng 6 năm 2006 của Thủ tướng Chính phủ về việc thành lập Trường Đại học Công nghệ Thông tin (ĐH CNTT) thuộc Đại học Quốc gia Thành phố Hồ Chí Minh (ĐHQG-HCM);\nCăn cứ Quyết định số 867/QĐ-ĐHQG, ngày 17 tháng 8 năm 2016 của Giám đốc ĐHQG-HCM về việc ban hành quy chế tổ chức và hoạt động của Trường Đại học thành viên và Khoa trực thuộc ĐHQG-HCM;\nCăn cứ Quyết định số 262/QĐ-ĐHQG, ngày 20 tháng 4 năm 2017 của Giám đốc ĐHQG-HCM về việc ban hành Quy chế đào tạo đại học;\nCăn cứ Quyết định số 790/QĐ-ĐHCNTT, ngày 28 tháng 9 năm 2022 của Hiệu trưởng Trường ĐH CNTT về việc ban hành Quy chế đào tạo theo học chế tín chỉ cho hệ đại học chính quy của Trường ĐH CNTT;\nTheo đề nghị của Trưởng phòng Đào tạo Đại học.\nQUYẾT ĐỊNH:",
+        "id": "quyet_dinh",
+        "source": "C:\\Users\\admin\\Downloads\\Khiem\\Chatbot-UIT\\services\\rag_services\\data\\quy_dinh\\1393-qd-dhcntt_29-12-2023_cap_nhat_quy_che_dao_tao_theo_hoc_che_tin_chi_cho_he_dai_hoc_chinh_quy_images",
+        "title": "QUYẾT ĐỊNH Về việc cập nhật Quy chế đào tạo theo học chế tín chỉ cho hệ đại học chính quy của Trường Đại học Công nghệ Thông tin"
+      }
+    },
+    {
+      "id": 122,
+      "labels": [
+        "Article"
+      ],
+      "properties": {
+        "page_range": [
+          1
+        ],
+        "updated_at": "2025-12-05T09:02:20.924000000+00:00",
+        "full_text": "Cập nhật Quy chế Đào tạo theo học chế tín chỉ được ban hành theo Quyết định số 790/QĐ-ĐHCNTT ngày 28 tháng 9 năm 2022 của Hiệu trưởng Trường Đại học Công nghệ Thông tin như sau:\n1. Khoản 3 Điều 4:\nĐối với học kỳ hè: Học phí = HPTCHM HKHE × TCHPHM + HPTCHL × TCHPHL + HPTCCT × TCHPCT\nTrong đó:\n- Với sinh viên còn trong thời gian học theo thiết kế chương trình đào tạo: HPTCHM HKHE là mức chênh lệch giữa HPTCHM học kỳ hè của khóa tuyển sinh gần nhất và HPTCHM học kỳ chính của từng khóa được quy định trong quy định học phí hiện hành.\n- Với sinh viên đã quá thời gian học theo thiết kế chương trình đào tạo: HPTCHM HKHE thực hiện theo quy định học phí hiện hành.",
+        "id": "dieu_1",
+        "title": "Điều 1. Cập nhật Quy chế Đào tạo theo học chế tín chỉ"
+      }
+    },
+    {
+      "id": 123,
+      "labels": [
+        "Article"
+      ],
+      "properties": {
+        "page_range": [
+          2
+        ],
+        "updated_at": "2025-12-05T09:02:21.221000000+00:00",
+        "full_text": "Các Ông/Bà Trưởng các Phòng, Ban, Khoa, Bộ môn, đơn vị có liên quan và sinh viên chính quy chịu trách nhiệm thi hành Quyết định này. Quyết định này có hiệu lực kể từ ngày ký./.",
+        "id": "dieu_2",
+        "title": "Điều 2"
+      }
+    },
+    {
+      "id": 124,
+      "labels": [
+        "Clause"
+      ],
+      "properties": {
+        "page_range": [
+          1
+        ],
+        "updated_at": "2025-12-05T09:02:21.332000000+00:00",
+        "full_text": "Đối với học kỳ hè: Học phí = HPTCHM HKHE × TCHPHM + HPTCHL × TCHPHL + HPTCCT × TCHPCT\nTrong đó:\n- Với sinh viên còn trong thời gian học theo thiết kế chương trình đào tạo: HPTCHM HKHE là mức chênh lệch giữa HPTCHM học kỳ hè của khóa tuyển sinh gần nhất và HPTCHM học kỳ chính của từng khóa được quy định trong quy định học phí hiện hành.\n- Với sinh viên đã quá thời gian học theo thiết kế chương trình đào tạo: HPTCHM HKHE thực hiện theo quy định học phí hiện hành.",
+        "id": "khoan_3_dieu_4",
+        "title": "Khoản 3 Điều 4"
+      }
+    },
+    {
+      "id": 125,
+      "labels": [
+        "Clause"
+      ],
+      "properties": {
+        "page_range": [
+          2
+        ],
+        "updated_at": "2025-12-05T09:02:21.420000000+00:00",
+        "full_text": "Lớp học phần được mở nếu số lượng sinh viên đăng ký tối thiểu là 70 sinh viên đối với các môn học đại cương và các môn học cơ sở ngành học chung toàn Trường.",
+        "id": "khoan_2_dieu_12",
+        "title": "Khoản 2 Điều 12"
+      }
+    },
+    {
+      "id": 126,
+      "labels": [
+        "Clause"
+      ],
+      "properties": {
+        "page_range": [
+          2
+        ],
+        "updated_at": "2025-12-05T09:02:21.430000000+00:00",
+        "full_text": "Trong học kỳ hè - Tổng số tín chỉ đăng ký không được vượt quá 12 tín chỉ. - Sinh viên được đăng ký học mới, học lại và cải thiện điểm nếu có nhu cầu. Trường thực hiện mở các lớp đủ sĩ số theo quy định, không mở lớp sĩ số ít.",
+        "id": "khoan_3_dieu_14",
+        "title": "Mục b khoản 1 Điều 14"
+      }
+    },
+    {
+      "id": 127,
+      "labels": [
+        "Clause"
+      ],
+      "properties": {
+        "page_range": [
+          2
+        ],
+        "updated_at": "2025-12-05T09:02:21.437000000+00:00",
+        "full_text": "Sinh viên đã thi đạt yêu cầu một học phần thuộc trình độ đại học ở một CSDT khác muốn xin miễn học phần đó thì cần phải làm đơn kèm theo xác nhận (số tiết học, số tín chỉ và bảng điểm) gửi về P.ĐTĐH của Trường trong vòng 1 tháng sau khi bắt đầu học kỳ. Trường có thể yêu cầu sinh viên cung cấp đề cương chi tiết của học phần có xác nhận của nơi sinh viên đã học. Các học phần được công nhận được nhận điểm M.",
+        "id": "khoan_1_dieu_23",
+        "title": "Khoản 1 Điều 23"
+      }
+    },
+    {
+      "id": 128,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "quy chế đào tạo theo học chế tín chỉ",
+        "created_at": "2025-12-05T09:02:21.735000000+00:00",
+        "mention_count": 1,
+        "text": "Quy chế Đào tạo theo học chế tín chỉ",
+        "type": "QUY_DINH"
+      }
+    },
+    {
+      "id": 129,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "quyết định số 790/qđ-đhcntt",
+        "created_at": "2025-12-05T09:02:22.114000000+00:00",
+        "mention_count": 1,
+        "text": "Quyết định số 790/QĐ-ĐHCNTT",
+        "type": "QUY_DINH"
+      }
+    },
+    {
+      "id": 130,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "28 tháng 9 năm 2022",
+        "created_at": "2025-12-05T09:02:22.219000000+00:00",
+        "text": "28 tháng 9 năm 2022",
+        "mention_count": 1,
+        "type": "THOI_GIAN"
+      }
+    },
+    {
+      "id": 131,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.813000000+00:00",
+        "normalized_text": "học kỳ hè",
+        "created_at": "2025-12-05T09:02:22.258000000+00:00",
+        "text": "học kỳ hè",
+        "mention_count": 3,
+        "type": "KY_HOC"
+      }
+    },
+    {
+      "id": 132,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.603000000+00:00",
+        "normalized_text": "hptchm hkhe",
+        "created_at": "2025-12-05T09:02:22.358000000+00:00",
+        "text": "HPTCHM HKHE",
+        "mention_count": 2,
+        "type": "HOC_PHI"
+      }
+    },
+    {
+      "id": 133,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.696000000+00:00",
+        "normalized_text": "hptchm học kỳ hè",
+        "created_at": "2025-12-05T09:02:22.367000000+00:00",
+        "text": "HPTCHM học kỳ hè",
+        "mention_count": 2,
+        "type": "HOC_PHI"
+      }
+    },
+    {
+      "id": 134,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.704000000+00:00",
+        "normalized_text": "hptchm học kỳ chính",
+        "created_at": "2025-12-05T09:02:22.376000000+00:00",
+        "text": "HPTCHM học kỳ chính",
+        "mention_count": 2,
+        "type": "HOC_PHI"
+      }
+    },
+    {
+      "id": 135,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.859000000+00:00",
+        "normalized_text": "sinh viên",
+        "created_at": "2025-12-05T09:02:22.384000000+00:00",
+        "text": "sinh viên",
+        "mention_count": 5,
+        "type": "SINH_VIEN"
+      }
+    },
+    {
+      "id": 136,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.711000000+00:00",
+        "normalized_text": "hptchl",
+        "created_at": "2025-12-05T09:02:22.394000000+00:00",
+        "text": "HPTCHL",
+        "mention_count": 2,
+        "type": "HOC_PHI"
+      }
+    },
+    {
+      "id": 137,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.718000000+00:00",
+        "normalized_text": "hptcct",
+        "created_at": "2025-12-05T09:02:22.403000000+00:00",
+        "text": "HPTCCT",
+        "mention_count": 2,
+        "type": "HOC_PHI"
+      }
+    },
+    {
+      "id": 138,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.727000000+00:00",
+        "normalized_text": "tchphm",
+        "created_at": "2025-12-05T09:02:22.412000000+00:00",
+        "text": "TCHPHM",
+        "mention_count": 2,
+        "type": "TIN_CHI"
+      }
+    },
+    {
+      "id": 139,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.736000000+00:00",
+        "normalized_text": "tchphl",
+        "created_at": "2025-12-05T09:02:22.420000000+00:00",
+        "text": "TCHPHL",
+        "mention_count": 2,
+        "type": "TIN_CHI"
+      }
+    },
+    {
+      "id": 140,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "updated_at": "2025-12-05T09:02:22.744000000+00:00",
+        "normalized_text": "tchpct",
+        "created_at": "2025-12-05T09:02:22.428000000+00:00",
+        "text": "TCHPCT",
+        "mention_count": 2,
+        "type": "TIN_CHI"
+      }
+    },
+    {
+      "id": 141,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "quyết định này",
+        "created_at": "2025-12-05T09:02:22.435000000+00:00",
+        "text": "Quyết định này",
+        "mention_count": 1,
+        "type": "QUY_DINH"
+      }
+    },
+    {
+      "id": 142,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "phòng, ban, khoa, bộ môn, đơn vị",
+        "created_at": "2025-12-05T09:02:22.444000000+00:00",
+        "text": "Phòng, Ban, Khoa, Bộ môn, đơn vị",
+        "mention_count": 1,
+        "type": "KHOA"
+      }
+    },
+    {
+      "id": 143,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "sinh viên chính quy",
+        "created_at": "2025-12-05T09:02:22.452000000+00:00",
+        "text": "sinh viên chính quy",
+        "mention_count": 1,
+        "type": "SINH_VIEN"
+      }
+    },
+    {
+      "id": 144,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "ngày ký",
+        "created_at": "2025-12-05T09:02:22.460000000+00:00",
+        "text": "ngày ký",
+        "mention_count": 1,
+        "type": "THOI_GIAN"
+      }
+    },
+    {
+      "id": 145,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "thời gian học theo thiết kế chương trình đào tạo",
+        "created_at": "2025-12-05T09:02:22.760000000+00:00",
+        "mention_count": 1,
+        "text": "thời gian học theo thiết kế chương trình đào tạo",
+        "type": "THOI_GIAN"
+      }
+    },
+    {
+      "id": 146,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "quy định học phí hiện hành",
+        "created_at": "2025-12-05T09:02:22.768000000+00:00",
+        "mention_count": 1,
+        "text": "quy định học phí hiện hành",
+        "type": "QUY_DINH"
+      }
+    },
+    {
+      "id": 147,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "môn học đại cương",
+        "created_at": "2025-12-05T09:02:22.781000000+00:00",
+        "text": "môn học đại cương",
+        "mention_count": 1,
+        "type": "MON_HOC"
+      }
+    },
+    {
+      "id": 148,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "môn học cơ sở ngành học chung",
+        "created_at": "2025-12-05T09:02:22.789000000+00:00",
+        "mention_count": 1,
+        "text": "môn học cơ sở ngành học chung",
+        "type": "MON_HOC"
+      }
+    },
+    {
+      "id": 149,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "tối thiểu 70 sinh viên",
+        "created_at": "2025-12-05T09:02:22.798000000+00:00",
+        "text": "tối thiểu 70 sinh viên",
+        "mention_count": 1,
+        "type": "DIEU_KIEN"
+      }
+    },
+    {
+      "id": 150,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "trường",
+        "created_at": "2025-12-05T09:02:22.805000000+00:00",
+        "text": "Trường",
+        "mention_count": 1,
+        "type": "KHOA"
+      }
+    },
+    {
+      "id": 151,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "12 tín chỉ",
+        "created_at": "2025-12-05T09:02:22.821000000+00:00",
+        "text": "12 tín chỉ",
+        "mention_count": 1,
+        "type": "TIN_CHI"
+      }
+    },
+    {
+      "id": 152,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "quy định",
+        "created_at": "2025-12-05T09:02:22.851000000+00:00",
+        "text": "quy định",
+        "mention_count": 1,
+        "type": "QUY_DINH"
+      }
+    },
+    {
+      "id": 153,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "học phần",
+        "created_at": "2025-12-05T09:02:22.866000000+00:00",
+        "text": "học phần",
+        "mention_count": 1,
+        "type": "MON_HOC"
+      }
+    },
+    {
+      "id": 154,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "p.đtđh",
+        "created_at": "2025-12-05T09:02:22.874000000+00:00",
+        "text": "P.ĐTĐH",
+        "mention_count": 1,
+        "type": "KHOA"
+      }
+    },
+    {
+      "id": 155,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "1 tháng",
+        "created_at": "2025-12-05T09:02:22.881000000+00:00",
+        "text": "1 tháng",
+        "mention_count": 1,
+        "type": "THOI_GIAN"
+      }
+    },
+    {
+      "id": 156,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "học kỳ",
+        "created_at": "2025-12-05T09:02:22.888000000+00:00",
+        "text": "học kỳ",
+        "mention_count": 1,
+        "type": "KY_HOC"
+      }
+    },
+    {
+      "id": 157,
+      "labels": [
+        "Entity"
+      ],
+      "properties": {
+        "normalized_text": "số tín chỉ",
+        "created_at": "2025-12-05T09:02:22.895000000+00:00",
+        "text": "số tín chỉ",
+        "mention_count": 1,
+        "type": "TIN_CHI"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source_id": 122,
+      "target_id": 123,
+      "source_name": "dieu_1",
+      "target_name": "dieu_2",
+      "source_text": "dieu_1",
+      "target_text": "dieu_2",
+      "source_label": "Article",
+      "target_label": "Article",
+      "type": "FOLLOWS",
+      "properties": {}
+    },
+    {
+      "source_id": 122,
+      "target_id": 128,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "Quy chế Đào tạo theo học chế tín chỉ",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_1",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:21.735000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 129,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "Quyết định số 790/QĐ-ĐHCNTT",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_2",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.114000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 130,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "28 tháng 9 năm 2022",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_3",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.219000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 131,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "học kỳ hè",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_4",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.258000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 132,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "HPTCHM HKHE",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_5",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.358000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 133,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "HPTCHM học kỳ hè",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_6",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.367000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 134,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "HPTCHM học kỳ chính",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_7",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.376000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 135,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "sinh viên",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_8",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.384000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 136,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "HPTCHL",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_9",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.394000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 137,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "HPTCCT",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_10",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.403000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 138,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "TCHPHM",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_11",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.412000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 139,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "TCHPHL",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_12",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.420000000+00:00"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 140,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": "TCHPCT",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_1_ent_13",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.428000000+00:00"
+      }
+    },
+    {
+      "source_id": 123,
+      "target_id": 141,
+      "source_name": "dieu_2",
+      "target_name": null,
+      "source_text": "dieu_2",
+      "target_text": "Quyết định này",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_2_ent_1",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.435000000+00:00"
+      }
+    },
+    {
+      "source_id": 123,
+      "target_id": 142,
+      "source_name": "dieu_2",
+      "target_name": null,
+      "source_text": "dieu_2",
+      "target_text": "Phòng, Ban, Khoa, Bộ môn, đơn vị",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_2_ent_2",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.444000000+00:00"
+      }
+    },
+    {
+      "source_id": 123,
+      "target_id": 143,
+      "source_name": "dieu_2",
+      "target_name": null,
+      "source_text": "dieu_2",
+      "target_text": "sinh viên chính quy",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_2_ent_3",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.452000000+00:00"
+      }
+    },
+    {
+      "source_id": 123,
+      "target_id": 144,
+      "source_name": "dieu_2",
+      "target_name": null,
+      "source_text": "dieu_2",
+      "target_text": "ngày ký",
+      "source_label": "Article",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "dieu_2_ent_4",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.460000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 131,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "học kỳ hè",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_1",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.494000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 132,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "HPTCHM HKHE",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_2",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.603000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 133,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "HPTCHM học kỳ hè",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_3",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.696000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 134,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "HPTCHM học kỳ chính",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_4",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.704000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 136,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "HPTCHL",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_5",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.711000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 137,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "HPTCCT",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_6",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.718000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 138,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "TCHPHM",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_7",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.727000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 139,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "TCHPHL",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_8",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.736000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 140,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "TCHPCT",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_9",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.744000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 135,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "sinh viên",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_10",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.752000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 145,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "thời gian học theo thiết kế chương trình đào tạo",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_11",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.760000000+00:00"
+      }
+    },
+    {
+      "source_id": 124,
+      "target_id": 146,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": "quy định học phí hiện hành",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_4_ent_12",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.768000000+00:00"
+      }
+    },
+    {
+      "source_id": 125,
+      "target_id": 135,
+      "source_name": "khoan_2_dieu_12",
+      "target_name": null,
+      "source_text": "khoan_2_dieu_12",
+      "target_text": "sinh viên",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_2_dieu_12_ent_1",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.775000000+00:00"
+      }
+    },
+    {
+      "source_id": 125,
+      "target_id": 147,
+      "source_name": "khoan_2_dieu_12",
+      "target_name": null,
+      "source_text": "khoan_2_dieu_12",
+      "target_text": "môn học đại cương",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_2_dieu_12_ent_2",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.781000000+00:00"
+      }
+    },
+    {
+      "source_id": 125,
+      "target_id": 148,
+      "source_name": "khoan_2_dieu_12",
+      "target_name": null,
+      "source_text": "khoan_2_dieu_12",
+      "target_text": "môn học cơ sở ngành học chung",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_2_dieu_12_ent_3",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.789000000+00:00"
+      }
+    },
+    {
+      "source_id": 125,
+      "target_id": 149,
+      "source_name": "khoan_2_dieu_12",
+      "target_name": null,
+      "source_text": "khoan_2_dieu_12",
+      "target_text": "tối thiểu 70 sinh viên",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_2_dieu_12_ent_4",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.798000000+00:00"
+      }
+    },
+    {
+      "source_id": 125,
+      "target_id": 150,
+      "source_name": "khoan_2_dieu_12",
+      "target_name": null,
+      "source_text": "khoan_2_dieu_12",
+      "target_text": "Trường",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_2_dieu_12_ent_5",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.805000000+00:00"
+      }
+    },
+    {
+      "source_id": 126,
+      "target_id": 131,
+      "source_name": "khoan_3_dieu_14",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_14",
+      "target_text": "học kỳ hè",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_14_ent_1",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.813000000+00:00"
+      }
+    },
+    {
+      "source_id": 126,
+      "target_id": 151,
+      "source_name": "khoan_3_dieu_14",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_14",
+      "target_text": "12 tín chỉ",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_14_ent_2",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.821000000+00:00"
+      }
+    },
+    {
+      "source_id": 126,
+      "target_id": 135,
+      "source_name": "khoan_3_dieu_14",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_14",
+      "target_text": "sinh viên",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_14_ent_3",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.843000000+00:00"
+      }
+    },
+    {
+      "source_id": 126,
+      "target_id": 152,
+      "source_name": "khoan_3_dieu_14",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_14",
+      "target_text": "quy định",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_3_dieu_14_ent_4",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.851000000+00:00"
+      }
+    },
+    {
+      "source_id": 127,
+      "target_id": 135,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": "sinh viên",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_1_dieu_23_ent_1",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.859000000+00:00"
+      }
+    },
+    {
+      "source_id": 127,
+      "target_id": 153,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": "học phần",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_1_dieu_23_ent_2",
+        "confidence": 0.9,
+        "created_at": "2025-12-05T09:02:22.866000000+00:00"
+      }
+    },
+    {
+      "source_id": 127,
+      "target_id": 154,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": "P.ĐTĐH",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_1_dieu_23_ent_4",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.874000000+00:00"
+      }
+    },
+    {
+      "source_id": 127,
+      "target_id": 155,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": "1 tháng",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_1_dieu_23_ent_5",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.881000000+00:00"
+      }
+    },
+    {
+      "source_id": 127,
+      "target_id": 156,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": "học kỳ",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_1_dieu_23_ent_6",
+        "confidence": 0.9,
+        "created_at": "2025-12-05T09:02:22.888000000+00:00"
+      }
+    },
+    {
+      "source_id": 127,
+      "target_id": 157,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": "số tín chỉ",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_1_dieu_23_ent_7",
+        "confidence": 0.9,
+        "created_at": "2025-12-05T09:02:22.895000000+00:00"
+      }
+    },
+    {
+      "source_id": 127,
+      "target_id": 0,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": "điểm M",
+      "source_label": "Clause",
+      "target_label": "Entity",
+      "type": "MENTIONS",
+      "properties": {
+        "local_id": "khoan_1_dieu_23_ent_8",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:22.902000000+00:00"
+      }
+    },
+    {
+      "source_id": 131,
+      "target_id": 132,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "học kỳ hè",
+      "target_text": "HPTCHM HKHE",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "properties": {
+        "evidence": "Học phí = HPTCHM HKHE × TCHPHM + HPTCHL × TCHPHL + HPTCCT × TCHPCT",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.103000000+00:00",
+        "source_article": "dieu_1"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 131,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "học kỳ hè",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "AP_DUNG_CHO",
+      "properties": {
+        "evidence": "Đối với học kỳ hè: Học phí = HPTCHM HKHE × TCHPHM + HPTCHL × TCHPHL + HPTCCT × TCHPCT",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.248000000+00:00",
+        "source_article": "dieu_1"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 133,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "HPTCHM học kỳ hè",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "YEU_CAU",
+      "properties": {
+        "evidence": "Với sinh viên còn trong thời gian học theo thiết kế chương trình đào tạo",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.343000000+00:00",
+        "source_article": "dieu_1"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 134,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "HPTCHM học kỳ chính",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "YEU_CAU",
+      "properties": {
+        "evidence": "Với sinh viên đã quá thời gian học theo thiết kế chương trình đào tạo",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.412000000+00:00",
+        "source_article": "dieu_1"
+      }
+    },
+    {
+      "source_id": 142,
+      "target_id": 141,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "Phòng, Ban, Khoa, Bộ môn, đơn vị",
+      "target_text": "Quyết định này",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "AP_DUNG_CHO",
+      "properties": {
+        "evidence": "Các Ông/Bà Trưởng các Phòng, Ban, Khoa, Bộ môn, đơn vị có liên quan và sinh viên chính quy chịu trách nhiệm thi hành Quyết định này.",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.432000000+00:00",
+        "source_article": "dieu_2"
+      }
+    },
+    {
+      "source_id": 143,
+      "target_id": 141,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên chính quy",
+      "target_text": "Quyết định này",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "AP_DUNG_CHO",
+      "properties": {
+        "evidence": "Các Ông/Bà Trưởng các Phòng, Ban, Khoa, Bộ môn, đơn vị có liên quan và sinh viên chính quy chịu trách nhiệm thi hành Quyết định này.",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.500000000+00:00",
+        "source_article": "dieu_2"
+      }
+    },
+    {
+      "source_id": 141,
+      "target_id": 144,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "Quyết định này",
+      "target_text": "ngày ký",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "properties": {
+        "evidence": "Quyết định này có hiệu lực kể từ ngày ký.",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.523000000+00:00",
+        "source_article": "dieu_2"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 145,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "thời gian học theo thiết kế chương trình đào tạo",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "YEU_CAU",
+      "properties": {
+        "evidence": "Với sinh viên còn trong thời gian học theo thiết kế chương trình đào tạo",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.594000000+00:00",
+        "source_article": "khoan_3_dieu_4"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 146,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "quy định học phí hiện hành",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "YEU_CAU",
+      "properties": {
+        "evidence": "Với sinh viên đã quá thời gian học theo thiết kế chương trình đào tạo",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.651000000+00:00",
+        "source_article": "khoan_3_dieu_4"
+      }
+    },
+    {
+      "source_id": 149,
+      "target_id": 135,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "tối thiểu 70 sinh viên",
+      "target_text": "sinh viên",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "YEU_CAU",
+      "properties": {
+        "evidence": "số lượng sinh viên đăng ký tối thiểu là 70 sinh viên",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.671000000+00:00",
+        "source_article": "khoan_2_dieu_12"
+      }
+    },
+    {
+      "source_id": 147,
+      "target_id": 150,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "môn học đại cương",
+      "target_text": "Trường",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "AP_DUNG_CHO",
+      "properties": {
+        "evidence": "các môn học đại cương và các môn học cơ sở ngành học chung toàn Trường",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.734000000+00:00",
+        "source_article": "khoan_2_dieu_12"
+      }
+    },
+    {
+      "source_id": 148,
+      "target_id": 150,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "môn học cơ sở ngành học chung",
+      "target_text": "Trường",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "AP_DUNG_CHO",
+      "properties": {
+        "evidence": "các môn học cơ sở ngành học chung toàn Trường",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.791000000+00:00",
+        "source_article": "khoan_2_dieu_12"
+      }
+    },
+    {
+      "source_id": 131,
+      "target_id": 151,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "học kỳ hè",
+      "target_text": "12 tín chỉ",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "properties": {
+        "evidence": "Tổng số tín chỉ đăng ký không được vượt quá 12 tín chỉ.",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.812000000+00:00",
+        "source_article": "khoan_3_dieu_14"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 152,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "quy định",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "AP_DUNG_CHO",
+      "properties": {
+        "evidence": "Sinh viên được đăng ký học mới, học lại và cải thiện điểm nếu có nhu cầu.",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.902000000+00:00",
+        "source_article": "khoan_3_dieu_14"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 153,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "học phần",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "YEU_CAU",
+      "properties": {
+        "evidence": "Sinh viên đã thi đạt yêu cầu một học phần",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:23.973000000+00:00",
+        "source_article": "khoan_1_dieu_23"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 154,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "P.ĐTĐH",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "AP_DUNG_CHO",
+      "properties": {
+        "evidence": "gửi về P.ĐTĐH của Trường",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:24.025000000+00:00",
+        "source_article": "khoan_1_dieu_23"
+      }
+    },
+    {
+      "source_id": 135,
+      "target_id": 155,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "sinh viên",
+      "target_text": "1 tháng",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "properties": {
+        "evidence": "trong vòng 1 tháng sau khi bắt đầu học kỳ",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:24.032000000+00:00",
+        "source_article": "khoan_1_dieu_23"
+      }
+    },
+    {
+      "source_id": 153,
+      "target_id": 157,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "học phần",
+      "target_text": "số tín chỉ",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "properties": {
+        "evidence": "xác nhận (số tiết học, số tín chỉ và bảng điểm)",
+        "confidence": 0.9,
+        "created_at": "2025-12-05T09:02:24.039000000+00:00",
+        "source_article": "khoan_1_dieu_23"
+      }
+    },
+    {
+      "source_id": 153,
+      "target_id": 0,
+      "source_name": null,
+      "target_name": null,
+      "source_text": "học phần",
+      "target_text": "điểm M",
+      "source_label": "Entity",
+      "target_label": "Entity",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "properties": {
+        "evidence": "Các học phần được công nhận được nhận điểm M",
+        "confidence": 1.0,
+        "created_at": "2025-12-05T09:02:24.047000000+00:00",
+        "source_article": "khoan_1_dieu_23"
+      }
+    },
+    {
+      "source_id": 122,
+      "target_id": 120,
+      "source_name": "dieu_1",
+      "target_name": null,
+      "source_text": "dieu_1",
+      "target_text": null,
+      "source_label": "Article",
+      "target_label": "Category",
+      "type": "BELONGS_TO",
+      "properties": {}
+    },
+    {
+      "source_id": 123,
+      "target_id": 120,
+      "source_name": "dieu_2",
+      "target_name": null,
+      "source_text": "dieu_2",
+      "target_text": null,
+      "source_label": "Article",
+      "target_label": "Category",
+      "type": "BELONGS_TO",
+      "properties": {}
+    },
+    {
+      "source_id": 124,
+      "target_id": 120,
+      "source_name": "khoan_3_dieu_4",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_4",
+      "target_text": null,
+      "source_label": "Clause",
+      "target_label": "Category",
+      "type": "BELONGS_TO",
+      "properties": {}
+    },
+    {
+      "source_id": 125,
+      "target_id": 120,
+      "source_name": "khoan_2_dieu_12",
+      "target_name": null,
+      "source_text": "khoan_2_dieu_12",
+      "target_text": null,
+      "source_label": "Clause",
+      "target_label": "Category",
+      "type": "BELONGS_TO",
+      "properties": {}
+    },
+    {
+      "source_id": 126,
+      "target_id": 120,
+      "source_name": "khoan_3_dieu_14",
+      "target_name": null,
+      "source_text": "khoan_3_dieu_14",
+      "target_text": null,
+      "source_label": "Clause",
+      "target_label": "Category",
+      "type": "BELONGS_TO",
+      "properties": {}
+    },
+    {
+      "source_id": 127,
+      "target_id": 120,
+      "source_name": "khoan_1_dieu_23",
+      "target_name": null,
+      "source_text": "khoan_1_dieu_23",
+      "target_text": null,
+      "source_label": "Clause",
+      "target_label": "Category",
+      "type": "BELONGS_TO",
+      "properties": {}
+    },
+    {
+      "source_id": 121,
+      "target_id": 122,
+      "source_name": "quyet_dinh",
+      "target_name": "dieu_1",
+      "source_text": "quyet_dinh",
+      "target_text": "dieu_1",
+      "source_label": "Document",
+      "target_label": "Article",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source_id": 122,
+      "target_id": 124,
+      "source_name": "dieu_1",
+      "target_name": "khoan_3_dieu_4",
+      "source_text": "dieu_1",
+      "target_text": "khoan_3_dieu_4",
+      "source_label": "Article",
+      "target_label": "Clause",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source_id": 123,
+      "target_id": 125,
+      "source_name": "dieu_2",
+      "target_name": "khoan_2_dieu_12",
+      "source_text": "dieu_2",
+      "target_text": "khoan_2_dieu_12",
+      "source_label": "Article",
+      "target_label": "Clause",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source_id": 123,
+      "target_id": 126,
+      "source_name": "dieu_2",
+      "target_name": "khoan_3_dieu_14",
+      "source_text": "dieu_2",
+      "target_text": "khoan_3_dieu_14",
+      "source_label": "Article",
+      "target_label": "Clause",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source_id": 123,
+      "target_id": 127,
+      "source_name": "dieu_2",
+      "target_name": "khoan_1_dieu_23",
+      "source_text": "dieu_2",
+      "target_text": "khoan_1_dieu_23",
+      "source_label": "Article",
+      "target_label": "Clause",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source_id": 121,
+      "target_id": 123,
+      "source_name": "quyet_dinh",
+      "target_name": "dieu_2",
+      "source_text": "quyet_dinh",
+      "target_text": "dieu_2",
+      "source_label": "Document",
+      "target_label": "Article",
+      "type": "CONTAINS",
+      "properties": {}
+    }
+  ]
+}
