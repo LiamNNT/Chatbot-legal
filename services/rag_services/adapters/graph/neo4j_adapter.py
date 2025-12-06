@@ -1129,6 +1129,7 @@ class Neo4jGraphAdapter(GraphRepository):
         
         For CatRAG schema with Article nodes containing 'title', 'content' fields.
         """
+        logger.info(f"🔍 search_articles_by_keyword called with keywords: {keywords}, limit: {limit}")
         driver = self._get_driver()
         
         # Build search pattern for keywords
@@ -1136,7 +1137,7 @@ class Neo4jGraphAdapter(GraphRepository):
         keyword_conditions = []
         for i, kw in enumerate(keywords):
             keyword_conditions.append(
-                f"(toLower(a.title) CONTAINS toLower($kw{i}) OR toLower(a.content) CONTAINS toLower($kw{i}))"
+                f"(toLower(a.title) CONTAINS toLower($kw{i}) OR toLower(a.full_text) CONTAINS toLower($kw{i}))"
             )
         
         where_clause = " OR ".join(keyword_conditions) if keyword_conditions else "true"
@@ -1144,8 +1145,8 @@ class Neo4jGraphAdapter(GraphRepository):
         cypher = f"""
         MATCH (a:Article)
         WHERE {where_clause}
-        RETURN elementId(a) as id, a.article_id as article_id, a.title as title, 
-               a.content as content, a.article_number as article_number
+        RETURN elementId(a) as element_id, a.id as article_id, a.title as title, 
+               a.full_text as content
         LIMIT $limit
         """
         
@@ -1156,20 +1157,21 @@ class Neo4jGraphAdapter(GraphRepository):
         
         results = []
         try:
+            logger.info(f"📝 Executing Cypher: {cypher[:200]}...")
+            logger.info(f"📝 With params: {params}")
             with driver.session(database=self.database) as session:
                 result = session.run(cypher, **params)
                 for record in result:
                     results.append({
-                        "id": record["id"],
+                        "id": record["element_id"],
                         "article_id": record["article_id"],
                         "title": record["title"],
                         "content": record["content"][:500] if record["content"] else "",
-                        "article_number": record["article_number"],
                         "type": "Article"
                     })
-            logger.info(f"Found {len(results)} articles for keywords: {keywords}")
+            logger.info(f"✅ Found {len(results)} articles for keywords: {keywords}")
         except Exception as e:
-            logger.error(f"Error searching articles: {e}")
+            logger.error(f"❌ Error searching articles: {e}", exc_info=True)
         
         return results
     
@@ -1236,16 +1238,19 @@ class Neo4jGraphAdapter(GraphRepository):
         """
         driver = self._get_driver()
         
+        # Convert article_number to article id (e.g., 19 -> "dieu_19")
+        article_id = f"dieu_{article_number}"
+        
         cypher = """
-        MATCH (a:Article {article_number: $article_number})
+        MATCH (a:Article {id: $article_id})
         OPTIONAL MATCH (a)-[:MENTIONS]->(e:Entity)
-        RETURN a.title as title, a.content as content, a.article_number as article_number,
-               collect(DISTINCT {name: e.name, type: e.type, description: e.description}) as entities
+        RETURN a.title as title, a.full_text as content,
+               collect(DISTINCT {name: e.text, type: e.type}) as entities
         """
         
         try:
             with driver.session(database=self.database) as session:
-                result = session.run(cypher, article_number=article_number)
+                result = session.run(cypher, article_id=article_id)
                 record = result.single()
                 
                 if record:
@@ -1254,7 +1259,7 @@ class Neo4jGraphAdapter(GraphRepository):
                     return {
                         "title": record["title"],
                         "content": record["content"],
-                        "article_number": record["article_number"],
+                        "article_number": article_number,
                         "entities": entities,
                         "type": "Article"
                     }

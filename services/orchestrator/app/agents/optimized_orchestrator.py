@@ -372,6 +372,12 @@ class OptimizedMultiAgentOrchestrator:
             # Priority 2: SmartPlanner recommends based on query analysis
             should_use_graph = False
             
+            logger.info(f"🔍 Checking if should use KG...")
+            logger.info(f"   - graph_reasoning_agent exists: {self.graph_reasoning_agent is not None}")
+            logger.info(f"   - plan_result exists: {plan_result is not None}")
+            if plan_result:
+                logger.info(f"   - plan_result.use_knowledge_graph: {getattr(plan_result, 'use_knowledge_graph', None)}")
+            
             # Check request parameter first (user override)
             if hasattr(request, 'use_knowledge_graph') and request.use_knowledge_graph:
                 should_use_graph = True
@@ -380,6 +386,8 @@ class OptimizedMultiAgentOrchestrator:
             elif plan_result and plan_result.use_knowledge_graph:
                 should_use_graph = True
                 logger.info("🔗 Knowledge Graph RECOMMENDED by SmartPlanner")
+            else:
+                logger.info("❌ Knowledge Graph NOT selected")
             
             graph_context = None
             if should_use_graph and self.graph_reasoning_agent is not None:
@@ -409,6 +417,12 @@ class OptimizedMultiAgentOrchestrator:
                 processing_stats["graph_confidence"] = graph_result.confidence
                 
                 graph_context = graph_result.synthesized_context
+                
+                logger.info(f"📊 Graph Reasoning Results:")
+                logger.info(f"   - Nodes found: {len(graph_result.nodes)}")
+                logger.info(f"   - Paths found: {len(graph_result.paths)}")
+                logger.info(f"   - Confidence: {graph_result.confidence}")
+                logger.info(f"   - Context length: {len(graph_context) if graph_context else 0} chars")
                 
                 if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
                     logger.debug(f"Graph reasoning: {len(graph_result.nodes)} nodes, {len(graph_result.paths)} paths")
@@ -523,6 +537,47 @@ class OptimizedMultiAgentOrchestrator:
             # Get extracted filters from plan
             extracted_filters = plan_result.extracted_filters
             
+            # === GRAPH REASONING ===
+            # Check if we should use Graph Reasoning (for complex multi-hop queries)
+            should_use_graph = False
+            graph_context = None
+            
+            if plan_result and plan_result.use_knowledge_graph:
+                should_use_graph = True
+                logger.info("🔗 Knowledge Graph ENABLED for IRCoT (from SmartPlanner)")
+            
+            if should_use_graph and self.graph_reasoning_agent is not None:
+                graph_query_type_str = getattr(plan_result, 'graph_query_type', 'local')
+                try:
+                    from app.agents.graph_reasoning_agent import GraphQueryType
+                    graph_query_type = GraphQueryType(graph_query_type_str)
+                except ValueError:
+                    from app.agents.graph_reasoning_agent import GraphQueryType
+                    graph_query_type = GraphQueryType.LOCAL
+                
+                logger.info(f"🔗 Graph Reasoning in IRCoT: type={graph_query_type.value}")
+                
+                graph_start = time.time()
+                graph_result = await self.graph_reasoning_agent.reason(
+                    query=request.user_query,
+                    query_type=graph_query_type,
+                    context={
+                        "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
+                        "search_terms": plan_result.search_terms if plan_result else []
+                    }
+                )
+                processing_stats["graph_reasoning_time"] = time.time() - graph_start
+                processing_stats["graph_nodes_found"] = len(graph_result.nodes)
+                processing_stats["graph_paths_found"] = len(graph_result.paths)
+                processing_stats["graph_confidence"] = graph_result.confidence
+                
+                graph_context = graph_result.synthesized_context
+                
+                logger.info(f"📊 Graph Reasoning Results in IRCoT:")
+                logger.info(f"   - Nodes found: {len(graph_result.nodes)}")
+                logger.info(f"   - Confidence: {graph_result.confidence}")
+                logger.info(f"   - Context length: {len(graph_context) if graph_context else 0} chars")
+            
             # Perform IRCoT reasoning with retrieval
             ircot_result = await self.ircot_service.reason_with_retrieval(
                 query=request.user_query,
@@ -571,6 +626,20 @@ class OptimizedMultiAgentOrchestrator:
                     "source": "IRCoT Chain-of-Thought"
                 }
                 mapped_documents.insert(0, reasoning_doc)
+            
+            # === COMBINE GRAPH CONTEXT ===
+            # If we have graph context, prepend it as a high-priority document
+            if graph_context:
+                graph_doc = {
+                    "content": graph_context,
+                    "score": 1.0,  # Highest priority
+                    "metadata": {"source_type": "graph_reasoning"},
+                    "title": "Graph Reasoning Context",
+                    "source": "Knowledge Graph"
+                }
+                # Insert graph doc before reasoning doc (highest priority)
+                mapped_documents.insert(0, graph_doc)
+                logger.info(f"✅ Added Graph Reasoning context to IRCoT results")
             
             logger.info(f"✅ IRCoT completed: {ircot_result.total_iterations} iterations, "
                        f"{len(mapped_documents)} documents")

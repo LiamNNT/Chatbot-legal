@@ -425,6 +425,8 @@ class SmartPlannerAgent(SpecializedAgent):
         Determine if the query would benefit from Knowledge Graph search.
         
         Knowledge Graph is particularly useful for:
+        - Questions about specific articles/regulations (structured data in KG)
+        - Questions about conditions, requirements in regulations
         - Questions about relationships between articles/regulations
         - Questions involving multiple connected concepts  
         - Questions that require traversing linked information
@@ -444,17 +446,29 @@ class SmartPlannerAgent(SpecializedAgent):
             "khoản", "mục", "chương", "quy chế", "nghị định", "thông tư"
         ]
         
+        # Regulation-related question patterns - questions about conditions/requirements
+        regulation_questions = [
+            "điều kiện", "yêu cầu", "quy định", "thủ tục", "hồ sơ",
+            "chuyển ngành", "chuyển trường", "chuyển chương trình",
+            "bảo lưu", "thôi học", "tốt nghiệp", "xét tốt nghiệp",
+            "khen thưởng", "kỷ luật", "học bổng"
+        ]
+        
         # Check for relationship keywords
         has_relationship = any(p in query_lower for p in relationship_patterns)
         
         # Check for regulation/article references (excluding simple "điều" and "quy định")
         has_regulation = any(p in query_lower for p in regulation_patterns)
         
+        # Check for regulation-related questions (conditions, requirements)
+        has_regulation_question = any(p in query_lower for p in regulation_questions)
+        
         # Use regex to properly count distinct article references
-        # Pattern matches "điều X" where X is a number
-        article_pattern = r'điều\s*(\d+)'
+        # Pattern matches "điều X" where X is a number (may have words in between)
+        article_pattern = r'điều\s+(\d+)'  # More flexible: requires space(s) before number
         article_matches = re.findall(article_pattern, query_lower)
         unique_articles = set(article_matches)
+        has_single_article = len(unique_articles) >= 1  # Changed: even 1 article should use KG
         has_multiple_articles = len(unique_articles) >= 2
         
         # Check for comparative patterns with regulations
@@ -465,12 +479,17 @@ class SmartPlannerAgent(SpecializedAgent):
         
         # Enable KG if:
         # 1. Query explicitly asks about relationships
-        # 2. Query references multiple distinct articles (cross-reference)
+        # 2. Query references ANY article (even single article - KG has structured data)
         # 3. Query compares regulations
+        # 4. Query references other regulation patterns (khoản, mục, chương, etc.)
+        # 5. Query asks about conditions/requirements (likely from regulations in KG)
         return (
             has_relationship or
+            has_single_article or  # Use KG for even single article queries
             has_multiple_articles or
-            comparative_regulation
+            comparative_regulation or
+            has_regulation or  # Use KG for regulation patterns
+            has_regulation_question  # NEW: Use KG for condition/requirement questions
         )
 
     def _determine_graph_query_type(self, query: str) -> str:

@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     storage_dir: str = "./storage"  # Directory to store indices and other data (for faiss/chroma)
     
     # Weaviate settings
-    weaviate_url: str = "http://localhost:8080"  # Weaviate server URL
+    weaviate_url: str = "http://localhost:8090"  # Weaviate server URL (mapped to 8090 in docker)
     weaviate_api_key: str = ""  # Optional API key for authentication
     weaviate_class_name: str = "ChatbotUit"  # Weaviate class name (PascalCase)
     weaviate_use_cloud: bool = False  # true = cloud, false = local

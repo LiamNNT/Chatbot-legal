@@ -59,7 +59,10 @@ class ToolResult:
     def _format_item(self, item: Any) -> str:
         """Format a single item for display."""
         if isinstance(item, dict):
-            name = item.get("name") or item.get("title") or item.get("ma_mon") or item.get("ten_mon", "Unknown")
+            # Support both MON_HOC nodes and Article nodes
+            name = (item.get("name") or item.get("title") or 
+                   item.get("ma_mon") or item.get("ten_mon") or 
+                   item.get("article_id", "Unknown"))
             item_type = item.get("type") or item.get("node_type", "")
             return f"[{item_type}] {name}"
         return str(item)
@@ -146,7 +149,10 @@ class GraphReasoningResult:
         if self.nodes:
             parts.append("=== Related Nodes ===")
             for node in self.nodes[:10]:  # Limit to 10
-                name = node.get("name") or node.get("ten_mon") or node.get("ma_mon", "Unknown")
+                # Support both MON_HOC nodes and Article nodes
+                name = (node.get("name") or node.get("title") or 
+                       node.get("ten_mon") or node.get("ma_mon") or 
+                       node.get("article_id", "Unknown"))
                 node_type = node.get("type", "Node")
                 parts.append(f"• [{node_type}] {name}")
         
@@ -731,6 +737,33 @@ QUAN TRỌNG:
         logger.info(f"Local reasoning: entity={entity}, pattern={query_pattern}")
         
         try:
+            # === ENHANCED: Nếu không tìm thấy mã môn, thử tìm bằng tên ===
+            if not entity and query_pattern in ["prerequisite", "general"]:
+                logger.info("No course code found, trying full-text search on MON_HOC")
+                try:
+                    from core.domain.graph_models import NodeCategory
+                    mon_hoc_nodes = await self.graph_adapter.search_nodes(
+                        query, 
+                        categories=[NodeCategory.MON_HOC], 
+                        limit=3
+                    )
+                    
+                    if mon_hoc_nodes:
+                        # Lấy mã môn từ node đầu tiên
+                        first_node = mon_hoc_nodes[0]
+                        entity = first_node.properties.get("ma_mon") or first_node.properties.get("code")
+                        
+                        logger.info(f"Found course via full-text search: {entity}")
+                        result.reasoning_steps.append(
+                            f"Tìm thấy môn học '{first_node.properties.get('ten_mon', entity)}' qua tìm kiếm tên"
+                        )
+                        
+                        # Nếu pattern chưa rõ, set thành prerequisite
+                        if query_pattern == "general":
+                            query_pattern = "prerequisite"
+                except Exception as e:
+                    logger.warning(f"Full-text search on MON_HOC failed: {e}")
+            
             if query_pattern == "prerequisite" and entity:
                 # Pattern 1: Find prerequisites
                 paths = await self.graph_adapter.find_prerequisites_chain(entity, max_depth=3)
@@ -808,25 +841,53 @@ QUAN TRỌNG:
                     result.confidence = 0.4
             
             else:
-                # Try ReAct for complex queries if LLM available
-                if self.llm_port and not keywords:
-                    logger.info("No pattern match and no keywords, trying ReAct")
-                    return await self._react_loop(query, context)
-                
-                # Fallback: Search in CatRAG schema (Articles, Entities)
+                # === ENHANCED FALLBACK: Tìm kiếm toàn diện ===
                 keywords = self._extract_keywords_from_query(query)
                 
-                # Search Articles by keywords
+                # If no keywords extracted and LLM available, try ReAct
+                if not keywords and self.llm_port:
+                    logger.info("No keywords extracted, trying ReAct")
+                    return await self._react_loop(query, context)
+                
+                # 1. Search Articles by keywords (Quy chế)
                 articles = await self.graph_adapter.search_articles_by_keyword(keywords, limit=5)
+                
+                # 2. Search Entities by keywords
                 entities = await self.graph_adapter.search_entities_by_keyword(keywords, limit=5)
                 
-                all_nodes = articles + entities
+                # 3. ENHANCED: Search MON_HOC nodes specifically
+                mon_hoc_nodes = []
+                try:
+                    from core.domain.graph_models import NodeCategory
+                    mon_hoc_search = await self.graph_adapter.search_nodes(
+                        query, 
+                        categories=[NodeCategory.MON_HOC], 
+                        limit=10
+                    )
+                    
+                    # Convert GraphNode to dict format
+                    for node in mon_hoc_search:
+                        mon_hoc_nodes.append({
+                            "id": node.id,
+                            "name": node.properties.get("ten_mon", "Unknown"),
+                            "ma_mon": node.properties.get("ma_mon", ""),
+                            "so_tin_chi": node.properties.get("so_tin_chi", 0),
+                            "type": "MON_HOC",
+                            "node_type": "Course"
+                        })
+                    
+                    logger.info(f"Found {len(mon_hoc_nodes)} MON_HOC nodes via full-text search")
+                except Exception as e:
+                    logger.warning(f"MON_HOC search failed: {e}")
+                
+                # Combine all results
+                all_nodes = articles + entities + mon_hoc_nodes
                 
                 if all_nodes:
                     result.nodes = all_nodes
                     result.reasoning_steps = [
                         f"Tìm kiếm với từ khóa: {', '.join(keywords)}",
-                        f"Tìm thấy {len(articles)} điều khoản và {len(entities)} thực thể"
+                        f"Tìm thấy {len(articles)} điều khoản, {len(entities)} thực thể, {len(mon_hoc_nodes)} môn học"
                     ]
                     result.confidence = 0.7
                 elif self.llm_port:
@@ -834,16 +895,8 @@ QUAN TRỌNG:
                     logger.info("No keyword results, falling back to ReAct")
                     return await self._react_loop(query, context)
                 else:
-                    # Final fallback: Try old full-text search (for course data)
-                    try:
-                        from core.domain.graph_models import NodeCategory
-                        nodes = await self.graph_adapter.search_nodes(query, limit=5)
-                        if nodes:
-                            result.nodes = [self._node_to_dict(n) for n in nodes]
-                            result.reasoning_steps = [f"Tìm kiếm full-text với query: {query}"]
-                            result.confidence = 0.6
-                    except Exception:
-                        pass  # Old method may not work, that's ok
+                    result.reasoning_steps = ["Không tìm thấy kết quả phù hợp"]
+                    result.confidence = 0.3
         
         except Exception as e:
             logger.error(f"Local reasoning error: {e}")
@@ -1313,15 +1366,28 @@ QUAN TRỌNG:
         # Also extract compound terms (Vietnamese compound words)
         compound_terms = []
         compound_patterns = [
-            r"học phần", r"sinh viên", r"tín chỉ", r"điểm trung bình",
+            r"học phần", r"môn học", r"sinh viên", r"tín chỉ", r"điểm trung bình",
             r"đăng ký", r"xét tốt nghiệp", r"tốt nghiệp", r"buộc thôi học",
-            r"cảnh báo học tập", r"kết quả", r"chương trình đào tạo"
+            r"cảnh báo học tập", r"kết quả", r"chương trình đào tạo",
+            r"tiên quyết", r"học trước", r"môn cơ sở", r"môn chuyên ngành",
+            # ENHANCED: Thêm tên môn học phổ biến
+            r"nhập môn lập trình", r"lập trình hướng đối tượng",
+            r"cấu trúc dữ liệu", r"giải thuật", r"cơ sở dữ liệu",
+            r"mạng máy tính", r"hệ điều hành", r"công nghệ phần mềm",
+            r"trí tuệ nhân tạo", r"machine learning", r"deep learning"
         ]
         for pattern in compound_patterns:
             if re.search(pattern, query.lower()):
                 compound_terms.append(pattern.replace(r" ", " "))
         
-        return list(set(keywords + compound_terms))[:10]  # Max 10 keywords
+        # ENHANCED: Extract course names without codes
+        # Pattern: "Môn [Tên]" or just "[Tên môn học]"
+        course_name_pattern = r"môn\s+([A-ZĐÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴ][a-zđàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ\s]+)"
+        course_matches = re.findall(course_name_pattern, query, re.IGNORECASE)
+        for match in course_matches:
+            compound_terms.append(match.strip())
+        
+        return list(set(keywords + compound_terms))[:15]  # Max 15 keywords
     
     async def _find_courses_by_department(self, dept_code: str) -> List[Dict[str, Any]]:
         """Find courses belonging to a department."""

@@ -77,9 +77,14 @@ agents:
          • Course prerequisites or dependencies: "môn tiên quyết", "học trước"
          • Paths between concepts: "mối quan hệ giữa X và Y"
          • Multi-hop reasoning about regulations
+         • **MÔN HỌC - BẮT BUỘC dùng KG khi có:**
+           - Từ khóa: "môn học", "học phần", "tiên quyết", "tín chỉ", "chương trình đào tạo"
+           - Mã môn (IT001, CS101, etc.) hoặc tên môn tiếng Việt
+           - Tên môn cụ thể: "Nhập môn lập trình", "Cấu trúc dữ liệu", "OOP", etc.
+           - Điều kiện học tập, đăng ký học phần
          
          Set graph_query_type:
-         • "local": Single entity lookup (e.g., "Điều 14 quy định gì?")
+         • "local": Single entity lookup (e.g., "Điều 14 quy định gì?", "Môn Nhập môn lập trình")
          • "global": Overview/summary queries (e.g., "Tổng quan về quy chế đào tạo")
          • "multi_hop": Relationship chains (e.g., "Môn IT001 cần học trước những môn nào?")
       
@@ -108,6 +113,12 @@ agents:
 
       Query: "Môn IT001 cần học trước những môn nào?"
       Output: {"intent":"informational","complexity_score":6.0,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"multi_hop","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Môn tiên quyết của IT001 Nhập môn lập trình","Các môn học trước IT001"],"search_terms":["IT001","môn tiên quyết","học trước"],"reasoning":"Course prerequisite query - use knowledge graph for relationship traversal"}
+      
+      Query: "Môn Nhập môn lập trình có khó không?"
+      Output: {"intent":"informational","complexity_score":4.0,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"local","strategy":"standard_rag","top_k":5,"hybrid_search":true,"rewritten_queries":["Thông tin về môn Nhập môn lập trình IT001","Đánh giá độ khó môn Nhập môn lập trình"],"search_terms":["nhập môn lập trình","IT001","độ khó"],"reasoning":"Tên môn học tiếng Việt - BẮT BUỘC dùng KG để tìm thông tin môn học"}
+      
+      Query: "Học Cấu trúc dữ liệu cần học gì trước?"
+      Output: {"intent":"informational","complexity_score":5.5,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"multi_hop","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Môn tiên quyết của Cấu trúc dữ liệu IT003","Cần học gì trước khi học môn Cấu trúc dữ liệu"],"search_terms":["cấu trúc dữ liệu","tiên quyết","IT003"],"reasoning":"Tên môn học + tiên quyết - BẮT BUỘC dùng KG"}
 
       Query: "So sánh quy trình ĐKHP giữa SV năm 1 và năm 3"
       Output: {"intent":"comparative","complexity_score":7.5,"complexity":"complex","requires_rag":true,"use_knowledge_graph":false,"strategy":"advanced_rag","top_k":10,"hybrid_search":true,"reranking":true,"rewritten_queries":["Quy trình đăng ký học phần sinh viên năm thứ nhất UIT","Quy trình đăng ký học phần sinh viên năm thứ ba UIT","So sánh ưu tiên đăng ký học phần theo năm học"],"search_terms":["đăng ký học phần","sinh viên năm 1","sinh viên năm 3","quy trình","ưu tiên"],"reasoning":"Comparative query needs multiple aspects, policy-sensitive"}

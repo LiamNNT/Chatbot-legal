@@ -6,7 +6,7 @@
 
 import logging
 import weaviate
-from weaviate.classes.config import Configure, Property, DataType
+from weaviate.classes.config import Configure, Property, DataType, VectorDistances
 from weaviate.classes.init import Auth
 from typing import Optional
 
@@ -102,6 +102,11 @@ def create_document_collection(client: weaviate.WeaviateClient) -> bool:
             
             # Vectorizer configuration - we'll provide our own vectors
             vectorizer_config=Configure.Vectorizer.none(),
+            
+            # Vector index configuration - explicitly set distance metric
+            vector_index_config=Configure.VectorIndex.hnsw(
+                distance_metric=VectorDistances.COSINE
+            ),
             
             # Properties/fields for document chunks
             properties=[

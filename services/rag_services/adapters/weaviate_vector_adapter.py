@@ -91,7 +91,20 @@ class WeaviateVectorAdapter(VectorSearchRepository):
         try:
             # Use the embedding model to get vector
             vector = self.embedding_model.get_text_embedding(text)
-            return vector
+            
+            # DEBUG: Log vector info
+            logger.debug(f"Embedding vector type: {type(vector)}, length: {len(vector) if hasattr(vector, '__len__') else 'N/A'}")
+            
+            # Ensure it's a flat list of floats
+            if isinstance(vector, list):
+                return vector
+            elif hasattr(vector, 'tolist'):
+                # NumPy array or similar
+                return vector.tolist()
+            else:
+                logger.error(f"Unexpected vector type: {type(vector)}")
+                raise TypeError(f"Expected list or array, got {type(vector)}")
+                
         except Exception as e:
             logger.error(f"Failed to generate embedding: {e}")
             raise
@@ -221,6 +234,12 @@ class WeaviateVectorAdapter(VectorSearchRepository):
                     # Generate embedding
                     vector = self._embed_text(chunk.text)
                     
+                    # DEBUG: Log vector info before adding to batch
+                    logger.info(f"DEBUG: About to add chunk {chunk.chunk_index}")
+                    logger.info(f"DEBUG: Vector type: {type(vector)}, length: {len(vector) if hasattr(vector, '__len__') else 'N/A'}")
+                    if isinstance(vector, list) and len(vector) > 0:
+                        logger.info(f"DEBUG: First 5 values: {vector[:5]}")
+                    
                     # Convert to Weaviate format
                     obj = self._chunk_to_weaviate_object(chunk, vector)
                     
@@ -261,10 +280,10 @@ class WeaviateVectorAdapter(VectorSearchRepository):
             # Must specify return_properties to get the text content
             # Properties match VietnameseDocumentV3 schema
             return_props = ["text", "doc_id", "chunk_id", "chunk_index", "title", 
-                          "page", "doc_type", "faculty", "year",
-                          "language", "structure_type", "chapter", "chapter_title",
-                          "article", "article_number", "article_title",
-                          "source", "filename", "metadata_json"]
+                          "page", "doc_type", "faculty", "year", "subject", "section", "subsection",
+                          "language", "structure_type", "chapter",
+                          "article", "article_number",
+                          "filename", "metadata_json"]
             
             # Execute query - in v4, filters are NOT supported in near_vector() directly
             # If filters are needed, we need to use a different approach
