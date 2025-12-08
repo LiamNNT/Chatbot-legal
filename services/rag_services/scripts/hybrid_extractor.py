@@ -238,7 +238,7 @@ class LLMConfig(BaseModel):
     model: str = "openai/gpt-4o-mini"
     base_url: str = "https://openrouter.ai/api/v1"
     max_tokens: int = 2000
-    temperature: float = 0.1
+    temperature: float = 0.0
     
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -264,41 +264,62 @@ class LLMConfig(BaseModel):
 # Stage 1: Structure Extractor (VLM)
 # =============================================================================
 
-STRUCTURE_EXTRACTION_PROMPT = """Bạn là chuyên gia phân tích cấu trúc văn bản quy phạm pháp luật Việt Nam.
+STRUCTURE_EXTRACTION_PROMPT = """
+You are an expert AI specializing in Vietnamese Legal Document Structure Extraction.
+Your task is to analyze the provided document page (image or text) and extract hierarchical structured data into a strict JSON format.
 
-## NHIỆM VỤ
-Từ ảnh trang văn bản pháp luật, hãy:
-1. OCR toàn bộ nội dung
-2. Nhận diện và trích xuất cấu trúc: Document, Chapter (Chương), Article (Điều), Clause (Khoản)
-3. Xử lý văn bản bị ngắt trang (nối pending_text từ trang trước)
-
-## CONTEXT TỪ TRANG TRƯỚC
+## INPUT CONTEXT (From Previous Page)
+Use this to handle text continuity across pages:
 {prev_context}
 
-## HƯỚNG DẪN TRÍCH XUẤT
+## EXTRACTION RULES (Vietnamese Definitions)
+Identify structure elements based on these standard Vietnamese legal markers:
+1. **Chapter (Chương)**: Starts with "Chương" + Roman numerals (e.g., "Chương I").
+2. **Section (Mục)**: Starts with "Mục" + Number (e.g., "Mục 1").
+3. **Article (Điều)**: Starts with "Điều" + Number (e.g., "Điều 1.", "Điều 15"). This is the most important unit.
+4. **Clause (Khoản)**: Usually starts with a number + dot (e.g., "1.", "2.") indenting a paragraph.
+5. **Point (Điểm)**: Usually starts with a letter + parenthesis (e.g., "a)", "b)").
 
-### Trích xuất Structural Nodes
-Với mỗi Điều/Khoản/Chương trong văn bản, tạo một node với:
-- `id`: ID duy nhất, format snake_case (VD: "dieu_1", "khoan_3_dieu_4")
-- `type`: "Document", "Chapter", "Article", "Clause", "Point"
-- `title`: Tiêu đề ngắn gọn
-- `full_text`: Toàn bộ nội dung văn bản của node đó
-- `page_number`: Số trang
+## PROCESSING LOGIC
+1. **Transcribe**: OCR/Read the full text exactly as strictly as possible in Vietnamese.
+2. **Hierarchy**: Create nodes for document elements. Maintain the hierarchy: Document > Chapter > Section > Article > Clause.
+3. **Continuity**:
+   - If `prev_context` has `pending_text`, check if the start of this page completes it. If so, merge it into the previous node structure (conceptually) or handle it as a continuation.
+   - If the text on this page cuts off mid-sentence or mid-clause, save that text in `next_context.pending_text` and the ID of the node it belongs to in `pending_node_id`.
 
-### Trích xuất Relations
-- "CONTAINS": Quyết định chứa Điều, Điều chứa Khoản
-- "FOLLOWS": Điều 2 theo sau Điều 1
-
-### Cập nhật Context cho trang sau
-- `pending_text`: Nếu văn bản bị cắt giữa chừng, lưu phần cuối
-- `pending_node_id`: ID của node chứa pending_text
-
-## YÊU CẦU OUTPUT
-QUAN TRỌNG: CHỈ trả về JSON object, KHÔNG có markdown, KHÔNG có giải thích.
-
-Trả về ĐÚNG format JSON sau:
-{{"nodes": [{{"id": "dieu_1", "type": "Article", "title": "Điều 1. ...", "full_text": "...", "page_number": 1}}], "relations": [{{"source": "quyet_dinh", "target": "dieu_1", "type": "CONTAINS"}}], "next_context": {{"current_chapter": null, "current_chapter_id": null, "current_article": "Điều 1", "current_article_id": "dieu_1", "current_clause": null, "pending_text": null, "pending_node_id": null}}}}"""
-
+## OUTPUT SCHEMA
+Return ONLY a valid JSON object. Do NOT use Markdown formatting (no ```json blocks).
+The JSON must follow this structure:
+{{
+  "nodes": [
+    {{
+      "id": "snake_case_id (e.g., 'chuong_1', 'dieu_1', 'dieu_1_khoan_1')",
+      "type": "Chapter" | "Article" | "Clause" | "Document",
+      "title": "Full title (e.g., 'Điều 1. Phạm vi điều chỉnh')",
+      "full_text": "The complete text content of this node.",
+      "page_number": <integer>
+    }}
+  ],
+  "relations": [
+    {{
+      "source": "parent_node_id",
+      "target": "child_node_id",
+      "type": "CONTAINS"
+    }},
+    {{
+      "source": "previous_node_id",
+      "target": "current_node_id",
+      "type": "FOLLOWS"
+    }}
+  ],
+  "next_context": {{
+    "current_chapter_id": "ID of the last processed Chapter (or null)",
+    "current_article_id": "ID of the last processed Article (or null)",
+    "pending_text": "Text fragment at the end of page if cut off (or null)",
+    "pending_node_id": "ID of the node extracting the pending text (or null)"
+  }}
+}}
+"""
 
 class StructureExtractor:
     """
@@ -818,41 +839,131 @@ SEMANTIC_EXTRACTION_PROMPT = """Bạn là chuyên gia trích xuất thực thể
 
 ## NHIỆM VỤ
 Từ nội dung Điều luật sau, trích xuất:
-1. **Entities (Thực thể)**: Các đối tượng được đề cập
-2. **Relations (Quan hệ)**: Mối liên hệ giữa các thực thể
+1. **Entities (Thực thể)**: Các đối tượng được đề cập.
+2. **Relations (Quan hệ)**: Mối liên hệ giữa các thực thể.
 
-## LOẠI THỰC THỂ (theo CatRAG Schema)
-- MON_HOC: Môn học, học phần (VD: "IT001", "Nhập môn lập trình")
-- QUY_DINH: Quy định, điều khoản
-- DIEU_KIEN: Điều kiện (VD: "tối thiểu 70 sinh viên", "đạt 4.0 điểm")
+## LOẠI THỰC THỂ (CatRAG Schema)
+- MON_HOC: Môn học, học phần (VD: "IT001", "Toán rời rạc")
+- QUY_DINH: Quy định, điều khoản (VD: "Quyết định 123", "Điều 5")
+- DIEU_KIEN: Điều kiện (VD: "tối thiểu 70 sinh viên", "ĐTB >= 8.0")
 - SINH_VIEN: Sinh viên, người học
-- KHOA: Khoa, đơn vị (VD: "Khoa CNTT", "P.ĐTĐH")
-- KY_HOC: Kỳ học (VD: "học kỳ hè", "học kỳ chính")
-- HOC_PHI: Học phí, chi phí
-- DIEM_SO: Điểm số, thang điểm
-- TIN_CHI: Số tín chỉ
-- THOI_GIAN: Thời gian, thời hạn
+- KHOA: Khoa, đơn vị (VD: "P.ĐTĐH", "Khoa HTTT")
+- KY_HOC: Kỳ học (VD: "học kỳ hè", "HK1")
+- HOC_PHI: Học phí, tiền (VD: "HPTCHM", "350.000đ")
+- DIEM_SO: Điểm số (VD: "điểm M", "4.0")
+- TIN_CHI: Số tín chỉ (VD: "12 tín chỉ", "TCHPHM")
+- THOI_GIAN: Thời gian (VD: "1 tháng", "4 năm")
 
-## LOẠI QUAN HỆ (theo CatRAG Schema)
-- YEU_CAU: Yêu cầu điều kiện
-- DIEU_KIEN_TIEN_QUYET: Môn học tiên quyết (chỉ MON_HOC -> MON_HOC)
+## LOẠI QUAN HỆ (CatRAG Schema)
+- YEU_CAU: Yêu cầu điều kiện (A yêu cầu B)
+- DIEU_KIEN_TIEN_QUYET: Môn tiên quyết
 - AP_DUNG_CHO: Quy định áp dụng cho đối tượng
-- QUY_DINH_DIEU_KIEN: Quy định về điều kiện
-- THUOC_KHOA: Thuộc khoa/đơn vị
-- HOC_TRONG: Học trong kỳ học
+- QUY_DINH_DIEU_KIEN: Nội dung quy định chi tiết
+- THUOC_KHOA: Thuộc đơn vị quản lý
+- HOC_TRONG: Diễn ra trong kỳ học
+- BAO_GOM: Thành phần cấu tạo (dùng cho công thức)
 
-## INPUT
+## VÍ DỤ MINH HỌA (ONE-SHOT EXAMPLE)
+**Input:**
+Điều: khoan_2_dieu_10
+Tiêu đề: Quy định về học bổng
+Nội dung:
+Sinh viên có điểm rèn luyện từ 80 trở lên và điểm trung bình học kỳ 1 trên 8.0 sẽ được Khoa xem xét cấp học bổng khuyến khích.
+
+**Output:**
+{{
+  "entities": [
+    {{
+      "id": "khoan_2_dieu_10_ent_1",
+      "type": "SINH_VIEN",
+      "text": "Sinh viên",
+      "normalized": "Sinh viên",
+      "confidence": 1.0
+    }},
+    {{
+      "id": "khoan_2_dieu_10_ent_2",
+      "type": "DIEM_SO",
+      "text": "điểm rèn luyện từ 80 trở lên",
+      "normalized": "ĐRL >= 80",
+      "confidence": 0.95
+    }},
+    {{
+      "id": "khoan_2_dieu_10_ent_3",
+      "type": "DIEM_SO",
+      "text": "điểm trung bình trên 8.0",
+      "normalized": "ĐTB > 8.0",
+      "confidence": 0.95
+    }},
+    {{
+      "id": "khoan_2_dieu_10_ent_4",
+      "type": "KY_HOC",
+      "text": "học kỳ 1",
+      "normalized": "HK1",
+      "confidence": 1.0
+    }},
+    {{
+      "id": "khoan_2_dieu_10_ent_5",
+      "type": "KHOA",
+      "text": "Khoa",
+      "normalized": "Khoa",
+      "confidence": 1.0
+    }},
+    {{
+      "id": "khoan_2_dieu_10_ent_6",
+      "type": "QUY_DINH",
+      "text": "học bổng khuyến khích",
+      "normalized": "Học bổng khuyến khích",
+      "confidence": 1.0
+    }}
+  ],
+  "relations": [
+    {{
+      "source_id": "khoan_2_dieu_10_ent_1",
+      "target_id": "khoan_2_dieu_10_ent_2",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "Sinh viên có điểm rèn luyện từ 80 trở lên"
+    }},
+    {{
+      "source_id": "khoan_2_dieu_10_ent_1",
+      "target_id": "khoan_2_dieu_10_ent_3",
+      "type": "YEU_CAU",
+      "confidence": 1.0,
+      "evidence": "Sinh viên có... điểm trung bình... trên 8.0"
+    }},
+    {{
+      "source_id": "khoan_2_dieu_10_ent_3",
+      "target_id": "khoan_2_dieu_10_ent_4",
+      "type": "HOC_TRONG",
+      "confidence": 0.9,
+      "evidence": "điểm trung bình học kỳ 1"
+    }},
+    {{
+      "source_id": "khoan_2_dieu_10_ent_5",
+      "target_id": "khoan_2_dieu_10_ent_6",
+      "type": "QUY_DINH_DIEU_KIEN",
+      "confidence": 0.9,
+      "evidence": "Khoa xem xét cấp học bổng"
+    }},
+    {{
+      "source_id": "khoan_2_dieu_10_ent_6",
+      "target_id": "khoan_2_dieu_10_ent_1",
+      "type": "AP_DUNG_CHO",
+      "confidence": 1.0,
+      "evidence": "Sinh viên... sẽ được... cấp học bổng"
+    }}
+  ]
+}}
+
+## INPUT DỮ LIỆU THỰC TẾ
 Điều: {article_id}
 Tiêu đề: {article_title}
 Nội dung:
 {article_text}
 
 ## OUTPUT FORMAT
-Trả về JSON với cấu trúc:
-- "entities": mảng các thực thể, mỗi thực thể có id, type, text, normalized, confidence
-- "relations": mảng các quan hệ, mỗi quan hệ có source_id, target_id, type, confidence, evidence
-
-CHỈ trả về JSON hợp lệ, không có text giải thích."""
+Trả về JSON hợp lệ (không markdown, không giải thích thêm).
+"""
 
 
 class SemanticExtractor:
