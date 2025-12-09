@@ -384,10 +384,15 @@ class OptimizedMultiAgentOrchestrator:
                 should_use_graph = True
                 logger.info("🔗 Knowledge Graph RECOMMENDED by SmartPlanner")
             else:
+                should_use_graph = False
                 logger.info("❌ Knowledge Graph NOT selected")
+            
+            logger.info(f"🎯 Final decision: should_use_graph = {should_use_graph}")
             
             graph_context = None
             if should_use_graph and self.graph_reasoning_agent is not None:
+                
+                logger.info("⚡ PARALLEL EXECUTION: Running Graph + Vector search in parallel...")
                 
                 # Get query type from plan or default to 'local'
                 graph_query_type_str = getattr(plan_result, 'graph_query_type', 'local') if plan_result else 'local'
@@ -398,8 +403,11 @@ class OptimizedMultiAgentOrchestrator:
                 
                 logger.info(f"🔗 Graph Reasoning: type={graph_query_type.value}")
                 
+                # ⚡ OPTIMIZATION: Run Graph + Vector search in PARALLEL
                 graph_start = time.time()
-                graph_result = await self.graph_reasoning_agent.reason(
+                
+                # Create tasks for parallel execution
+                graph_task = self.graph_reasoning_agent.reason(
                     query=request.user_query,
                     query_type=graph_query_type,
                     context={
@@ -407,7 +415,20 @@ class OptimizedMultiAgentOrchestrator:
                         "search_terms": plan_result.search_terms if plan_result else []
                     }
                 )
-                processing_stats["graph_reasoning_time"] = time.time() - graph_start
+                vector_task = self._perform_rag_retrieval(
+                    search_queries, 
+                    top_k,
+                    extracted_filters=extracted_filters,
+                    use_rerank=use_rerank
+                )
+                
+                # Run both in parallel using asyncio.gather
+                import asyncio
+                logger.info("⏱️  Starting parallel tasks...")
+                graph_result, rag_data = await asyncio.gather(graph_task, vector_task)
+                
+                graph_reasoning_time = time.time() - graph_start
+                processing_stats["graph_reasoning_time"] = graph_reasoning_time
                 processing_stats["graph_query_type"] = graph_query_type.value
                 processing_stats["graph_nodes_found"] = len(graph_result.nodes)
                 processing_stats["graph_paths_found"] = len(graph_result.paths)
@@ -415,24 +436,22 @@ class OptimizedMultiAgentOrchestrator:
                 
                 graph_context = graph_result.synthesized_context
                 
-                logger.info(f"📊 Graph Reasoning Results:")
-                logger.info(f"   - Nodes found: {len(graph_result.nodes)}")
-                logger.info(f"   - Paths found: {len(graph_result.paths)}")
-                logger.info(f"   - Confidence: {graph_result.confidence}")
-                logger.info(f"   - Context length: {len(graph_context) if graph_context else 0} chars")
+                logger.info(f"✅ Parallel execution completed in {graph_reasoning_time:.2f}s")
+                logger.info(f"📊 Graph: {len(graph_result.nodes)} nodes, {len(graph_result.paths)} paths, confidence={graph_result.confidence}")
+                logger.info(f"📊 Vector: {len(rag_data.get('retrieved_documents', []))} docs")
                 
                 if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
                     logger.debug(f"Graph reasoning: {len(graph_result.nodes)} nodes, {len(graph_result.paths)} paths")
                     logger.debug(f"Graph confidence: {graph_result.confidence}")
             
-            # === VECTOR SEARCH ===
-            # Perform RAG retrieval with filters
-            rag_data = await self._perform_rag_retrieval(
-                search_queries, 
-                top_k,
-                extracted_filters=extracted_filters,
-                use_rerank=use_rerank
-            )
+            else:
+                # === VECTOR SEARCH ONLY (no graph) ===
+                rag_data = await self._perform_rag_retrieval(
+                    search_queries, 
+                    top_k,
+                    extracted_filters=extracted_filters,
+                    use_rerank=use_rerank
+                )
             
             processing_stats["rag_time"] = time.time() - step_start
             processing_stats["documents_retrieved"] = len(rag_data.get("retrieved_documents", []))
@@ -466,7 +485,11 @@ class OptimizedMultiAgentOrchestrator:
             
             # === COMBINE GRAPH CONTEXT WITH VECTOR RESULTS ===
             # If we have graph context, prepend it as a special document
+            logger.info(f"🔍 DEBUG: graph_context value = {graph_context[:100] if graph_context else 'None'}...")
+            logger.info(f"🔍 DEBUG: should_use_graph was = {should_use_graph}")
+            
             if graph_context:
+                logger.info(f"✅ Adding Graph Reasoning Context document ({len(graph_context)} chars)")
                 graph_doc = {
                     "content": graph_context,
                     "score": 1.0,  # High priority
@@ -475,6 +498,8 @@ class OptimizedMultiAgentOrchestrator:
                     "source": "Knowledge Graph"
                 }
                 mapped_documents.insert(0, graph_doc)
+            else:
+                logger.info(f"ℹ️  No graph_context to add")
             
             if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
                 logger.debug(f"Documents retrieved: {len(mapped_documents)}")
@@ -769,7 +794,11 @@ class OptimizedMultiAgentOrchestrator:
                 subjects=extracted_filters.subjects if extracted_filters.subjects else None
             )
         
-        for query in queries:
+        # ⚡ OPTIMIZATION: Run all queries in parallel using asyncio.gather
+        logger.info(f"⚡ Executing {len(queries)} RAG queries in PARALLEL...")
+        
+        async def retrieve_single_query(query: str) -> List[Dict[str, Any]]:
+            """Helper function to retrieve documents for a single query."""
             try:
                 result = await self.rag_port.retrieve_context(
                     query, 
@@ -780,9 +809,23 @@ class OptimizedMultiAgentOrchestrator:
                     include_char_spans=True
                 )
                 if result and result.get("retrieved_documents"):
-                    all_results.extend(result["retrieved_documents"])
-            except Exception:
-                continue
+                    return result["retrieved_documents"]
+                return []
+            except Exception as e:
+                logger.warning(f"Query failed: {query[:50]}... - {e}")
+                return []
+        
+        # Execute all queries in parallel
+        results_per_query = await asyncio.gather(
+            *[retrieve_single_query(q) for q in queries],
+            return_exceptions=False
+        )
+        
+        # Flatten results from all queries
+        for docs in results_per_query:
+            all_results.extend(docs)
+        
+        logger.info(f"✅ Parallel retrieval completed: {len(all_results)} total documents")
         
         # Deduplicate and rank
         unique_results = self._deduplicate_documents(all_results)
