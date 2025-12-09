@@ -32,7 +32,8 @@ from core.domain.graph_models import (
     Relation,
 )
 from core.ports.graph_repository import GraphRepository
-from indexing.category_guided_entity_extractor import CategoryGuidedEntityExtractor
+# NOTE: Old indexing module removed - entity extraction now handled differently
+# from indexing.category_guided_entity_extractor import CategoryGuidedEntityExtractor
 from .graph_builder_config import (
     GraphBuilderConfig,
     DeduplicationStrategy,

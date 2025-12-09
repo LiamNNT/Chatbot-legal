@@ -331,7 +331,7 @@ async def main():
     )
     parser.add_argument(
         "--weaviate-url",
-        default="http://localhost:8080",
+        default="http://localhost:8090",
         help="Weaviate server URL"
     )
     

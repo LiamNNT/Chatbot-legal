@@ -61,10 +61,13 @@ def get_weaviate_client(
             )
         else:
             # Connect without authentication (for self-hosted development)
-            client = weaviate.connect_to_local(
-                host=host,
-                port=port,
+            client = weaviate.connect_to_custom(
+                http_host=host,
+                http_port=port,
+                http_secure=use_https,
+                grpc_host=host,
                 grpc_port=50051,
+                grpc_secure=use_https,
                 skip_init_checks=False
             )
         

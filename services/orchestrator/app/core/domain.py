@@ -112,6 +112,7 @@ class OrchestrationRequest:
     user_query: str
     session_id: Optional[str] = None
     use_rag: bool = True
+    use_knowledge_graph: Optional[bool] = None  # Force KG usage (overrides SmartPlanner)
     rag_top_k: int = 5
     agent_model: Optional[str] = None
     conversation_context: Optional[ConversationContext] = None

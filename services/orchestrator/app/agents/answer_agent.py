@@ -7,10 +7,11 @@ Uses Qwen3 Coder model for structured reasoning and answer generation.
 Enhanced with:
 - Detailed source citations with char_spans
 - Document metadata (doc_type, faculty, year, subject)
+- Streaming support for real-time response generation
 """
 
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, AsyncGenerator
 from ..agents.base import SpecializedAgent, AgentConfig, AgentType, AnswerResult, DetailedSource
 
 
@@ -82,6 +83,89 @@ class AnswerAgent(SpecializedAgent):
         except json.JSONDecodeError:
             # Fallback to extracting answer from text response
             return self._create_fallback_answer(query, response.content, context_documents)
+    
+    async def stream_process(self, input_data: Dict[str, Any]) -> AsyncGenerator[str, None]:
+        """
+        Stream comprehensive answer generation from context and query.
+        
+        This method yields answer text chunks in real-time as they are generated,
+        providing better user experience for long-running queries.
+        
+        Args:
+            input_data: Dictionary containing:
+                - query: str - User query
+                - context_documents: List[Dict] - Retrieved documents
+                - rewritten_queries: Optional[List[str]] - Alternative queries
+                - previous_context: Optional[str] - Conversation context
+                - previous_feedback: Optional[str] - Feedback from ResponseFormatter for retry
+        
+        Yields:
+            String chunks of the generated answer as they become available
+        """
+        query = input_data.get("query", "")
+        context_documents = input_data.get("context_documents", [])
+        rewritten_queries = input_data.get("rewritten_queries", [])
+        previous_context = input_data.get("previous_context", "")
+        previous_feedback = input_data.get("previous_feedback", "")
+        
+        # Build the answer generation prompt
+        prompt = self._build_answer_prompt(
+            query, context_documents, rewritten_queries, previous_context, previous_feedback
+        )
+        
+        # Stream response from the agent
+        async for chunk in self._stream_agent_request(prompt):
+            yield chunk
+    
+    async def _stream_agent_request(self, prompt: str) -> AsyncGenerator[str, None]:
+        """
+        Stream a request to the underlying agent.
+        
+        Args:
+            prompt: The prompt to send to the agent
+            
+        Yields:
+            String chunks from the agent response
+        """
+        from ..core.domain import ConversationContext, AgentRequest
+        import logging
+        import os
+        
+        logger = logging.getLogger(__name__)
+        
+        # Log input if debug mode is enabled
+        if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
+            logger.debug(f"\n{'='*80}")
+            logger.debug(f"🔵 AGENT STREAMING INPUT - {self.config.agent_type.value.upper()}")
+            logger.debug(f"{'='*80}")
+            logger.debug(f"System Prompt Length: {len(self.config.system_prompt)} chars")
+            logger.debug(f"User Prompt: {prompt[:500]}..." if len(prompt) > 500 else f"User Prompt: {prompt}")
+            logger.debug(f"Model: {self.config.model}")
+            logger.debug(f"Temperature: {self.config.temperature}")
+            logger.debug(f"{'='*80}\n")
+        
+        # Create conversation context with system prompt from agent config
+        conversation_context = ConversationContext(
+            session_id="agent_stream_session",
+            messages=[],
+            system_prompt=self.config.system_prompt,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens
+        )
+        
+        request = AgentRequest(
+            prompt=prompt,
+            context=conversation_context,
+            model=self.config.model,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens,
+            stream=True,  # Enable streaming
+            metadata={"agent_type": self.config.agent_type.value}
+        )
+        
+        # Stream response from agent port
+        async for chunk in self.agent_port.stream_response(request):
+            yield chunk
     
     def _build_answer_prompt(
         self,
@@ -259,14 +343,34 @@ class AnswerAgent(SpecializedAgent):
     
     def _extract_answer_from_text(self, text: str) -> str:
         """Extract the main answer from text response."""
-        # Clean up the response text
+        # Try to find and parse JSON first
+        import re
+        
+        # Look for JSON blocks (with or without ```json markers)
+        json_pattern = r'```json\s*({.*?})\s*```|({.*?})'
+        matches = re.findall(json_pattern, text, re.DOTALL)
+        
+        if matches:
+            # Get the first non-empty match
+            json_str = next((m for group in matches for m in group if m), None)
+            if json_str:
+                try:
+                    data = json.loads(json_str)
+                    # Extract answer field from JSON
+                    if isinstance(data, dict) and "answer" in data:
+                        return data["answer"]
+                except json.JSONDecodeError:
+                    pass
+        
+        # Fallback: clean up the response text
         lines = text.strip().split('\n')
         answer_lines = []
         
         # Skip JSON markers or system messages
         for line in lines:
             line = line.strip()
-            if line and not line.startswith('{') and not line.startswith('}'):
+            # Skip code blocks and JSON markers
+            if line and not line.startswith('```') and not line.startswith('{') and not line.startswith('}'):
                 if not line.startswith('"') or line.endswith('",'):
                     answer_lines.append(line)
         

@@ -123,12 +123,17 @@ class RAGServiceAdapter(RAGServicePort):
         """
         session = await self._get_session()
         
+        # OPTIMIZATION: Limit reranking to top 5 documents for performance
+        # Instead of reranking all retrieved docs, only rerank the most promising ones
+        rerank_top_n = min(5, top_k) if use_rerank else 0
+        
         # Build payload with all supported parameters
         payload = {
             "query": query,
             "top_k": top_k,
             "search_mode": search_mode,
             "use_rerank": use_rerank,
+            "rerank_top_n": rerank_top_n,  # Limit reranking scope
             "need_citation": need_citation,
             "include_char_spans": include_char_spans,
             "highlight_matches": True

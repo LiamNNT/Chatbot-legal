@@ -221,26 +221,34 @@ class SmartPlannerAgent(SpecializedAgent):
             return self._create_fallback_result(original_query, response_content)
     
     def _create_result_from_json(self, data: Dict[str, Any], original_query: str) -> SmartPlanResult:
-        """Create SmartPlanResult from parsed JSON data."""
+        """Create SmartPlanResult from parsed JSON data with optimized reranking strategy."""
         complexity_score = data.get("complexity_score", 5.0)
         complexity = data.get("complexity", self._score_to_complexity(complexity_score))
         requires_rag = data.get("requires_rag", True)
         strategy = data.get("strategy", "standard_rag")
         intent = data.get("intent", "informational")
         
-        # Determine RAG parameters based on complexity
+        # Determine RAG parameters based on complexity with optimized reranking strategy
+        # OPTIMIZATION: Only use reranking for high complexity (score > 7.0) to reduce latency
         if complexity == "simple" or not requires_rag:
             top_k = 0
             hybrid_search = False
             reranking = False
-        elif complexity == "complex":
+        elif complexity == "complex" and complexity_score > 7.0:
+            # High complexity: Use aggressive search with reranking
             top_k = data.get("top_k", 10)
             hybrid_search = data.get("hybrid_search", True)
-            reranking = data.get("reranking", True)
+            reranking = True  # Only enable for very complex queries
+        elif complexity == "complex":
+            # Medium-high complexity: Use hybrid but skip reranking
+            top_k = data.get("top_k", 8)
+            hybrid_search = data.get("hybrid_search", True)
+            reranking = False  # Skip reranking for faster response
         else:  # medium
+            # Medium complexity: Fast vector-only search, no reranking
             top_k = data.get("top_k", 5)
-            hybrid_search = data.get("hybrid_search", False)
-            reranking = False
+            hybrid_search = False  # Vector-only for speed
+            reranking = False  # No reranking for medium complexity
         
         # Determine search sources based on complexity, strategy, and query content
         # Use Knowledge Graph for:
@@ -305,14 +313,20 @@ class SmartPlannerAgent(SpecializedAgent):
         # Extract search terms
         search_terms = self._extract_keywords(query) if requires_rag else []
         
-        # Determine RAG parameters
+        # Determine RAG parameters with optimized reranking strategy
         if complexity == "simple":
             top_k, hybrid_search, reranking = 0, False, False
             strategy = "direct_response"
-        elif complexity == "complex":
+        elif complexity == "complex" and complexity_score > 7.0:
+            # High complexity: Use reranking for best accuracy
             top_k, hybrid_search, reranking = 10, True, True
             strategy = "advanced_rag"
+        elif complexity == "complex":
+            # Medium-high complexity: Skip reranking for speed
+            top_k, hybrid_search, reranking = 8, True, False
+            strategy = "advanced_rag"
         else:
+            # Medium complexity: Fast vector-only search
             top_k, hybrid_search, reranking = 5, False, False
             strategy = "standard_rag"
         

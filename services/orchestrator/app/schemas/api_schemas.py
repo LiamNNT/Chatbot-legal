@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="User query/message", min_length=1, max_length=2000)
     session_id: Optional[str] = Field(None, description="Conversation session ID")
     use_rag: bool = Field(True, description="Whether to use RAG for context retrieval")
+    use_knowledge_graph: Optional[bool] = Field(None, description="Whether to force Knowledge Graph usage (overrides SmartPlanner)")
     rag_top_k: int = Field(5, description="Number of documents to retrieve", ge=1, le=20)
     model: Optional[str] = Field(None, description="Specific model to use for generation")
     temperature: Optional[float] = Field(None, description="Generation temperature", ge=0.0, le=2.0)
@@ -73,6 +74,14 @@ class ProcessingStats(BaseModel):
     documents_retrieved: Optional[int] = Field(None, description="Number of documents retrieved")
     tokens_used: Optional[int] = Field(None, description="Number of tokens used")
     rag_error: Optional[str] = Field(None, description="RAG error message if any")
+    
+    # Optimized pipeline stats
+    llm_calls: Optional[int] = Field(None, description="Number of LLM API calls made")
+    pipeline: Optional[str] = Field(None, description="Pipeline type used")
+    planning_time: Optional[float] = Field(None, description="Planning step time in seconds")
+    answer_generation_time: Optional[float] = Field(None, description="Answer generation time in seconds")
+    plan_complexity: Optional[str] = Field(None, description="Query complexity from planner")
+    plan_complexity_score: Optional[float] = Field(None, description="Numeric complexity score")
 
 
 class ChatResponse(BaseModel):

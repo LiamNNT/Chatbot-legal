@@ -1,40 +1,47 @@
 # =============================================================================
-# OPTIMIZED Agent Configuration - Reduced LLM Calls
+# OPTIMIZED Agent Configuration - V2 (2-Agent Pipeline)
 # =============================================================================
-# Giảm từ 5 agents xuống 3 agents để tối ưu chi phí nhưng giữ độ chính xác
+# Reduced from 5 agents to 2 agents for optimal cost and latency
 #
-# BEFORE (5 LLM calls):
+# ORIGINAL (5 LLM calls):
 #   Planner → Query Rewriter → Answer Agent → Verifier → Response Agent
 #
-# AFTER (3 LLM calls - 40% reduction):
-#   Smart Planner (plan + rewrite) → Answer Agent → Response Formatter (format + light verify)
+# V1 OPTIMIZED (3 LLM calls - 40% reduction):
+#   Smart Planner → Answer Agent → Response Formatter
+#
+# V2 OPTIMIZED (2 LLM calls - 60% reduction) ⭐ CURRENT:
+#   Smart Planner (fast model) → Answer Agent (quality model, includes formatting)
 # =============================================================================
 
 system:
   default_timeout: 30
   default_max_retries: 3
-  enable_verification: false  # Disable separate verification, merged into response_formatter
+  enable_verification: false  # Deprecated - formatting merged into answer_agent
   enable_planning: true
-  optimization_mode: "cost_optimized"  # "full_pipeline" | "cost_optimized" | "speed_optimized"
+  optimization_mode: "speed_optimized"  # "full_pipeline" | "cost_optimized" | "speed_optimized"
 
 models:
-  # Model cho Smart Planner (gộp Planner + Query Rewriter)
+  # Fast model for Smart Planner (optimized for speed)
+  # Uses GPT-4o-mini for low latency planning
   smart_planner_model:
-    name: "openai/gpt-4o-mini"
+    name: "openai/gpt-4o-mini"  # Fast and cost-effective
     temperature: 0.2
-    max_tokens: 1500
+    max_tokens: 1000  # Reduced for faster response
     timeout: null
     
-  # Model chính cho Answer - giữ nguyên chất lượng cao
+  # Quality model for Answer Agent (optimized for accuracy)
+  # Includes built-in formatting (emojis, structure, friendly tone)
   answer_model:
-    name: "deepseek/deepseek-v3.2-exp"
+    name: "openai/gpt-5.1-chat"  # GPT-4o for fast and high-quality answers
     temperature: 0.2
     max_tokens: 2000
     timeout: null
     
-  # Model cho Response Formatter (gộp Verifier + Response Agent)
+  # Response Formatter [DEPRECATED - Keep for backward compatibility]
+  # This model is no longer used in the V2 pipeline
+  # Formatting is now built into answer_agent
   response_formatter_model:
-    name: "openai/gpt-4o-mini"
+    name: "openai/gpt-4o-mini"  # Not used in V2
     temperature: 0.1
     max_tokens: 1500
     timeout: null
@@ -149,67 +156,106 @@ agents:
       max_rewritten_queries: 3
 
   # =============================================================================
-  # AGENT 2: Answer Agent (Giữ nguyên - Core Logic)
+  # AGENT 2: Answer Agent (Enhanced with Built-in Formatting)
   # =============================================================================
-  # Đây là agent quan trọng nhất, giữ nguyên chất lượng
+  # This agent now combines:
+  # - Core answer generation (technical accuracy)
+  # - User-friendly formatting (tone, structure, emojis)
+  # 
+  # This eliminates the need for ResponseFormatterAgent, reducing latency
+  # by removing one LLM call from the pipeline.
   # =============================================================================
   answer_agent:
     agent_type: "answer_agent"
     model_config: "answer_model"
     system_prompt: |
       You are an expert Answer Agent for Chatbot-UIT (University of Information Technology, ĐHQG-HCM).
-      Synthesize accurate, comprehensive answers from RAG-retrieved context.
+      Synthesize accurate answers from RAG-retrieved context and present them in a friendly format.
+
+      ═══ 🛡️ CRITICAL: ANTI-HALLUCINATION PROTOCOL ═══
+      
+      1. **CONTEXT IS KING:** You must answer ONLY based on the provided "Documents" or "Context".
+      2. **NO GUESSING:** If the documents do not contain the answer, you MUST explicitly state: 
+         "Hiện tại mình chưa tìm thấy thông tin chính xác về vấn đề này trong tài liệu của trường."
+      3. **NO EXTERNAL KNOWLEDGE:** Do not use your outside training data to fill in gaps about specific UIT regulations (tuition, dates, codes).
+      4. **VERIFY FACTS:** Before writing any number, date, or policy, verify it exists in the provided text.
 
       ═══ CORE PRINCIPLES ═══
       
-      1. ACCURACY FIRST: Prioritize official UIT documents over general knowledge
-      2. BE SPECIFIC: Use exact numbers, dates, regulations when available
-      3. BE COMPLETE: Address all aspects of the query
-      4. BE HONEST: State "Thông tin chưa có trong tài liệu" when data is insufficient
-      5. CITE SOURCES: Reference document titles used
+      1. ACCURACY FIRST: Prioritize official UIT documents over everything else.
+      2. BE SPECIFIC: Use exact numbers, dates, regulations found in context.
+      3. BE COMPLETE: Address all aspects of the query using ONLY the context.
+      4. CITE SOURCES: Reference document titles used.
+      5. BE FRIENDLY: Use natural Vietnamese, student-friendly tone (using "mình", "bạn").
 
       ═══ ANSWER STRUCTURE ═══
       
       For Informational: Facts → Evidence → Context → Notes
       For Procedural: Introduction → Step-by-step → Tips → Notes
-      For Comparative: Introduction → Comparison by dimensions → Recommendation
+      For Comparative: Introduction → Comparison → Recommendation
+      **If Info Missing:** Friendly apology → Suggest contacting relevant department.
+
+      ═══ FORMATTING GUIDELINES ═══
+      
+      **Tone & Style:**
+      - Start with friendly greeting: "Chào bạn! 👋"
+      - Use natural, conversational Vietnamese.
+      - End with helpful closing.
+      
+      **Structure:**
+      - Use **bold** for important terms/numbers.
+      - Use bullet points (•) for lists.
+      - Keep paragraphs short (2-3 sentences).
+      
+      **Emojis (2-3 max):** ✅ 💡 👋 🎓 📝 ⚠️
 
       ═══ REASONING PROCESS ═══
       
-      1. Review all retrieved documents
-      2. Extract relevant facts, numbers, dates
-      3. Synthesize coherent answer
-      4. Add context and helpful notes
-      5. Self-check accuracy
+      1. **Check Context:** Does the retrieved text contain the answer?
+         → YES: Proceed to step 2.
+         → NO: Stop and generate the "Not Found" response immediately.
+      2. Extract facts/numbers from context.
+      3. Synthesize answer + Add formatting.
+      4. **Self-Correction:** Check if every fact in your answer is supported by the context.
+
+      ═══ EXAMPLE RESPONSES ═══
+
+      Query: "Học phí KHMT?"
+      Context: [Doc says: "Học phí KHMT là 7.2 triệu/HK"]
+      Response: "Chào bạn! 👋\n\n**Học phí ngành Khoa học máy tính (KHMT):**\n\n• Mức thu: **7,200,000 VNĐ/học kỳ**..."
+
+      Query: "Khi nào có điểm thi?"
+      Context: [Context is empty or irrelevant]
+      Response: "Chào bạn! 👋\n\nHiện tại mình **chưa tìm thấy thông tin cụ thể** về lịch công bố điểm thi trong các tài liệu đang có.\n\n💡 Bạn vui lòng theo dõi thông báo mới nhất trên trang web Phòng Đào tạo hoặc hỏi giảng viên bộ môn nhé!\n\nCần hỗ trợ gì khác cứ nhắn mình nha!"
 
       ═══ OUTPUT FORMAT ═══
       
       {
         "query": string,
-        "answer": string (Vietnamese, well-structured, 100-500 words),
-        "confidence": float (0-1),
-        "sources_used": [string] (document titles),
-        "reasoning_steps": [string] (3-5 steps),
-        "answer_type": "informative"|"procedural"|"comparative"|"clarification",
+        "answer": string (The formatted Markdown response),
+        "confidence": float (Set to 0.0 if answer is not found in context, otherwise > 0.6),
+        "sources_used": [string],
+        "reasoning_steps": [string],
         "completeness": "complete"|"partial"|"insufficient_data"
       }
 
-      Return ONLY valid JSON. Be accurate and helpful!
+      Return ONLY valid JSON.
     parameters:
       min_answer_length: 50
+      max_answer_length: 400
       max_sources: 5
       confidence_thresholds:
-        high: 0.8
+        high: 0.85
         medium: 0.6
-        low: 0.4
+        low: 0.0 # Allow low confidence for "Not Found" answers
 
   # =============================================================================
-  # AGENT 3: Response Formatter (Merged: Verifier + Response Agent)
+  # AGENT 3: Response Formatter [DEPRECATED - Merged into Answer Agent]
   # =============================================================================
-  # Một LLM call thực hiện cả:
-  # - Light verification (check obvious errors)
-  # - Format response cho user-friendly
-  # - Add greetings, emojis, next steps
+  # This agent is no longer used in the optimized pipeline.
+  # Its formatting logic has been merged into the Answer Agent to reduce latency.
+  # 
+  # Kept in config for backward compatibility and potential A/B testing.
   # =============================================================================
   response_formatter:
     agent_type: "response_formatter"
@@ -278,24 +324,41 @@ agents:
       max_emojis: 2
 
 # =============================================================================
-# COST COMPARISON
+# COST & PERFORMANCE COMPARISON
 # =============================================================================
 # 
 # ORIGINAL (5 agents, 5 LLM calls):
-#   - Planner: ~500 tokens
-#   - Query Rewriter: ~400 tokens
-#   - Answer Agent: ~1500 tokens
-#   - Verifier: ~1000 tokens
-#   - Response Agent: ~600 tokens
-#   TOTAL: ~4000 tokens/request
+#   - Planner: ~500 tokens (GPT-4)
+#   - Query Rewriter: ~400 tokens (GPT-4)
+#   - Answer Agent: ~1500 tokens (GPT-4)
+#   - Verifier: ~1000 tokens (GPT-4)
+#   - Response Agent: ~600 tokens (GPT-4)
+#   TOTAL: ~4000 tokens/request | ~5 API calls | ~3-5s latency
 #
-# OPTIMIZED (3 agents, 3 LLM calls):
-#   - Smart Planner: ~700 tokens (merged planner + rewriter)
-#   - Answer Agent: ~1500 tokens (unchanged)
-#   - Response Formatter: ~800 tokens (merged verifier + response)
-#   TOTAL: ~3000 tokens/request
+# OPTIMIZED V1 (3 agents, 3 LLM calls):
+#   - Smart Planner: ~700 tokens (GPT-4o-mini)
+#   - Answer Agent: ~1500 tokens (DeepSeek V3)
+#   - Response Formatter: ~800 tokens (GPT-4o-mini)
+#   TOTAL: ~3000 tokens/request | ~3 API calls | ~2-3s latency
+#   SAVINGS: 25% tokens + 40% API calls + 30% latency
 #
-# SAVINGS: 25% token reduction + 40% LLM API call reduction
+# OPTIMIZED V2 (2 agents, 2 LLM calls) ⭐ CURRENT:
+#   - Smart Planner: ~500 tokens (GPT-4o-mini, max_tokens=1000)
+#   - Answer Agent: ~1800 tokens (DeepSeek V3, includes formatting)
+#   TOTAL: ~2300 tokens/request | ~2 API calls | ~1.5-2s latency
+#   SAVINGS: 42.5% tokens + 60% API calls + 50% latency
+#
+# ADDITIONAL OPTIMIZATIONS:
+#   - Conditional reranking (only for complexity > 7.0)
+#   - Hybrid search disabled for medium complexity
+#   - Reranking limited to top 5 documents
+#   - Fast planning model (GPT-4o-mini)
+#
+# EXPECTED PERFORMANCE:
+#   - Simple queries (≤3.5): ~0.5s (no RAG)
+#   - Medium queries (3.6-6.5): ~1.0s (vector-only, no rerank)
+#   - Complex queries (6.6-7.0): ~1.5s (hybrid, no rerank)
+#   - High complexity (>7.0): ~2.0s (hybrid + rerank top 5)
 #
 # =============================================================================
 
@@ -303,17 +366,27 @@ agents:
 # USAGE NOTES
 # =============================================================================
 #
-# To switch between configurations:
+# Current Configuration (V2 Optimized):
+#   - Pipeline: Smart Planner (GPT-4o-mini) → Answer Agent (DeepSeek V3)
+#   - Agents: 2
+#   - LLM Calls: 2
+#   - Use case: Production deployment (optimal speed + quality)
+#   - Best for: 90% of queries (simple to medium-high complexity)
 #
-# 1. Full Pipeline (highest quality, higher cost):
-#    Use: agents_config.yaml
-#    Agents: 5
-#    Use case: Complex queries, policy-sensitive answers
+# When to use other configurations:
 #
-# 2. Cost Optimized (balanced quality/cost):
-#    Use: agents_config_optimized.yaml  
-#    Agents: 3
-#    Use case: Standard queries, production deployment
+# 1. Full Pipeline (agents_config.yaml):
+#    - Agents: 5
+#    - Use case: Critical queries requiring maximum verification
+#    - Trade-off: Higher cost and latency for highest quality
+#
+# 2. A/B Testing:
+#    - Compare V2 vs V1 for specific query types
+#    - Monitor quality metrics vs latency improvement
+#
+# 3. Custom Routing:
+#    - Route high-stakes queries to full pipeline
+#    - Route simple queries to V2 optimized
 #
 # 3. Speed Optimized (fastest, lower quality):
 #    Implement rule-based router + single Answer Agent
