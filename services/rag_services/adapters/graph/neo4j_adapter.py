@@ -570,6 +570,100 @@ class Neo4jGraphAdapter(GraphRepository):
         
         return relationships
     
+    async def get_pairs_by_relationship_type(
+        self, 
+        rel_types: List[str], 
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all node pairs connected by specific relationship types.
+        
+        This is useful for queries like "List all articles with YEU_CAU or QUY_DINH_DIEU_KIEN relationships"
+        
+        Args:
+            rel_types: List of relationship type names (e.g., ["YEU_CAU", "QUY_DINH_DIEU_KIEN"])
+            limit: Maximum number of pairs to return
+            
+        Returns:
+            List of dictionaries containing source and target node information
+            
+        Example:
+            pairs = await adapter.get_pairs_by_relationship_type(["YEU_CAU", "QUY_DINH_DIEU_KIEN"], limit=10)
+            # Returns: [{"source": {...}, "target": {...}, "relationship": "YEU_CAU"}, ...]
+        """
+        driver = self._get_driver()
+        
+        # Build relationship type pattern
+        rel_pattern = "|".join(rel_types)
+        
+        cypher = f"""
+        MATCH (source)-[r:{rel_pattern}]->(target)
+        RETURN 
+            labels(source)[0] as source_type,
+            properties(source) as source_props,
+            type(r) as rel_type,
+            properties(r) as rel_props,
+            labels(target)[0] as target_type,
+            properties(target) as target_props
+        LIMIT $limit
+        """
+        
+        pairs = []
+        
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, limit=limit)
+                
+                for record in result:
+                    source_props = dict(record["source_props"])
+                    target_props = dict(record["target_props"])
+                    rel_props = dict(record["rel_props"])
+                    
+                    # Get display names for source and target
+                    # Try various property names in order of preference
+                    source_name = (
+                        source_props.get("article_id") or
+                        source_props.get("title") or
+                        source_props.get("name") or
+                        source_props.get("ma_mon") or
+                        source_props.get("ten_mon") or
+                        source_props.get("entity_text") or
+                        source_props.get("text") or
+                        f"Entity_{list(source_props.values())[0] if source_props else 'Unknown'}"
+                    )
+                    
+                    target_name = (
+                        target_props.get("article_id") or
+                        target_props.get("title") or
+                        target_props.get("name") or
+                        target_props.get("ma_mon") or
+                        target_props.get("ten_mon") or
+                        target_props.get("entity_text") or
+                        target_props.get("text") or
+                        f"Entity_{list(target_props.values())[0] if target_props else 'Unknown'}"
+                    )
+                    
+                    pairs.append({
+                        "source": {
+                            "type": record["source_type"],
+                            "name": source_name,
+                            "properties": source_props
+                        },
+                        "target": {
+                            "type": record["target_type"],
+                            "name": target_name,
+                            "properties": target_props
+                        },
+                        "relationship": record["rel_type"],
+                        "rel_properties": rel_props
+                    })
+                    
+        except Exception as e:
+            logger.error(f"Error getting relationship pairs: {e}")
+            raise
+        
+        return pairs
+    
     async def delete_relationship(
         self, source_id: str, target_id: str, rel_type: RelationshipType
     ) -> bool:

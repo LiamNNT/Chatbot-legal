@@ -154,7 +154,18 @@ class GraphReasoningResult:
                        node.get("ten_mon") or node.get("ma_mon") or 
                        node.get("article_id", "Unknown"))
                 node_type = node.get("type", "Node")
-                parts.append(f"• [{node_type}] {name}")
+                
+                # FIX: Include content/full_text in context!
+                content = node.get("content") or node.get("full_text") or node.get("noi_dung")
+                
+                if content:
+                    # Add title and content
+                    parts.append(f"• [{node_type}] {name}")
+                    parts.append(f"  Content: {content}")
+                    parts.append("")  # Add blank line for readability
+                else:
+                    # Fallback: just title if no content
+                    parts.append(f"• [{node_type}] {name}")
         
         return "\n".join(parts) if parts else "No graph context found."
 
@@ -233,6 +244,12 @@ class GraphReasoningAgent:
             examples=['find_dependents("IT001")', 'find_dependents("MA001")']
         ),
         Tool(
+            name="scan_relationships",
+            description="Liệt kê các cặp node có mối quan hệ cụ thể (ví dụ: YEU_CAU, QUY_DINH_DIEU_KIEN)",
+            parameters={"rel_types": "danh sách loại quan hệ, phân cách dấu phẩy"},
+            examples=['scan_relationships("YEU_CAU")', 'scan_relationships("YEU_CAU, QUY_DINH_DIEU_KIEN")']
+        ),
+        Tool(
             name="done",
             description="Kết thúc reasoning khi đã có đủ thông tin để trả lời",
             parameters={"summary": "tóm tắt kết quả tìm được"},
@@ -307,6 +324,7 @@ QUAN TRỌNG:
             "find_article_path": self._tool_find_article_path,
             "find_prerequisites": self._tool_find_prerequisites,
             "find_dependents": self._tool_find_dependents,
+            "scan_relationships": self._tool_scan_relationships,
             "done": self._tool_done,
         }
     
@@ -673,6 +691,37 @@ QUAN TRỌNG:
             )
             return ToolResult(success=True, data=paths)
         except Exception as e:
+            return ToolResult(success=False, error=str(e))
+    
+    async def _tool_scan_relationships(self, rel_types: str) -> ToolResult:
+        """
+        Tool: Scan all node pairs with specific relationship types.
+        
+        Args:
+            rel_types: Comma-separated relationship types (e.g., "YEU_CAU, QUY_DINH_DIEU_KIEN")
+            
+        Returns:
+            ToolResult with list of relationship pairs
+        """
+        try:
+            # Parse relationship types
+            type_list = [t.strip().upper() for t in rel_types.split(",")]
+            
+            # Call adapter to get pairs
+            pairs = await self.graph_adapter.get_pairs_by_relationship_type(type_list, limit=50)
+            
+            # Format results for better readability
+            formatted_results = []
+            for pair in pairs:
+                formatted_results.append({
+                    "source": f"[{pair['source']['type']}] {pair['source']['name']}",
+                    "relationship": pair['relationship'],
+                    "target": f"[{pair['target']['type']}] {pair['target']['name']}"
+                })
+            
+            return ToolResult(success=True, data=formatted_results)
+        except Exception as e:
+            logger.error(f"Error scanning relationships: {e}")
             return ToolResult(success=False, error=str(e))
     
     async def _tool_done(self, summary: str = "") -> ToolResult:

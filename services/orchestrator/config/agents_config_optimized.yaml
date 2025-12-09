@@ -79,12 +79,15 @@ agents:
       
       4. DETERMINE KNOWLEDGE GRAPH USAGE (use_knowledge_graph):
          Set use_knowledge_graph=true when query involves:
-         • Specific "Điều" (Article) references: "Điều 14", "Điều 15"...
-         • Relationships between regulations/articles
-         • Course prerequisites or dependencies: "môn tiên quyết", "học trước"
-         • Paths between concepts: "mối quan hệ giữa X và Y"
-         • Multi-hop reasoning about regulations
-         • **MÔN HỌC - BẮT BUỘC dùng KG khi có:**
+         • **QUY CHẾ ĐÀO TẠO - BẮT BUỘC dùng KG:**
+           - Specific "Điều" (Article) references: "Điều 14", "Điều 15"...
+           - Relationships between regulations/articles
+           - **NỘI DUNG QUY ĐỊNH:** chuyển ngành, chuyển trường, điều kiện thi, miễn học, kỷ luật
+           - Điều kiện, quy định, thủ tục liên quan quy chế đào tạo
+           - Multi-hop reasoning about regulations
+         • **MÔN HỌC - BẮT BUỘC dùng KG:**
+           - Course prerequisites or dependencies: "môn tiên quyết", "học trước"
+           - Paths between concepts: "mối quan hệ giữa X và Y"
            - Từ khóa: "môn học", "học phần", "tiên quyết", "tín chỉ", "chương trình đào tạo"
            - Mã môn (IT001, CS101, etc.) hoặc tên môn tiếng Việt
            - Tên môn cụ thể: "Nhập môn lập trình", "Cấu trúc dữ liệu", "OOP", etc.
@@ -126,6 +129,15 @@ agents:
       
       Query: "Học Cấu trúc dữ liệu cần học gì trước?"
       Output: {"intent":"informational","complexity_score":5.5,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"multi_hop","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Môn tiên quyết của Cấu trúc dữ liệu IT003","Cần học gì trước khi học môn Cấu trúc dữ liệu"],"search_terms":["cấu trúc dữ liệu","tiên quyết","IT003"],"reasoning":"Tên môn học + tiên quyết - BẮT BUỘC dùng KG"}
+
+      Query: "Sinh viên muốn chuyển ngành cần điều kiện gì?"
+      Output: {"intent":"informational","complexity_score":5.0,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"local","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Điều kiện chuyển ngành cho sinh viên UIT","Quy định chuyển ngành đào tạo"],"search_terms":["chuyển ngành","điều kiện","quy chế"],"reasoning":"Quy định về chuyển ngành - BẮT BUỘC dùng KG để tìm nội dung từ quy chế"}
+
+      Query: "ĐTBC bao nhiêu thì được chuyển ngành?"
+      Output: {"intent":"informational","complexity_score":4.5,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"local","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Điểm trung bình tích lũy yêu cầu để chuyển ngành","Điều kiện ĐTBC chuyển ngành"],"search_terms":["ĐTBC","điểm","chuyển ngành"],"reasoning":"Điều kiện cụ thể trong quy chế - BẮT BUỘC dùng KG"}
+
+      Query: "Phải đi học bao nhiêu phần trăm mới được thi?"
+      Output: {"intent":"informational","complexity_score":4.0,"complexity":"medium","requires_rag":true,"use_knowledge_graph":true,"graph_query_type":"local","strategy":"standard_rag","top_k":5,"hybrid_search":false,"rewritten_queries":["Điều kiện dự thi học phần theo tỷ lệ tham gia","Yêu cầu phần trăm buổi học để được thi"],"search_terms":["điều kiện thi","phần trăm","tham gia học"],"reasoning":"Quy định điều kiện thi - BẮT BUỘC dùng KG"}
 
       Query: "So sánh quy trình ĐKHP giữa SV năm 1 và năm 3"
       Output: {"intent":"comparative","complexity_score":7.5,"complexity":"complex","requires_rag":true,"use_knowledge_graph":false,"strategy":"advanced_rag","top_k":10,"hybrid_search":true,"reranking":true,"rewritten_queries":["Quy trình đăng ký học phần sinh viên năm thứ nhất UIT","Quy trình đăng ký học phần sinh viên năm thứ ba UIT","So sánh ưu tiên đăng ký học phần theo năm học"],"search_terms":["đăng ký học phần","sinh viên năm 1","sinh viên năm 3","quy trình","ưu tiên"],"reasoning":"Comparative query needs multiple aspects, policy-sensitive"}

@@ -316,6 +316,59 @@ class OpenRouterAdapter(AgentPort):
         
         return self._supported_models.copy()
     
+    async def generate(self, messages: list, temperature: float = 0.7, max_tokens: int = 1000) -> Any:
+        """
+        Generate a response using the chat completion endpoint.
+        Alias method to support GraphReasoningAgent interface.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            
+        Returns:
+            Response object with .content attribute containing the generated text
+        """
+        # Create AgentRequest from raw parameters
+        request = AgentRequest(
+            prompt="",  # Prompt is in messages
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=False,
+            context=None  # Messages will be added directly
+        )
+        
+        # Override message preparation to use provided messages
+        session = await self._get_session()
+        payload = {
+            "model": self.default_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False
+        }
+        
+        try:
+            async with session.post(
+                f"{self.base_url}/chat/completions",
+                json=payload
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    content = data["choices"][0]["message"]["content"]
+                    
+                    # Return object with .content attribute for compatibility
+                    class ResponseWrapper:
+                        def __init__(self, content):
+                            self.content = content
+                    
+                    return ResponseWrapper(content)
+                else:
+                    error_text = await response.text()
+                    raise Exception(f"OpenRouter API error: {response.status} - {error_text}")
+        except Exception as e:
+            raise Exception(f"Failed to generate response: {str(e)}")
+    
     def get_provider_info(self) -> AgentProvider:
         """Get provider information."""
         return AgentProvider.OPENROUTER

@@ -251,24 +251,38 @@ class SmartPlannerAgent(SpecializedAgent):
             reranking = False  # No reranking for medium complexity
         
         # Determine search sources based on complexity, strategy, and query content
+        # Priority 1: Read use_knowledge_graph from LLM response (if provided)
+        # Priority 2: Fallback to rule-based detection
         # Use Knowledge Graph for:
-        # 1. Complex queries
-        # 2. Advanced RAG strategy
-        # 3. Queries about relationships between concepts/articles/regulations
+        # 1. LLM explicitly set use_knowledge_graph=true in response
+        # 2. Complex queries
+        # 3. Advanced RAG strategy
+        # 4. Queries about relationships between concepts/articles/regulations
         needs_relationship_search = self._needs_knowledge_graph(original_query)
         
-        use_knowledge_graph = (
-            requires_rag and 
-            (complexity == "complex" or 
-             strategy == "advanced_rag" or 
-             needs_relationship_search or
-             intent == "comparative")
-        )
+        # CRITICAL FIX: Read use_knowledge_graph from LLM response first!
+        use_knowledge_graph = data.get("use_knowledge_graph", None)
+        if use_knowledge_graph is None:
+            # Fallback to rule-based logic if LLM didn't provide it
+            use_knowledge_graph = (
+                requires_rag and 
+                (complexity == "complex" or 
+                 strategy == "advanced_rag" or 
+                 needs_relationship_search or
+                 intent == "comparative")
+            )
+        
         # Always use vector search for RAG queries (primary source)
         use_vector_search = requires_rag
         
         # Determine graph query type for advanced reasoning
-        graph_query_type = self._determine_graph_query_type(original_query) if use_knowledge_graph else "local"
+        # Priority 1: Read from LLM response
+        # Priority 2: Fallback to rule-based detection
+        graph_query_type = data.get("graph_query_type", None)
+        if graph_query_type is None and use_knowledge_graph:
+            graph_query_type = self._determine_graph_query_type(original_query)
+        elif graph_query_type is None:
+            graph_query_type = "local"
         
         # Extract filters from query context
         extracted_filters = self._extract_filters_from_query(original_query) if requires_rag else None
@@ -544,17 +558,30 @@ class SmartPlannerAgent(SpecializedAgent):
             if re.search(pattern, query_lower):
                 return "multi_hop"
         
+        # === LOCAL PATTERNS (CHECK FIRST - for relationship scanning) ===
+        # These should use LOCAL with ReAct to call scan_relationships tool
+        relationship_scan_patterns = [
+            r'liệt kê.*(có|với).*(quan hệ|mối quan hệ).*(yeu_cau|quy_dinh|điều kiện)',
+            r'(các điều|điều khoản).*(có|với).*(quan hệ|relationship)',
+            r'scan.*relationship',
+            r'tìm.*(các cặp|cặp).*(có|với).*quan hệ',
+        ]
+        
+        for pattern in relationship_scan_patterns:
+            if re.search(pattern, query_lower):
+                return "local"  # Use LOCAL with ReAct for scan_relationships tool
+        
         # === GLOBAL PATTERNS ===
-        # Comparative, overview, summary questions
+        # Comparative, overview, summary questions (but NOT relationship scans)
         global_patterns = [
             # Comparison
             r'so sánh.*(chương trình|ngành|khoa)',
             r'khác biệt.*(giữa|của).*(chương trình|ngành|khoa)',
             r'(cntt|khmt|httt|mmt).*(vs|so với|và).*(cntt|khmt|httt|mmt)',
-            # Overview/Summary
+            # Overview/Summary (exclude relationship queries)
             r'tóm tắt.*(quy định|chương trình|môn học)',
             r'tổng quan.*(về|của)',
-            r'liệt kê tất cả',
+            r'liệt kê tất cả.*(môn|chương trình)',  # More specific
             r'có bao nhiêu (môn|quy định|điều)',
             # Categorization
             r'phân loại.*(môn|quy định)',

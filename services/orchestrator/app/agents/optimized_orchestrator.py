@@ -536,10 +536,17 @@ class OptimizedMultiAgentOrchestrator:
             
             # === GRAPH REASONING ===
             # Check if we should use Graph Reasoning (for complex multi-hop queries)
+            # Priority 1: User explicitly requests via API (use_knowledge_graph=true)
+            # Priority 2: SmartPlanner recommends based on query analysis
             should_use_graph = False
             graph_context = None
             
-            if plan_result and plan_result.use_knowledge_graph:
+            # Check request parameter first (user override)
+            if hasattr(request, 'use_knowledge_graph') and request.use_knowledge_graph:
+                should_use_graph = True
+                logger.info("🔗 Knowledge Graph FORCED from API request (IRCoT)")
+            # Then check planner recommendation
+            elif plan_result and plan_result.use_knowledge_graph:
                 should_use_graph = True
                 logger.info("🔗 Knowledge Graph ENABLED for IRCoT (from SmartPlanner)")
             
@@ -590,6 +597,21 @@ class OptimizedMultiAgentOrchestrator:
             processing_stats["ircot_confidence"] = ircot_result.final_confidence
             processing_stats["ircot_documents_accumulated"] = len(ircot_result.accumulated_context)
             processing_stats["ircot_queries_used"] = ircot_result.get_all_search_queries()
+            
+            # Record Graph Reasoning usage flag (stats already recorded above if graph was used)
+            processing_stats["use_knowledge_graph"] = should_use_graph
+            if should_use_graph and graph_result:
+                processing_stats["graph_query_type"] = graph_query_type.value if 'graph_query_type' in locals() else "unknown"
+            
+            # Record search mode info
+            if plan_result:
+                processing_stats["use_vector_search"] = plan_result.use_vector_search
+                processing_stats["complexity"] = plan_result.complexity
+                processing_stats["strategy"] = plan_result.strategy
+            else:
+                processing_stats["use_vector_search"] = True
+                processing_stats["complexity"] = "complex"  # IRCoT only for complex
+                processing_stats["strategy"] = "ircot"
             
             if os.getenv('LOG_LEVEL', 'INFO').upper() == 'DEBUG':
                 logger.debug(f"IRCoT iterations: {ircot_result.total_iterations}")
