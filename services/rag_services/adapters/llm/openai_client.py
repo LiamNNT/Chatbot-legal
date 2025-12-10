@@ -119,6 +119,9 @@ class OpenAIClient(LLMClient):
         temperature = temperature or self.config.temperature
         max_tokens = max_tokens or self.config.max_tokens
         
+        # Remove 'model' from kwargs if present to avoid duplicate parameter
+        kwargs.pop('model', None)
+        
         try:
             # Call OpenAI API
             response = await self.client.chat.completions.create(
