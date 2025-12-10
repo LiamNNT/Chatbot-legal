@@ -30,10 +30,12 @@ from ..agents.smart_planner_agent import SmartPlannerAgent, SmartPlanResult, Ext
 from ..agents.response_formatter_agent import ResponseFormatterAgent, FormattedResponseResult
 from ..agents.graph_reasoning_agent import GraphReasoningAgent, GraphQueryType, GraphReasoningResult
 from ..adapters.rag_adapter import RAGFilters
+from ..adapters.conversation_manager import InMemoryConversationManagerAdapter
 from ..ports.agent_ports import AgentPort, RAGServicePort
 from ..core.domain import OrchestrationRequest, OrchestrationResponse, RAGContext
 from ..core.ircot_config import IRCoTConfig, IRCoTMode, IRCoTResult
 from ..core.ircot_service import IRCoTReasoningService
+from ..core.context_domain_service import ContextDomainService
 
 logger = logging.getLogger(__name__)
 
@@ -149,8 +151,16 @@ class OptimizedMultiAgentOrchestrator:
         else:
             logger.info("⚠ IRCoT disabled")
         
+        # Initialize ConversationManager for sliding window memory
+        self.conversation_manager = InMemoryConversationManagerAdapter(max_messages=20)
+        logger.info("✓ ConversationManager initialized (sliding window, max=20)")
+        
+        # Initialize ContextDomainService for query rewriting
+        self.context_service = ContextDomainService(llm_client=agent_port)
+        logger.info("✓ ContextDomainService initialized (query rewriting enabled)")
+        
         logger.info("=" * 60)
-        logger.info("🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (2 Agents + Graph Reasoning + IRCoT)")
+        logger.info("🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (2 Agents + Graph Reasoning + IRCoT + Memory)")
         logger.info("=" * 60)
     
     async def process_request(self, request: OrchestrationRequest) -> OrchestrationResponse:
@@ -178,6 +188,45 @@ class OptimizedMultiAgentOrchestrator:
         }
         
         try:
+            # Step 0: Contextual Query Rewriting (handle follow-up questions)
+            original_query = request.user_query
+            standalone_query = original_query
+            session_id = request.session_id or "default"
+            
+            # Get chat history for this session
+            chat_history = self.conversation_manager.get_history(session_id, limit=6)
+            
+            if chat_history:
+                # Rewrite query if there's conversation context
+                standalone_query = await self.context_service.contextualize_query(
+                    current_query=original_query,
+                    chat_history=chat_history
+                )
+                
+                if standalone_query != original_query:
+                    logger.info(f"🔄 Query rewritten for context:")
+                    logger.info(f"   Original: '{original_query}'")
+                    logger.info(f"   Standalone: '{standalone_query}'")
+                    processing_stats["query_rewritten"] = True
+                    processing_stats["original_query"] = original_query
+                    processing_stats["standalone_query"] = standalone_query
+                    
+                    # Update request with standalone query for downstream processing
+                    request = OrchestrationRequest(
+                        user_query=standalone_query,
+                        session_id=request.session_id,
+                        use_rag=request.use_rag,
+                        rag_top_k=request.rag_top_k,
+                        use_knowledge_graph=getattr(request, 'use_knowledge_graph', None),
+                        agent_model=getattr(request, 'agent_model', None),
+                        conversation_context=getattr(request, 'conversation_context', None),
+                        metadata=getattr(request, 'metadata', None)
+                    )
+                else:
+                    processing_stats["query_rewritten"] = False
+            else:
+                processing_stats["chat_history_empty"] = True
+            
             # Step 1: Smart Planning (combined planning + query rewriting)
             plan_result = None
             if self.enable_planning and self.smart_planner:
@@ -224,6 +273,11 @@ class OptimizedMultiAgentOrchestrator:
             
             # Use answer directly without additional formatting
             final_response = answer_result.answer if answer_result else "Xin lỗi, có lỗi xảy ra."
+            
+            # Save conversation history (user message + bot response)
+            self.conversation_manager.add_message(session_id, "user", original_query)
+            self.conversation_manager.add_message(session_id, "assistant", final_response)
+            logger.debug(f"💾 Saved conversation to session {session_id}")
             
             # Calculate total processing time
             total_time = time.time() - start_time
