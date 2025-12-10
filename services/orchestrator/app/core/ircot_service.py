@@ -83,7 +83,8 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
         self,
         query: str,
         initial_context: Optional[List[Dict[str, Any]]] = None,
-        extracted_filters: Optional[Any] = None
+        extracted_filters: Optional[Any] = None,
+        max_iterations_override: Optional[int] = None
     ) -> IRCoTResult:
         """
         Execute IRCoT reasoning with dynamic retrieval.
@@ -92,13 +93,17 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
             query: The original user query
             initial_context: Optional initial context documents
             extracted_filters: Optional filters for RAG retrieval
+            max_iterations_override: Override max iterations (for complexity-based optimization)
             
         Returns:
             IRCoTResult containing all iterations and accumulated context
         """
         start_time = time.time()
         
-        logger.info(f"🔄 Starting IRCoT reasoning for: {query[:50]}...")
+        # Use override if provided, otherwise use config default
+        effective_max_iterations = max_iterations_override or self.config.max_iterations
+        
+        logger.info(f"🔄 Starting IRCoT reasoning for: {query[:50]}... (max_iter={effective_max_iterations})")
         
         # Initialize accumulated context
         accumulated_context: List[Dict[str, Any]] = []
@@ -114,8 +119,8 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
         # Current search query (starts with original)
         current_search_query = query
         
-        for iteration_num in range(1, self.config.max_iterations + 1):
-            logger.info(f"  📍 Iteration {iteration_num}/{self.config.max_iterations}")
+        for iteration_num in range(1, effective_max_iterations + 1):
+            logger.info(f"  📍 Iteration {iteration_num}/{effective_max_iterations}")
             
             # Step 1: Retrieve with current query (skip if first iteration with initial context)
             if iteration_num > 1 or not initial_context:
@@ -139,7 +144,7 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
                 accumulated_context=accumulated_context,
                 previous_reasoning=reasoning_steps,
                 current_step=iteration_num,
-                max_steps=self.config.max_iterations
+                max_steps=effective_max_iterations
             )
             
             # Record iteration
@@ -287,6 +292,7 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
             request = AgentRequest(
                 prompt=prompt,
                 context=conversation_context,
+                model=self.config.cot_model,  # Use configured model (None = default)
                 temperature=self.config.cot_temperature,
                 metadata={"agent_type": "ircot_reasoner"}
             )
@@ -378,7 +384,10 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
         iteration: IRCoTIterationResult,
         iteration_num: int
     ) -> bool:
-        """Determine if reasoning should stop early."""
+        """Determine if reasoning should stop early.
+        
+        OPTIMIZED: More aggressive early stopping for faster responses.
+        """
         # Must complete minimum iterations
         if iteration_num < self.config.min_iterations:
             return False
@@ -387,13 +396,25 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
         if not self.config.early_stopping_enabled:
             return False
         
-        # Stop if can answer now with high confidence
+        # OPTIMIZATION 1: Stop if can answer now with sufficient confidence
         if (iteration.can_answer_now and 
             iteration.confidence >= self.config.early_stopping_threshold):
+            logger.info(f"    ⚡ Early stop: can_answer=True, confidence={iteration.confidence:.2f}")
             return True
         
-        # Stop if no more retrieval needed
+        # OPTIMIZATION 2: Stop if no information gaps remain
+        if iteration.can_answer_now and not iteration.information_gaps:
+            logger.info(f"    ⚡ Early stop: no information gaps, can_answer=True")
+            return True
+        
+        # OPTIMIZATION 3: Stop if no more retrieval needed
         if iteration.next_search_query is None and iteration.can_answer_now:
+            logger.info(f"    ⚡ Early stop: no more queries needed")
+            return True
+        
+        # OPTIMIZATION 4: Stop if confidence is high enough even without explicit can_answer
+        if iteration.confidence >= 0.80:
+            logger.info(f"    ⚡ Early stop: high confidence={iteration.confidence:.2f}")
             return True
         
         return False

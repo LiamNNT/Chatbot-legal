@@ -23,10 +23,30 @@ ReAct Framework (Reasoning + Acting):
 import json
 import logging
 import re
+import sys
+import os
 from typing import Dict, Any, List, Optional, Tuple, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC, abstractmethod
+
+# Add rag_services to path for importing NodeCategory
+_rag_services_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'rag_services'))
+if _rag_services_path not in sys.path:
+    sys.path.insert(0, _rag_services_path)
+
+# Import NodeCategory from rag_services
+try:
+    from core.domain.graph_models import NodeCategory
+except ImportError:
+    # Fallback: Define locally if import fails
+    class NodeCategory(str, Enum):
+        MON_HOC = "MON_HOC"
+        QUY_DINH = "QUY_DINH"
+        DIEU_KIEN = "DIEU_KIEN"
+        KHOA = "KHOA"
+        NGANH = "NGANH"
+        CHUONG_TRINH_DAO_TAO = "CHUONG_TRINH_DAO_TAO"
 
 logger = logging.getLogger(__name__)
 
@@ -285,16 +305,18 @@ QUAN TRỌNG:
 - Luôn kết thúc bằng done() khi đã đủ thông tin
 """
     
-    def __init__(self, graph_adapter, llm_port=None):
+    def __init__(self, graph_adapter, llm_port=None, react_model: Optional[str] = None):
         """
         Initialize GraphReasoningAgent.
         
         Args:
             graph_adapter: Neo4j adapter for graph operations
             llm_port: Optional LLM port for dynamic ReAct reasoning
+            react_model: Optional model name for ReAct LLM calls (None = use default)
         """
         self.graph_adapter = graph_adapter
         self.llm_port = llm_port
+        self.react_model = react_model  # Model to use for ReAct reasoning
         
         # Max depth for multi-hop reasoning
         self.max_hop_depth = 5
@@ -302,12 +324,18 @@ QUAN TRỌNG:
         # Community retrieval settings
         self.max_communities = 3
         
-        # ReAct settings
-        self.max_react_iterations = 8
+        # ReAct settings - OPTIMIZED: reduced from 8 to 3 for faster response
+        # Each iteration is ~1.7s LLM call, so 3 iterations = ~5s vs 8 iterations = ~14s
+        self.max_react_iterations = 3
         
         # Build tools mapping
         self._tools_map: Dict[str, Callable] = {}
         self._init_tools()
+        
+        if react_model:
+            logger.info(f"GraphReasoningAgent initialized with model: {react_model}")
+        else:
+            logger.info("GraphReasoningAgent initialized with default model")
         
         logger.info("GraphReasoningAgent initialized with ReAct framework")
     
@@ -463,11 +491,16 @@ QUAN TRỌNG:
         messages.extend(conversation)
         
         try:
-            response = await self.llm_port.generate(
-                messages=messages,
-                temperature=0.3,  # Low temperature for more deterministic reasoning
-                max_tokens=500
-            )
+            # Use configured react_model if available
+            generate_kwargs = {
+                "messages": messages,
+                "temperature": 0.3,  # Low temperature for more deterministic reasoning
+                "max_tokens": 500
+            }
+            if self.react_model:
+                generate_kwargs["model"] = self.react_model
+                
+            response = await self.llm_port.generate(**generate_kwargs)
             return response.content
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
@@ -790,7 +823,7 @@ QUAN TRỌNG:
             if not entity and query_pattern in ["prerequisite", "general"]:
                 logger.info("No course code found, trying full-text search on MON_HOC")
                 try:
-                    from core.domain.graph_models import NodeCategory
+                    # NodeCategory imported at top of file
                     mon_hoc_nodes = await self.graph_adapter.search_nodes(
                         query, 
                         categories=[NodeCategory.MON_HOC], 
@@ -907,7 +940,7 @@ QUAN TRỌNG:
                 # 3. ENHANCED: Search MON_HOC nodes specifically
                 mon_hoc_nodes = []
                 try:
-                    from core.domain.graph_models import NodeCategory
+                    # NodeCategory imported at top of file
                     mon_hoc_search = await self.graph_adapter.search_nodes(
                         query, 
                         categories=[NodeCategory.MON_HOC], 

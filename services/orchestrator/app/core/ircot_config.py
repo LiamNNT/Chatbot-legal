@@ -48,8 +48,9 @@ class IRCoTConfig:
     enabled: bool = True
     mode: IRCoTMode = IRCoTMode.AUTOMATIC
     
-    # Iteration limits
-    max_iterations: int = 3
+    # Iteration limits - OPTIMIZED: reduced from 3 to 2 for faster response
+    # Each iteration costs ~5s (RAG + LLM), so 2 iterations = ~10s vs 3 iterations = ~15s
+    max_iterations: int = 2
     min_iterations: int = 1
     
     # Complexity threshold for automatic mode
@@ -62,10 +63,11 @@ class IRCoTConfig:
     
     # LLM settings
     cot_temperature: float = 0.3
+    cot_model: Optional[str] = None  # Model for CoT reasoning (None = use agent's default)
     
-    # Early stopping
+    # Early stopping - OPTIMIZED for faster response
     early_stopping_enabled: bool = True
-    early_stopping_threshold: float = 0.85  # High confidence means stop early
+    early_stopping_threshold: float = 0.70  # Reduced from 0.85 for faster early stopping
     
     # Document handling
     deduplication_enabled: bool = True

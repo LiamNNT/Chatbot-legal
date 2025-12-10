@@ -78,7 +78,8 @@ class OptimizedMultiAgentOrchestrator:
         enable_verification: bool = True,  # Now built into Response Formatter
         enable_planning: bool = True,
         graph_adapter = None,  # Optional Neo4j adapter for Graph Reasoning
-        ircot_config: Optional[IRCoTConfig] = None  # Optional IRCoT configuration
+        ircot_config: Optional[IRCoTConfig] = None,  # Optional IRCoT configuration
+        react_model: Optional[str] = None  # Optional model for Graph ReAct reasoning
     ):
         """
         Initialize the optimized multi-agent orchestrator.
@@ -91,12 +92,14 @@ class OptimizedMultiAgentOrchestrator:
             enable_planning: Whether to use planning step
             graph_adapter: Optional Neo4j adapter for Graph Reasoning (local/global/multi_hop)
             ircot_config: Optional IRCoT configuration for complex multi-hop queries
+            react_model: Optional model for Graph ReAct reasoning (overrides default)
         """
         self.agent_port = agent_port
         self.rag_port = rag_port
         self.enable_planning = enable_planning
         self.agent_factory = agent_factory
         self.graph_adapter = graph_adapter
+        self.react_model = react_model
         
         # Initialize IRCoT service
         self.ircot_config = ircot_config or IRCoTConfig()
@@ -126,9 +129,11 @@ class OptimizedMultiAgentOrchestrator:
         if graph_adapter:
             self.graph_reasoning_agent = GraphReasoningAgent(
                 graph_adapter=graph_adapter,
-                llm_port=agent_port
+                llm_port=agent_port,
+                react_model=self.react_model
             )
-            logger.info("✓ Graph Reasoning Agent initialized (local/global/multi_hop support)")
+            model_info = f" with model: {self.react_model}" if self.react_model else ""
+            logger.info(f"✓ Graph Reasoning Agent initialized (local/global/multi_hop support){model_info}")
         else:
             self.graph_reasoning_agent = None
             logger.info("⚠ Graph Reasoning Agent not initialized (no graph_adapter provided)")
@@ -444,6 +449,17 @@ class OptimizedMultiAgentOrchestrator:
                     logger.debug(f"Graph reasoning: {len(graph_result.nodes)} nodes, {len(graph_result.paths)} paths")
                     logger.debug(f"Graph confidence: {graph_result.confidence}")
             
+            elif should_use_graph and self.graph_reasoning_agent is None:
+                # === WARNING: KG requested but unavailable ===
+                logger.warning("⚠️ Knowledge Graph was requested but graph_reasoning_agent is NOT available!")
+                logger.warning("⚠️ Falling back to Vector Search only. Check Neo4j connection.")
+                processing_stats["kg_unavailable_warning"] = True
+                rag_data = await self._perform_rag_retrieval(
+                    search_queries, 
+                    top_k,
+                    extracted_filters=extracted_filters,
+                    use_rerank=use_rerank
+                )
             else:
                 # === VECTOR SEARCH ONLY (no graph) ===
                 rag_data = await self._perform_rag_retrieval(
@@ -559,12 +575,13 @@ class OptimizedMultiAgentOrchestrator:
             # Get extracted filters from plan
             extracted_filters = plan_result.extracted_filters
             
-            # === GRAPH REASONING ===
+            # === GRAPH REASONING + IRCoT IN PARALLEL ===
             # Check if we should use Graph Reasoning (for complex multi-hop queries)
             # Priority 1: User explicitly requests via API (use_knowledge_graph=true)
             # Priority 2: SmartPlanner recommends based on query analysis
             should_use_graph = False
             graph_context = None
+            graph_result = None
             
             # Check request parameter first (user override)
             if hasattr(request, 'use_knowledge_graph') and request.use_knowledge_graph:
@@ -575,19 +592,25 @@ class OptimizedMultiAgentOrchestrator:
                 should_use_graph = True
                 logger.info("🔗 Knowledge Graph ENABLED for IRCoT (from SmartPlanner)")
             
+            # ⚡ OPTIMIZATION: Run Graph Reasoning and IRCoT in PARALLEL
+            # This reduces total time from (Graph + IRCoT) to max(Graph, IRCoT)
+            graph_query_type = GraphQueryType.LOCAL
             if should_use_graph and self.graph_reasoning_agent is not None:
                 graph_query_type_str = getattr(plan_result, 'graph_query_type', 'local')
                 try:
-                    from app.agents.graph_reasoning_agent import GraphQueryType
                     graph_query_type = GraphQueryType(graph_query_type_str)
                 except ValueError:
-                    from app.agents.graph_reasoning_agent import GraphQueryType
                     graph_query_type = GraphQueryType.LOCAL
                 
-                logger.info(f"🔗 Graph Reasoning in IRCoT: type={graph_query_type.value}")
+                # ⚡ DYNAMIC ITERATIONS: Use fewer iterations for medium complexity
+                # High complexity (>=7.0): 3 iterations, Medium (<7.0): 2 iterations
+                complexity_score = getattr(plan_result, 'complexity_score', 7.0)
+                ircot_max_iterations = 3 if complexity_score >= 7.0 else 2
                 
-                graph_start = time.time()
-                graph_result = await self.graph_reasoning_agent.reason(
+                logger.info(f"⚡ PARALLEL EXECUTION: Graph Reasoning ({graph_query_type.value}) + IRCoT (max_iter={ircot_max_iterations}, complexity={complexity_score})")
+                
+                # Create parallel tasks
+                graph_task = self.graph_reasoning_agent.reason(
                     query=request.user_query,
                     query_type=graph_query_type,
                     context={
@@ -595,24 +618,58 @@ class OptimizedMultiAgentOrchestrator:
                         "search_terms": plan_result.search_terms if plan_result else []
                     }
                 )
-                processing_stats["graph_reasoning_time"] = time.time() - graph_start
+                ircot_task = self.ircot_service.reason_with_retrieval(
+                    query=request.user_query,
+                    initial_context=None,
+                    extracted_filters=extracted_filters,
+                    max_iterations_override=ircot_max_iterations
+                )
+                
+                # Run both in parallel
+                graph_start = time.time()
+                graph_result, ircot_result = await asyncio.gather(graph_task, ircot_task)
+                parallel_time = time.time() - graph_start
+                
+                # Record graph stats
+                processing_stats["graph_reasoning_time"] = parallel_time  # Parallel time
                 processing_stats["graph_nodes_found"] = len(graph_result.nodes)
                 processing_stats["graph_paths_found"] = len(graph_result.paths)
                 processing_stats["graph_confidence"] = graph_result.confidence
                 
                 graph_context = graph_result.synthesized_context
                 
-                logger.info(f"📊 Graph Reasoning Results in IRCoT:")
-                logger.info(f"   - Nodes found: {len(graph_result.nodes)}")
-                logger.info(f"   - Confidence: {graph_result.confidence}")
-                logger.info(f"   - Context length: {len(graph_context) if graph_context else 0} chars")
-            
-            # Perform IRCoT reasoning with retrieval
-            ircot_result = await self.ircot_service.reason_with_retrieval(
-                query=request.user_query,
-                initial_context=None,  # Let IRCoT handle initial retrieval
-                extracted_filters=extracted_filters
-            )
+                logger.info(f"✅ Parallel execution completed in {parallel_time:.2f}s")
+                logger.info(f"📊 Graph: {len(graph_result.nodes)} nodes, confidence={graph_result.confidence}")
+                logger.info(f"📊 IRCoT: {ircot_result.total_iterations} iterations, {len(ircot_result.accumulated_context)} docs")
+                
+            elif should_use_graph and self.graph_reasoning_agent is None:
+                # === WARNING: KG requested but unavailable in IRCoT ===
+                logger.warning("⚠️ Knowledge Graph was requested in IRCoT but graph_reasoning_agent is NOT available!")
+                logger.warning("⚠️ IRCoT will proceed with Vector Search only. Check Neo4j connection.")
+                processing_stats["kg_unavailable_warning"] = True
+                
+                # Dynamic iterations for IRCoT alone
+                complexity_score = getattr(plan_result, 'complexity_score', 7.0)
+                ircot_max_iterations = 3 if complexity_score >= 7.0 else 2
+                
+                # Just run IRCoT alone
+                ircot_result = await self.ircot_service.reason_with_retrieval(
+                    query=request.user_query,
+                    initial_context=None,
+                    extracted_filters=extracted_filters,
+                    max_iterations_override=ircot_max_iterations
+                )
+            else:
+                # No graph, just run IRCoT with dynamic iterations
+                complexity_score = getattr(plan_result, 'complexity_score', 7.0) if plan_result else 7.0
+                ircot_max_iterations = 3 if complexity_score >= 7.0 else 2
+                
+                ircot_result = await self.ircot_service.reason_with_retrieval(
+                    query=request.user_query,
+                    initial_context=None,
+                    extracted_filters=extracted_filters,
+                    max_iterations_override=ircot_max_iterations
+                )
             
             # Record IRCoT stats
             processing_stats["ircot_mode"] = True

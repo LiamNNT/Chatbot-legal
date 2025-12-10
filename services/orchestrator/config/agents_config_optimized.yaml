@@ -36,6 +36,22 @@ models:
     temperature: 0.2
     max_tokens: 2000
     timeout: null
+  
+  # IRCoT Chain-of-Thought model (for complex multi-hop reasoning)
+  # Used in IRCoT iterations - needs good reasoning ability
+  ircot_cot_model:
+    name: "openai/gpt-4o-mini"  # Fast model for CoT steps
+    temperature: 0.3
+    max_tokens: 800
+    timeout: null
+  
+  # Graph Reasoning ReAct model (for Knowledge Graph reasoning)
+  # Used in multi-hop graph traversal with ReAct framework
+  graph_react_model:
+    name: "openai/gpt-4o-mini"  # Fast model for ReAct steps
+    temperature: 0.3
+    max_tokens: 500
+    timeout: null
     
   # Response Formatter [DEPRECATED - Keep for backward compatibility]
   # This model is no longer used in the V2 pipeline

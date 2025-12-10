@@ -263,13 +263,26 @@ class ServiceContainer:
             # Get Graph Adapter for Graph Reasoning
             graph_adapter = self.get_graph_adapter()
             
+            # Get Graph ReAct model from config
+            react_model = os.getenv("GRAPH_REACT_MODEL", None)
+            if not react_model:
+                # Try to get from YAML config
+                try:
+                    react_model_config = config_manager.get_model_config("graph_react_model")
+                    if react_model_config:
+                        react_model = react_model_config.get("name")
+                        logger.info(f"Graph ReAct model from config: {react_model}")
+                except Exception as e:
+                    logger.debug(f"Could not load Graph ReAct model from config: {e}")
+            
             logger.info("=" * 60)
             logger.info("🚀 Using OPTIMIZED orchestrator (3 agents, 40% cost savings)")
             if ircot_config.enabled:
                 logger.info(f"🔄 IRCoT ENABLED: max_iterations={ircot_config.max_iterations}, "
                            f"threshold={ircot_config.complexity_threshold}")
             if graph_adapter:
-                logger.info("🔗 Graph Reasoning ENABLED (Neo4j connected)")
+                react_model_info = f" (model: {react_model})" if react_model else ""
+                logger.info(f"🔗 Graph Reasoning ENABLED (Neo4j connected){react_model_info}")
             else:
                 logger.info("⚠ Graph Reasoning DISABLED (no graph adapter)")
             logger.info("=" * 60)
@@ -281,7 +294,8 @@ class ServiceContainer:
                 enable_verification=enable_verification,
                 enable_planning=enable_planning,
                 graph_adapter=graph_adapter,
-                ircot_config=ircot_config
+                ircot_config=ircot_config,
+                react_model=react_model
             )
         
         return self._multi_agent_orchestrator
@@ -310,16 +324,31 @@ class ServiceContainer:
         complexity_threshold = float(os.getenv("IRCOT_COMPLEXITY_THRESHOLD", "6.5"))
         early_stopping = os.getenv("IRCOT_EARLY_STOPPING", "true").lower() == "true"
         
+        # Get IRCoT model from config or environment
+        ircot_model = os.getenv("IRCOT_COT_MODEL", None)
+        if not ircot_model:
+            # Try to get from YAML config
+            try:
+                config_manager = self.get_config_manager()
+                models_config = config_manager.get_model_config("ircot_cot_model")
+                if models_config:
+                    ircot_model = models_config.get("name")
+                    logger.info(f"IRCoT model from config: {ircot_model}")
+            except Exception as e:
+                logger.debug(f"Could not load IRCoT model from config: {e}")
+        
         config = IRCoTConfig(
             enabled=ircot_enabled,
             mode=mode,
             max_iterations=max_iterations,
             complexity_threshold=complexity_threshold,
-            early_stopping_enabled=early_stopping
+            early_stopping_enabled=early_stopping,
+            cot_model=ircot_model  # Pass the model
         )
         
         logger.info(f"IRCoT Configuration: enabled={config.enabled}, mode={config.mode.value}, "
-                   f"max_iter={config.max_iterations}, threshold={config.complexity_threshold}")
+                   f"max_iter={config.max_iterations}, threshold={config.complexity_threshold}, "
+                   f"model={config.cot_model or 'default'}")
         
         return config
     

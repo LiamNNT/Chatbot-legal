@@ -58,13 +58,14 @@ def create_indexes(tx):
         if exists:
             print(f"✓ Index '{name}' already exists")
         else:
-            # Create index
+            # Create index using Cypher syntax for Neo4j 5.x
+            labels_str = "|".join(labels)
+            props_str = ", ".join([f"n.{p}" for p in properties])
+            
             create_query = f"""
-            CALL db.index.fulltext.createNodeIndex(
-                '{name}',
-                {labels},
-                {properties}
-            )
+            CREATE FULLTEXT INDEX {name} IF NOT EXISTS
+            FOR (n:{labels_str})
+            ON EACH [{props_str}]
             """
             
             try:
