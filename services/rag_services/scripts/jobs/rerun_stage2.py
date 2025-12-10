@@ -5,10 +5,19 @@ import json
 import sys
 from pathlib import Path
 
-# Add scripts to path
-sys.path.insert(0, str(Path(__file__).parent))
+# =============================================================================
+# PATH SETUP - Critical for resolving app.core modules after refactoring
+# =============================================================================
+SCRIPT_DIR = Path(__file__).parent.absolute()
+SCRIPTS_DIR = SCRIPT_DIR.parent
+RAG_SERVICES_ROOT = SCRIPTS_DIR.parent
 
-from hybrid_extractor import SemanticExtractor, LLMConfig
+# Add rag_services root to sys.path
+if str(RAG_SERVICES_ROOT) not in sys.path:
+    sys.path.insert(0, str(RAG_SERVICES_ROOT))
+
+# Import from new app.core location
+from app.core.extraction.hybrid_extractor import SemanticExtractor, LLMConfig
 
 def main():
     # Load existing extraction

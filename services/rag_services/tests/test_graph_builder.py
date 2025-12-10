@@ -56,8 +56,8 @@ def main():
     print(f"  Stage 2 - Entities:  {data['stage2_semantic']['stats'].get('entities', 0)} entities")
     print(f"  Stage 2 - Relations: {data['stage2_semantic']['stats'].get('relations', 0)} relations")
     
-    # Import and build
-    from scripts.graph_builder import Neo4jGraphBuilder
+    # Import and build from new location
+    from app.core.indexing.graph_builder import Neo4jGraphBuilder
     
     print(f"\n{'='*60}")
     print("BUILDING GRAPH...")

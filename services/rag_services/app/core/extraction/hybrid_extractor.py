@@ -24,12 +24,14 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add rag_services root to path for imports
+RAG_SERVICES_ROOT = Path(__file__).parent.parent.parent.parent
+if str(RAG_SERVICES_ROOT) not in sys.path:
+    sys.path.insert(0, str(RAG_SERVICES_ROOT))
 
 # Import utility modules for robust JSON parsing and cross-page merging
-from scripts.json_utils import clean_and_parse_json
-from scripts.page_merger import merge_nodes_into_dict
+from app.core.utils.json_utils import clean_and_parse_json
+from app.core.extraction.page_merger import merge_nodes_into_dict
 
 from pydantic import BaseModel, Field
 
@@ -1027,7 +1029,7 @@ class SemanticExtractor:
     
     def _parse_llm_response(self, response_text: str) -> Dict[str, Any]:
         """Parse LLM response JSON using robust parser."""
-        from scripts.json_utils import clean_and_parse_json
+        from app.core.utils.json_utils import clean_and_parse_json
         
         if not response_text:
             logger.warning("Empty LLM response")

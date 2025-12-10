@@ -18,9 +18,12 @@ import json
 from pathlib import Path
 
 # Add parent directories to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+RAG_SERVICES_ROOT = Path(__file__).parent.parent
+if str(RAG_SERVICES_ROOT) not in sys.path:
+    sys.path.insert(0, str(RAG_SERVICES_ROOT))
 
-from scripts.hybrid_extractor import (
+# Import from new app.core location
+from app.core.extraction.hybrid_extractor import (
     StructureExtractor,
     SemanticExtractor,
     VLMConfig,
@@ -134,7 +137,7 @@ def demo_graph_conversion():
     print("=" * 60)
     
     # Create mock hybrid result
-    from scripts.hybrid_extractor import (
+    from app.core.extraction.hybrid_extractor import (
         SemanticNode,
         SemanticRelation,
     )

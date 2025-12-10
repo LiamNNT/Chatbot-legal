@@ -270,7 +270,7 @@ class ServiceContainer:
                 try:
                     react_model_config = config_manager.get_model_config("graph_react_model")
                     if react_model_config:
-                        react_model = react_model_config.get("name")
+                        react_model = react_model_config.name
                         logger.info(f"Graph ReAct model from config: {react_model}")
                 except Exception as e:
                     logger.debug(f"Could not load Graph ReAct model from config: {e}")
@@ -332,7 +332,7 @@ class ServiceContainer:
                 config_manager = self.get_config_manager()
                 models_config = config_manager.get_model_config("ircot_cot_model")
                 if models_config:
-                    ircot_model = models_config.get("name")
+                    ircot_model = models_config.name
                     logger.info(f"IRCoT model from config: {ircot_model}")
             except Exception as e:
                 logger.debug(f"Could not load IRCoT model from config: {e}")

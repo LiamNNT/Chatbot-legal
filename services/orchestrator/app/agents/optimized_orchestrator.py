@@ -189,6 +189,29 @@ class OptimizedMultiAgentOrchestrator:
                 requires_rag = False
                 processing_stats["skipped_rag"] = True
             
+            # Step 1.5: Handle direct response for social greetings (skip LLM call)
+            if plan_result and plan_result.strategy == "direct_response":
+                direct_response = self._get_direct_response(request.user_query, plan_result.intent)
+                if direct_response:
+                    total_time = time.time() - start_time
+                    processing_stats["total_time"] = total_time
+                    processing_stats["direct_response"] = True
+                    processing_stats["llm_calls"] = 1  # Only SmartPlanner
+                    
+                    return OrchestrationResponse(
+                        response=direct_response,
+                        session_id=request.session_id or "unknown",
+                        rag_context=None,
+                        agent_metadata={
+                            "pipeline": "direct_response",
+                            "plan_result": plan_result.__dict__ if plan_result else None,
+                            "answer_confidence": 1.0,
+                            "detailed_sources": [],
+                        },
+                        processing_stats=processing_stats,
+                        timestamp=datetime.now()
+                    )
+            
             # Step 2: RAG Retrieval (using optimized queries from smart planner)
             rag_context = None
             if request.use_rag and requires_rag:
@@ -259,6 +282,72 @@ class OptimizedMultiAgentOrchestrator:
                 timestamp=datetime.now()
             )
     
+    def _get_direct_response(self, query: str, intent: str) -> Optional[str]:
+        """
+        Get direct response for social greetings without calling LLM.
+        
+        Args:
+            query: User's query
+            intent: Detected intent from SmartPlanner
+            
+        Returns:
+            Direct response string or None if should use LLM
+        """
+        query_lower = query.lower().strip()
+        
+        # Identity questions - "Bạn là ai?"
+        identity_patterns = ["bạn là ai", "bạn là gì", "mày là ai", "who are you", "bạn tên gì", "tên bạn là gì"]
+        for pattern in identity_patterns:
+            if pattern in query_lower:
+                return """Chào bạn! 👋
+
+Mình là **Đậu Đậu** 🫘 - chatbot AI của Trường Đại học Công nghệ Thông tin (UIT), ĐHQG-HCM.
+
+Mình được tạo ra để hỗ trợ sinh viên và phụ huynh giải đáp thắc mắc về:
+
+- 📚 Quy chế đào tạo, quy định học vụ
+- 📝 Đăng ký học phần, chương trình đào tạo
+- 🎓 Thông tin tuyển sinh, học phí
+- 💡 Các câu hỏi về UIT
+
+Cần hỗ trợ gì thì cứ hỏi mình nhé! 😊"""
+
+        # Greetings
+        greeting_patterns = ["xin chào", "hello", "hi", "chào bạn", "chào"]
+        for pattern in greeting_patterns:
+            if query_lower == pattern or query_lower.startswith(pattern + " ") or query_lower.startswith(pattern + ","):
+                return """Chào bạn! 👋
+
+Mình là **Đậu Đậu** 🫘 - chatbot của UIT.
+
+Mình có thể giúp bạn tìm hiểu về quy chế đào tạo, đăng ký học phần, thông tin tuyển sinh và nhiều thứ khác về UIT.
+
+Bạn cần hỏi gì nào? 😊"""
+
+        # Thank you
+        thanks_patterns = ["cảm ơn", "thanks", "thank you", "cám ơn"]
+        for pattern in thanks_patterns:
+            if pattern in query_lower:
+                return """Không có gì đâu bạn! 😊
+
+Nếu cần hỏi thêm điều gì về UIT, cứ nhắn mình nhé! 💪"""
+
+        # Goodbye
+        bye_patterns = ["tạm biệt", "bye", "goodbye", "chào tạm biệt"]
+        for pattern in bye_patterns:
+            if pattern in query_lower:
+                return """Tạm biệt bạn! 👋
+
+Chúc bạn học tập tốt! Khi nào cần hỗ trợ thì quay lại hỏi Đậu Đậu nhé! 🫘😊"""
+
+        # Simple acknowledgments - still process normally
+        simple_patterns = ["ok", "oke", "được", "vâng", "dạ", "ừ"]
+        for pattern in simple_patterns:
+            if query_lower == pattern:
+                return """Dạ, bạn cần mình giúp gì thêm không? 😊"""
+
+        return None
+
     async def _execute_smart_planning_step(
         self, 
         request: OrchestrationRequest, 

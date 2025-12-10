@@ -86,8 +86,16 @@ class Settings(BaseSettings):
     # --- Logging Configuration ---
     log_level: str = "INFO"
 
+    # --- OpenRouter / VLM Configuration (optional) ---
+    openrouter_api_key: str = ""  # OpenRouter API key (if using OpenRouter)
+    vlm_model: str = ""  # Vision Language Model (optional)
+
     # Pydantic model configuration to specify the source of the settings
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8",
+        extra="ignore"  # Ignore extra fields in .env that are not defined here
+    )
 
 # Create a singleton instance of the Settings class to be used across the application
 settings = Settings()

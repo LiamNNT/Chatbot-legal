@@ -14,8 +14,17 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# =============================================================================
+# PATH SETUP - Critical for resolving app.core modules after refactoring
+# =============================================================================
+# Get the rag_services root directory (2 levels up from scripts/jobs/)
+SCRIPT_DIR = Path(__file__).parent.absolute()
+SCRIPTS_DIR = SCRIPT_DIR.parent
+RAG_SERVICES_ROOT = SCRIPTS_DIR.parent
+
+# Add rag_services root to sys.path so we can import from app.core
+if str(RAG_SERVICES_ROOT) not in sys.path:
+    sys.path.insert(0, str(RAG_SERVICES_ROOT))
 
 # Configure logging
 logging.basicConfig(
@@ -26,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Load environment
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(dotenv_path=RAG_SERVICES_ROOT / ".env")
 
 import os
 print(f"\n{'='*60}")
@@ -40,8 +49,8 @@ if not api_key:
 print(f"API Key: ...{api_key[-8:]}")
 print(f"Base URL: {os.getenv('OPENAI_BASE_URL')}")
 
-# Import pipeline
-from hybrid_extractor import (
+# Import pipeline from new app.core location
+from app.core.extraction.hybrid_extractor import (
     VLMConfig, VLMProvider, StructureExtractor,
     LLMConfig, SemanticExtractor,
     StructureExtractionResult, SemanticExtractionResult,

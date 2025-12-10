@@ -177,6 +177,31 @@ class SmartPlannerAgent(SpecializedAgent):
         """
         query_lower = query.lower().strip()
         
+        # Identity questions - "Bạn là ai?"
+        identity_patterns = [
+            "bạn là ai", "bạn là gì", "mày là ai", "who are you", 
+            "bạn tên gì", "tên bạn là gì", "bạn là chatbot gì"
+        ]
+        
+        for pattern in identity_patterns:
+            if pattern in query_lower:
+                return SmartPlanResult(
+                    query=query,
+                    intent="social_greeting",
+                    complexity="simple",
+                    complexity_score=0.0,
+                    requires_rag=False,
+                    strategy="direct_response",
+                    rewritten_queries=[],
+                    search_terms=[],
+                    top_k=0,
+                    hybrid_search=False,
+                    reranking=False,
+                    reasoning="Identity question - direct response about chatbot",
+                    confidence=1.0,
+                    metadata={"rule_based": True, "pattern_matched": pattern}
+                )
+        
         # Social/greeting patterns
         social_patterns = [
             "xin chào", "hello", "hi", "chào", "cảm ơn", "thanks", "thank you",
