@@ -180,7 +180,7 @@ async def run_stage1_pipeline(
 
 
 # =============================================================================
-# Stage 2: LLM Semantic Extraction
+# Stage 2: LLM Semantic Extraction (FIXED TABLE MERGE)
 # =============================================================================
 
 async def run_stage2_pipeline(
@@ -191,7 +191,6 @@ async def run_stage2_pipeline(
 ):
     """
     Run Stage 2: LLM for semantic extraction from Stage 1 results.
-    
     Input: Stage 1 JSON (structure)
     Output: Combined JSON with structure + semantics
     """
@@ -209,20 +208,47 @@ async def run_stage2_pipeline(
         llm_config = LLMConfig.from_env()
         semantic_extractor = SemanticExtractor(llm_config)
         
-        # Get articles from stage1 data - support multiple formats
-        # Format 1: {"stage1_structure": {"articles": [...]}}
-        # Format 2: {"structure": {"articles": [...]}}
-        # Format 3: {"articles": [...]}
-        structure_dict = (
-            stage1_data.get("stage1_structure") or 
-            stage1_data.get("structure") or 
-            stage1_data
-        )
-        articles = structure_dict.get("articles", [])
+        # 1. Parse Input & Validate
+        if "stage1_structure" in stage1_data:
+            structure = stage1_data["stage1_structure"]
+        elif "structure" in stage1_data:
+            structure = stage1_data["structure"]
+        else:
+            structure = stage1_data
+
+        articles = structure.get("articles", [])
+        tables = structure.get("tables", [])
+        relations = structure.get("relations", [])
         
         if not articles:
             raise ValueError(f"Không tìm thấy điều khoản trong dữ liệu Stage 1. Keys: {list(stage1_data.keys())}")
         
+        # 2. CRITICAL: MERGE TABLES INTO ARTICLES LOGIC
+        # ---------------------------------------------------------------------
+        extraction_jobs[job_id]["current_step"] = f"Đang gộp {len(tables)} bảng vào văn bản..."
+        
+        # Map article by ID
+        article_map = {a['id']: a for a in articles}
+        
+        # Map Child -> Parent from relations
+        child_to_parent = {}
+        for rel in relations:
+            if rel.get("type") == "CONTAINS":
+                child_to_parent[rel["target"]] = rel["source"]
+        
+        merged_count = 0
+        for table in tables:
+            parent_id = child_to_parent.get(table["id"])
+            if parent_id and parent_id in article_map:
+                parent_article = article_map[parent_id]
+                # Append Markdown Table to Article Text
+                append_text = f"\n\n=== BẢNG THAM CHIẾU ({table.get('title', 'Bảng')}) ===\n{table.get('full_text', '')}\n========================\n"
+                parent_article["full_text"] += append_text
+                merged_count += 1
+        
+        print(f"Job {job_id}: Successfully merged {merged_count} tables into articles.")
+        # ---------------------------------------------------------------------
+
         extraction_jobs[job_id]["progress"] = 20
         extraction_jobs[job_id]["current_step"] = f"Đang xử lý {len(articles)} điều..."
         
@@ -239,7 +265,7 @@ async def run_stage2_pipeline(
                     lambda: semantic_extractor.extract_from_article(
                         article_id=article.get('id', ''),
                         article_title=article.get('title', ''),
-                        article_text=article.get('full_text', '')
+                        article_text=article.get('full_text', '') # Text đã có bảng
                     )
                 )
                 
@@ -302,7 +328,7 @@ async def run_stage2_pipeline(
             "source_file": stage1_data.get("source_file", "unknown"),
             "extracted_at": datetime.now().isoformat(),
             "category": category,
-            "stage1_structure": structure_dict,
+            "stage1_structure": structure, # Cấu trúc đã được update text (có bảng)
             "stage2_semantic": semantic_result
         }
         
@@ -344,6 +370,7 @@ async def run_stage2_pipeline(
         extraction_jobs[job_id]["result_file"] = str(result_file.name)
         extraction_jobs[job_id]["stats"] = {
             "articles_processed": len(articles),
+            "tables_merged": merged_count,
             "entities": len(all_entities),
             "relations": len(all_relations),
             "errors": len(errors)
@@ -358,7 +385,7 @@ async def run_stage2_pipeline(
 
 
 # =============================================================================
-# Full Pipeline (Original)
+# Full Pipeline (Original - FIXED)
 # =============================================================================
 
 async def run_extraction_pipeline(
@@ -369,9 +396,7 @@ async def run_extraction_pipeline(
 ):
     """
     Run the Two-Stage extraction pipeline asynchronously.
-    
-    Stage 1: VLM for structural extraction (Document -> Articles -> Clauses)
-    Stage 2: LLM for semantic extraction (Entities + Relations)
+    Stage 1: VLM Structure -> Merge Table -> Stage 2: Semantic
     """
     try:
         # Update status
@@ -420,24 +445,43 @@ async def run_extraction_pipeline(
             lambda: structure_extractor.extract_from_images(image_paths)
         )
         
-        # Convert Pydantic model to dict if needed
+        # Convert Pydantic model to dict
         if hasattr(structure_result, 'model_dump'):
             structure_dict = structure_result.model_dump()
         else:
             structure_dict = structure_result
         
         extraction_jobs[job_id]["progress"] = 50
-        extraction_jobs[job_id]["current_step"] = f"Stage 1 hoàn thành: {len(structure_dict.get('articles', []))} điều"
         
-        # Stage 2: LLM Semantic Extraction (PARALLEL)
+        # ---------------------------------------------------------------------
+        # CRITICAL: MERGE TABLES LOGIC HERE (Fixes missing data in Stage 2)
+        # ---------------------------------------------------------------------
+        extraction_jobs[job_id]["current_step"] = "Đang gộp bảng vào văn bản..."
+        
+        articles = structure_dict.get('articles', [])
+        tables = structure_dict.get('tables', [])
+        relations = structure_dict.get('relations', [])
+        
+        article_map = {a['id']: a for a in articles}
+        child_to_parent = {r["target"]: r["source"] for r in relations if r["type"] == "CONTAINS"}
+        
+        merged_count = 0
+        for table in tables:
+            parent_id = child_to_parent.get(table['id'])
+            if parent_id and parent_id in article_map:
+                # Update article text with table content
+                article_map[parent_id]['full_text'] += f"\n\n=== BẢNG ({table.get('title')}) ===\n{table.get('full_text')}\n"
+                merged_count += 1
+        
+        print(f"Full pipeline: Merged {merged_count} tables.")
+        # ---------------------------------------------------------------------
+        
+        # Stage 2: LLM Semantic Extraction
         extraction_jobs[job_id]["current_step"] = "Stage 2: Trích xuất ngữ nghĩa với LLM (song song)..."
         extraction_jobs[job_id]["progress"] = 60
         
-        # Extract semantics from each article - PARALLEL PROCESSING
-        articles = structure_dict.get('articles', [])
-        
         async def process_article(article):
-            """Process a single article - designed for parallel execution."""
+            """Process a single article."""
             try:
                 article_result = await loop.run_in_executor(
                     None,
@@ -453,14 +497,13 @@ async def run_extraction_pipeline(
                 else:
                     article_dict = article_result if isinstance(article_result, dict) else {}
                 
-                # Add source article ID to entities and relations
                 entities = []
                 for entity in article_dict.get('nodes', []):
                     entity['source_article_id'] = article.get('id', '')
                     entities.append(entity)
                 
                 relations = []
-                for rel in article_dict.get('edges', []):
+                for rel in article_dict.get('relations', []): # Corrected key 'relations'
                     rel['source_article_id'] = article.get('id', '')
                     relations.append(rel)
                 
@@ -469,13 +512,12 @@ async def run_extraction_pipeline(
             except Exception as e:
                 return {"entities": [], "relations": [], "error": {"article_id": article.get('id', ''), "error": str(e)}}
         
-        # Run all articles in parallel with concurrency limit
-        MAX_CONCURRENT = 5  # Limit concurrent LLM calls to avoid rate limiting
+        # Run all articles in parallel
+        MAX_CONCURRENT = 5
         all_entities = []
         all_relations = []
         errors = []
         
-        # Process in batches to control concurrency
         for batch_start in range(0, len(articles), MAX_CONCURRENT):
             batch = articles[batch_start:batch_start + MAX_CONCURRENT]
             batch_tasks = [process_article(article) for article in batch]
@@ -487,7 +529,6 @@ async def run_extraction_pipeline(
                 if result["error"]:
                     errors.append(result["error"])
             
-            # Update progress
             processed = min(batch_start + MAX_CONCURRENT, len(articles))
             progress = 60 + int(20 * processed / len(articles)) if articles else 80
             extraction_jobs[job_id]["progress"] = progress
@@ -557,7 +598,7 @@ async def run_extraction_pipeline(
         extraction_jobs[job_id]["stats"] = {
             "pages": len(pages),
             "articles": len(structure_dict.get("articles", [])),
-            "clauses": len(structure_dict.get("clauses", [])),
+            "tables_merged": merged_count,
             "entities": semantic_result.get("stats", {}).get("entities", 0),
             "relations": semantic_result.get("stats", {}).get("relations", 0)
         }

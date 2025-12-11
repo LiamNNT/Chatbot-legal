@@ -362,22 +362,24 @@ class AnswerAgent(SpecializedAgent):
                 except json.JSONDecodeError:
                     pass
         
-        # Fallback: clean up the response text
-        lines = text.strip().split('\n')
-        answer_lines = []
+        # --- BẮT ĐẦU PHẦN SỬA ---
+        # Fallback: Clean up markers only, PRESERVE NEWLINES and SPACING
+        clean_text = text.strip()
         
-        # Skip JSON markers or system messages
-        for line in lines:
-            line = line.strip()
-            # Skip code blocks and JSON markers
-            if line and not line.startswith('```') and not line.startswith('{') and not line.startswith('}'):
-                if not line.startswith('"') or line.endswith('",'):
-                    answer_lines.append(line)
+        # Remove opening ```json or ``` markers
+        clean_text = re.sub(r'^```[a-zA-Z]*\s*\n', '', clean_text)
         
-        if answer_lines:
-            answer = ' '.join(answer_lines)
-        else:
-            answer = text.strip()
+        # Remove closing ``` markers
+        clean_text = re.sub(r'\n\s*```\s*$', '', clean_text)
+        
+        # Remove standalone JSON braces if they wrap the entire text (rare edge case)
+        if clean_text.startswith('{') and clean_text.endswith('}'):
+             # Chỉ remove nếu nó trông giống JSON wrapper bị lỗi, 
+             # nhưng nếu là text chat bình thường bắt đầu bằng { thì giữ nguyên
+             pass 
+
+        answer = clean_text
+        # --- KẾT THÚC PHẦN SỬA ---
         
         # Ensure minimum answer length using configured threshold
         if len(answer) < self.min_answer_length:
