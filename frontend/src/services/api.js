@@ -221,6 +221,58 @@ export const getExtractionResult = async (jobId) => {
   return response.json();
 };
 
+/**
+ * Upload JSON file to Neo4j
+ * @param {File} file - JSON file with extraction data
+ * @param {boolean} clearExisting - Whether to clear existing data before import
+ * @returns {Promise} Import result
+ */
+export const uploadToNeo4j = async (file, clearExisting = false) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const url = new URL(`${RAG_SERVICE_URL}/v1/extraction/neo4j/upload`);
+  url.searchParams.append('clear_existing', clearExisting);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Neo4j import failed');
+  }
+
+  return response.json();
+};
+
+/**
+ * Get Neo4j database statistics
+ * @returns {Promise} Database stats
+ */
+export const getNeo4jStats = async () => {
+  const response = await fetch(`${RAG_SERVICE_URL}/v1/extraction/neo4j/stats`);
+  if (!response.ok) {
+    throw new Error('Failed to get Neo4j stats');
+  }
+  return response.json();
+};
+
+/**
+ * Clear all Neo4j data
+ * @returns {Promise} Clear result
+ */
+export const clearNeo4j = async () => {
+  const response = await fetch(`${RAG_SERVICE_URL}/v1/extraction/neo4j/clear`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to clear Neo4j');
+  }
+  return response.json();
+};
+
 export default {
   sendChatMessage,
   sendSimpleChatMessage,
@@ -232,5 +284,8 @@ export default {
   uploadForExtraction,
   getExtractionStatus,
   getExtractionResult,
+  uploadToNeo4j,
+  getNeo4jStats,
+  clearNeo4j,
 };
 
