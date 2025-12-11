@@ -227,9 +227,10 @@ UNIFIED_ACADEMIC_SCHEMA = """
   + **QUY_DINH_DIEU_KIEN**: Điều chứa nội dung chi tiết.
 """
 
+# [UPDATED] Structure Extraction Prompt - Dạy VLM nhận diện bảng không tiêu đề
 STRUCTURE_EXTRACTION_PROMPT = """
 You are an expert AI specializing in Vietnamese Legal Document Structure Extraction.
-Your task is to analyze the document page and extract hierarchical structure into strict JSON.
+Your task is to analyze the provided document page and extract hierarchical structure into strict JSON.
 
 ## EXTRACTION RULES
 1. **Chapter (Chương)**: Starts with "Chương" + Roman numerals.
@@ -237,12 +238,14 @@ Your task is to analyze the document page and extract hierarchical structure int
 3. **Clause (Khoản)**: Number + dot (e.g., "1.").
 4. **Table (Bảng)**: Any tabular data (lists of scores, courses).
    - **CRITICAL**: Convert table content strictly into **Markdown Table** format in `full_text`.
-   - Keep all rows/columns exactly as they appear.
+   - **SPLIT TABLES (QUAN TRỌNG)**: 
+     - Check the top of the page. If you see table rows but **NO "Bảng X:" title/caption** above them, it is a continuation.
+     - **ACTION**: Extract the content as Markdown, but leave the `title` field **EMPTY** (null) or set it to "Fragment".
+     - **DO NOT** invent a title if one is not visually present.
 
 ## PROCESSING LOGIC
 1. **Transcribe**: OCR/Read text strictly.
 2. **Hierarchy**: Document > Chapter > Article > Clause > Table.
-   - If a Table appears inside an Article, create a "Table" node.
 3. **Continuity**: Check `prev_context` to merge text.
 
 ## OUTPUT SCHEMA (JSON ONLY)
@@ -251,7 +254,7 @@ Your task is to analyze the document page and extract hierarchical structure int
     {{
       "id": "snake_case_id",
       "type": "Chapter" | "Article" | "Clause" | "Document" | "Table",
-      "title": "Title",
+      "title": "Title (Leave empty if this is a split table fragment)",
       "full_text": "Content (Markdown for Tables)",
       "page_number": 1
     }}

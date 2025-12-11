@@ -133,9 +133,69 @@ class StructureExtractor:
         errors = []
         current_context = PageContext()
         
+        last_table_of_prev_page = None
+
         for i, path in enumerate(image_paths, 1):
             try:
                 nodes, relations, next_context = self._process_single_page(Path(path), current_context, i)
+                
+                # --- LOGIC XỬ LÝ BẢNG BỊ NGẮT (BACKWARD MERGE - MẠNH MẼ HƠN) ---
+                if nodes and last_table_of_prev_page:
+                    # Thay vì chỉ kiểm tra node[0], ta kiểm tra 3 node đầu tiên
+                    # để tránh trường hợp có header/số trang rác chèn vào
+                    found_fragment_idx = -1
+                    
+                    for idx, node in enumerate(nodes[:3]):
+                        is_fragment = False
+                        # Dấu hiệu 1: Là Table và (không có title hoặc title trùng/chứa từ "tiếp")
+                        if node.type == StructureNodeType.TABLE:
+                             if not node.title or node.title == last_table_of_prev_page.title:
+                                is_fragment = True
+                             elif "tiếp" in (node.title or "").lower() or "cont" in (node.title or "").lower():
+                                is_fragment = True
+                        
+                        # Dấu hiệu 2: Text bắt đầu bằng "|" (Markdown Table)
+                        elif node.full_text.strip().startswith("|"):
+                             is_fragment = True
+                        
+                        if is_fragment:
+                            found_fragment_idx = idx
+                            break
+                    
+                    if found_fragment_idx != -1:
+                        fragment_node = nodes[found_fragment_idx]
+                        logger.info(f"MERGING SPLIT TABLE: Page {i} (Node {found_fragment_idx}) -> Table '{last_table_of_prev_page.id}'")
+                        
+                        new_content = fragment_node.full_text.strip()
+                        lines = new_content.split('\n')
+                        prev_lines = last_table_of_prev_page.full_text.strip().split('\n')
+                        
+                        # Bỏ header bị lặp (nếu có)
+                        if len(lines) > 0 and len(prev_lines) > 0:
+                             # Check dòng 1
+                             if lines[0] in prev_lines[:10]: # Quét sâu hơn trong bảng cũ
+                                new_content = "\n".join(lines[1:])
+                                # Check dòng 2 (nếu là dòng kẻ phân cách |---|)
+                                if new_content.strip().startswith("|-"):
+                                     new_content = "\n".join(new_content.split('\n')[1:])
+
+                        # NỐI VÀO BẢNG CŨ
+                        last_table_of_prev_page.full_text += "\n" + new_content
+                        if i not in last_table_of_prev_page.page_range:
+                            last_table_of_prev_page.page_range.append(i)
+                        
+                        # Xóa node mảnh thừa khỏi danh sách
+                        nodes.pop(found_fragment_idx)
+
+                # Cập nhật bảng cuối cùng để dùng cho trang sau
+                tables_in_page = [n for n in nodes if n.type == StructureNodeType.TABLE]
+                if tables_in_page:
+                    last_table_of_prev_page = tables_in_page[-1]
+                elif nodes: 
+                    # Nếu trang này có nội dung (Article, Clause) chen vào thì ngắt mạch nối
+                    # Trừ khi node đó bị nhận diện nhầm là fragment ở trên và đã bị pop()
+                    last_table_of_prev_page = None
+                
                 merged_nodes = merge_nodes_into_dict(merged_nodes, nodes, i, logger)
                 all_relations.extend(relations)
                 current_context = next_context
@@ -359,42 +419,53 @@ def run_pipeline(image_paths=None, pdf_path=None, vlm_config=None, llm_config=No
         structure_result = structure_extractor.extract_from_images([Path(p) for p in image_paths])
     
     # =========================================================================
-    # CRITICAL: TABLE MERGING LOGIC WITH DEBUG PRINTS
+    # CRITICAL: TABLE MERGING LOGIC WITH DEBUG PRINTS & NORMALIZATION
     # =========================================================================
     
+    print("\n--- DEBUG: STARTING TABLE MERGE ---")
     # B1: Map Article ID
-    article_map = {a.id: a for a in structure_result.articles}
+    article_map = {a.id.strip(): a for a in structure_result.articles}
+    print(f"DEBUG: Loaded {len(article_map)} articles into map.")
     
     # B2: Map Relationship (Child -> Parent)
     child_to_parent = {}
     for rel in structure_result.relations:
         if rel.type == "CONTAINS":
-            child_to_parent[rel.target] = rel.source
+            child_to_parent[rel.target.strip()] = rel.source.strip()
+    print(f"DEBUG: Mapped {len(child_to_parent)} child-parent relationships.")
             
     # B3: Merge Tables
     merged_count = 0
     print(f"DEBUG: Found {len(structure_result.tables)} tables to process.")
     
     for table in structure_result.tables:
-        parent_id = child_to_parent.get(table.id)
+        table_id = table.id.strip()
+        parent_id = child_to_parent.get(table_id)
+        
+        # Fallback Strategy
+        if not parent_id:
+            for art_id in article_map.keys():
+                if art_id in table_id: 
+                    parent_id = art_id
+                    print(f"DEBUG: Inferred parent {parent_id} for orphan table {table_id}")
+                    break
+
         if parent_id and parent_id in article_map:
             parent_article = article_map[parent_id]
             
-            print(f"DEBUG: MERGING Table '{table.id}' into Article '{parent_id}'")
-            logger.info(f"MERGING Table {table.id} into Article {parent_id}")
+            print(f"DEBUG: MERGING Table '{table_id}' into Article '{parent_id}'")
+            logger.info(f"MERGING Table {table_id} into Article {parent_id}")
             
             # Appending Table Markdown to Article Text
-            # We add specific headers to help LLM recognize this as table data
             append_text = f"\n\n=== BẢNG THAM CHIẾU ({table.title}) ===\n{table.full_text}\n========================\n"
             parent_article.full_text += append_text
-            
             merged_count += 1
         else:
-            print(f"DEBUG: ORPHAN Table detected: '{table.id}'. Parent ID: {parent_id}")
-            logger.warning(f"Orphan Table detected: {table.id}")
+            print(f"DEBUG: FAILED TO MERGE Table '{table_id}'. Parent ID found: '{parent_id}'")
+            logger.warning(f"Orphan Table detected: {table_id}")
 
-    print(f"DEBUG: Successfully merged {merged_count} tables into parent articles.")
-    logger.info(f"Merged {merged_count} tables into parent articles.")
+    print(f"DEBUG: Successfully merged {merged_count} tables.")
+    print("--- DEBUG: END TABLE MERGE ---\n")
 
     # 2. STAGE 2: Semantic Extraction (Using Enriched Articles)
     semantic_extractor = ParallelSemanticExtractor(llm_config)
@@ -403,9 +474,6 @@ def run_pipeline(image_paths=None, pdf_path=None, vlm_config=None, llm_config=No
     articles_data = []
     for a in structure_result.articles:
         if a.full_text.strip():
-            # DEBUG: Print first few chars of text to verify table was added (optional)
-            if "=== BẢNG THAM CHIẾU" in a.full_text:
-                print(f"DEBUG: Sending Article '{a.id}' to LLM with Table content included.")
             articles_data.append({"id": a.id, "title": a.title, "full_text": a.full_text})
     
     semantic_results = semantic_extractor.extract_batch(articles_data)

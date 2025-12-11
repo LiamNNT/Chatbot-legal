@@ -1,0 +1,160 @@
+{
+  "extraction_id": "d51c81fb-714a-49c0-97eb-72d79ee5c3a6",
+  "stage": "stage1",
+  "source_file": "20251211_195536_sub828_qd-dhcntt_04-10-2022_quy_dinh_dao_tao_ngoai_ngu_doi_voi_he_chinh_qui_khoa_2022_0_0.pdf",
+  "extracted_at": "2025-12-11T19:56:46.377908",
+  "category": "Quy chế Đào tạo",
+  "page_count": 2,
+  "structure": {
+    "document": {
+      "id": "document_page_3",
+      "type": "Document",
+      "title": "Page 3",
+      "full_text": "",
+      "page_range": [
+        1
+      ],
+      "parent_id": null,
+      "metadata": {
+        "source_page": 1
+      }
+    },
+    "chapters": [],
+    "articles": [
+      {
+        "id": "article_5",
+        "type": "Article",
+        "title": "Điều 5. Xét miễn các môn học tiếng Anh",
+        "full_text": "1. Sinh viên được xét miễn học các môn tiếng Anh tương ứng nếu có một trong các chứng chỉ/chứng nhận đạt trình độ tối thiểu theo quy định tại Bảng 3. Sinh viên được miễn môn học nào thì đồng thời được miễn những môn học ở cấp độ thấp hơn mà sinh viên chưa học hoặc chưa đạt.",
+        "page_range": [
+          1
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 1
+        }
+      },
+      {
+        "id": "article_6_trang_4",
+        "type": "Article",
+        "title": "Điều 6. Xét miễn các môn học tiếng Nhật đối với sinh viên thuộc chương trình Công nghệ Thông tin Việt - Nhật (chương trình chất lượng cao định hướng Nhật Bản)",
+        "full_text": "Sinh viên được xét miễn học các môn tiếng Nhật tương ứng trong CTĐT nếu có một trong các chứng chỉ đạt trình độ theo quy định tại Bảng 4. Sinh viên được miễn môn học nào thì đồng thời được miễn những môn học ở cấp độ thấp hơn mà sinh viên chưa học hoặc chưa đạt.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      }
+    ],
+    "clauses": [
+      {
+        "id": "clause_2_dieu_5_trang_4",
+        "type": "Clause",
+        "title": "2.",
+        "full_text": "Hàng năm, Trung tâm Ngoại ngữ của Trường tổ chức 04 đợt kiểm tra năng lực tiếng Anh với 04 kỹ năng nghe – đọc – nói – viết và cấp chứng nhận nội bộ. Sinh viên có thể dùng chứng nhận nội bộ này tương đương với chứng chỉ TOEIC để nộp xét miễn các môn tiếng Anh như trong Bảng 3.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "table_xep_lop_dau_khoa",
+        "type": "Table",
+        "title": "Bảng 2. Xếp lớp đầu khóa",
+        "full_text": "| Điểm kiểm tra (dạng thức TOEIC nghe và đọc) | CTC và CTTN | CTTT |\n|---|---|---|\n| < 300 | Không được học Anh văn 1 (mã môn ENG01), được đăng ký học Anh văn sơ cấp ngoài CTĐT chính quy do Trung tâm Ngoại ngữ phụ trách (không bắt buộc). | Học Anh văn 1 (mã môn ENG01) |\n| 300 – 345 | Học Anh văn 1 (mã môn ENG01) | |\n| 350 – 395 | Miễn Anh văn 1 (mã môn ENG01); Học Anh văn 2 (mã môn ENG02) | |\n| 400 – 445 | Miễn Anh văn 1 (mã môn ENG01) và Anh văn 2 (mã môn ENG02); Học Anh văn 3 (mã môn ENG03) | Miễn Anh văn 1 (mã môn ENG01) và Anh văn 2 (mã môn ENG02); Học Anh văn 3 (mã môn ENG03) |\n| 450 – 495 | Miễn Anh văn 1 (mã môn ENG01) đến Anh văn 3 (mã môn ENG03) | Miễn Anh văn 1 (mã môn ENG01) đến Anh văn 3 (mã môn ENG03); Học Anh văn 4 (mã môn ENG04) |\n| ≥ 500 |  | Miễn Anh văn 1 (mã môn ENG01) đến Anh văn 4 (mã môn ENG04); Học Anh văn 5 (mã môn ENG05) |",
+        "page_range": [
+          1
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 1
+        }
+      },
+      {
+        "id": "table_mien_hoc_mon_tieng_anh",
+        "type": "Table",
+        "title": "Bảng 3. Điều kiện miễn học môn tiếng Anh",
+        "full_text": "| TOEIC | TOEFL iBT | IELTS | VNU-EPT | Cambridge English (Tên cũ) | Cambridge English (Tên mới) | Môn học được miễn |\n|---|---|---|---|---|---|---|\n| Nghe - Đọc: 350 | Nói - Viết: 100 | 32 | 3.5 | 152 | KET (Merit) | A2 Key (Grade C) | Anh văn 1 (mã môn ENG01) (CTC/CTTN), Anh văn 1 (mã môn ENG01) (CTTT) |",
+        "page_range": [
+          1
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 1
+        }
+      },
+      {
+        "id": "table_bang_3_trang_4",
+        "type": "Table",
+        "title": "Bảng 3 (tiếp)",
+        "full_text": "| 400 | 120 | 35 | 4.0 | 165 | KET (Distinction) | A2 Key (Grade B) | Anh văn 2 (mã môn ENG02) | Anh văn 2 (mã môn ENG02) |\n| 450 | 140 | 45 | 4.5 | 176 | PET (Pass) Business Preliminary (Pass) | A2 Key (Grade A) B1 Preliminary (Grade C) B1 Business Preliminary (Pass) | Anh văn 3 (mã môn ENG03) | Anh văn 3 (mã môn ENG03) |\n| 500 | 160 | 50 | 5.0 | 201 | PET (Merit) Business Preliminary (Merit) | B1 Preliminary (Grade B) B1 Business Preliminary (Merit) | Anh văn 4 (mã môn ENG04) |\n| 555 | 180 | 60 | 5.5 | 251 | PET (Distinction) FCE (Grade C) Business Preliminary (Distinction) Business Vantage (Grade C) | B1 Preliminary (Grade A) B2 First (Grade C) B1 Business Preliminary (Distinction) B2 Business Vantage (Grade C) | Anh văn 5 (mã môn ENG05) |",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "table_bang_4_trang_4",
+        "type": "Table",
+        "title": "Bảng 4. Điều kiện miễn học môn tiếng Nhật",
+        "full_text": "| Chứng chỉ | Môn học được miễn |\n| --- | --- |\n| JLPT N5 / NAT-TEST N5 | JAN01, JAN02 |\n| JLPT N4 / NAT-TEST N4 | JAN01 đến JAN03 |\n| JLPT N3 / NAT-TEST N3 | JAN01 đến JAN06 |\n| JLPT N2 / NAT-TEST N2 | JAN01 đến JAN07 |\n| JLPT N1 / NAT-TEST N1 | JAN01 đến JAN08 |",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      }
+    ],
+    "relations": [
+      {
+        "source": "document_page_3",
+        "target": "table_xep_lop_dau_khoa",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document_page_3",
+        "target": "article_5",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "article_5",
+        "target": "table_mien_hoc_mon_tieng_anh",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "article_5_trang_3",
+        "target": "table_bang_3_trang_4",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "article_5_trang_3",
+        "target": "clause_2_dieu_5_trang_4",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document_root",
+        "target": "article_6_trang_4",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "article_6_trang_4",
+        "target": "table_bang_4_trang_4",
+        "type": "CONTAINS"
+      }
+    ],
+    "page_count": 2,
+    "errors": []
+  }
+}

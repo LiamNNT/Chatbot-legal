@@ -1,0 +1,1179 @@
+{
+  "extraction_id": "86dd9e07-4d8b-452c-a266-a6595e77913b",
+  "stage": "stage1",
+  "source_file": "20251211_210944_828_qd-dhcntt_04-10-2022_quy_dinh_dao_tao_ngoai_ngu_doi_voi_he_chinh_qui_khoa_2022_0_0.pdf",
+  "extracted_at": "2025-12-11T21:16:55.601565",
+  "category": "Quy chế Đào tạo",
+  "page_count": 9,
+  "structure": {
+    "document": {
+      "id": "document_quyet_dinh_dao_tao_ngoai_ngu_uit",
+      "type": "Document",
+      "title": "Quyết định Ban hành quy định đào tạo ngoại ngữ đối với hệ đại học chính quy của Trường Đại học Công nghệ Thông tin",
+      "full_text": "Số: 828/QĐ-ĐHCNTT\nTp. Hồ Chí Minh, ngày 04 tháng 10 năm 2022\nQUYẾT ĐỊNH Ban hành quy định đào tạo ngoại ngữ đối với hệ đại học chính quy của Trường Đại học Công nghệ Thông tin\nHIỆU TRƯỞNG TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN\nCăn cứ Quyết định số 134/2006/QĐ-TTg, ngày 08 tháng 6 năm 2006 của Thủ tướng Chính phủ về việc thành lập Trường Đại học Công nghệ Thông tin thuộc Đại học Quốc gia Thành phố Hồ Chí Minh (ĐHQG-HCM);\nCăn cứ Quyết định số 867/QĐ-ĐHQG, ngày 17 tháng 8 năm 2016 của Giám đốc ĐHQG-HCM ban hành Quy chế tổ chức và hoạt động của trường đại học thành viên và khoa trực thuộc ĐHQG-HCM;\nCăn cứ Quyết định số 1342/QĐ-ĐHQG, ngày 30 tháng 9 năm 2022 của Giám đốc ĐHQG-HCM về việc ban hành Quy chế Đào tạo trình độ đại học của ĐHQG-HCM;\nCăn cứ Quyết định số 790/QĐ-ĐHCNTT, ngày 28 tháng 9 năm 2022 của Hiệu trưởng Trường Đại học Công nghệ Thông tin về việc ban hành Quy chế đào tạo theo học chế tín chỉ cho hệ đại học chính quy của Trường Đại học Công nghệ Thông tin;\nTheo đề nghị của Trưởng phòng Đào tạo Đại học.",
+      "page_range": [
+        1
+      ],
+      "parent_id": null,
+      "metadata": {
+        "source_page": 1
+      }
+    },
+    "chapters": [
+      {
+        "id": "chuong_i_nhung_quy_dinh_chung",
+        "type": "Chapter",
+        "title": "CHƯƠNG I: NHỮNG QUY ĐỊNH CHUNG",
+        "full_text": "",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "chuong_ii",
+        "type": "Chapter",
+        "title": "CHƯƠNG II: CHƯƠNG TRÌNH GIẢNG DẠY VÀ TỔ CHỨC ĐÀO TẠO NGOẠI NGỮ",
+        "full_text": "",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "chuong_iii",
+        "type": "Chapter",
+        "title": "CHƯƠNG III GIẢNG DẠY CHUYÊN NGÀNH BẰNG NGOẠI NGỮ",
+        "full_text": "",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "chuong_iv",
+        "type": "Chapter",
+        "title": "CHƯƠNG IV: TỔ CHỨC THỰC HIỆN",
+        "full_text": "",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      }
+    ],
+    "articles": [
+      {
+        "id": "article_dieu_1",
+        "type": "Article",
+        "title": "Điều 1",
+        "full_text": "Ban hành kèm theo Quyết định này “Quy định đào tạo ngoại ngữ đối với hệ đại học chính quy của Trường Đại học Công nghệ Thông tin”.",
+        "page_range": [
+          1
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 1
+        }
+      },
+      {
+        "id": "article_dieu_2",
+        "type": "Article",
+        "title": "Điều 2",
+        "full_text": "Các Ông/Bà Trưởng các Phòng, Ban, các đơn vị có liên quan và sinh viên chính quy của Trường Đại học Công nghệ Thông tin chịu trách nhiệm thi hành Quyết định này. Quyết định có hiệu lực kể từ ngày ký.",
+        "page_range": [
+          1
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 1
+        }
+      },
+      {
+        "id": "dieu_1_pham_vi_va_doi_tuong_ap_dung",
+        "type": "Article",
+        "title": "Điều 1. Phạm vi điều chỉnh và đối tượng áp dụng",
+        "full_text": "1. Văn bản này quy định về đào tạo ngoại ngữ đối với các chương trình đào tạo hệ đại học chính quy của Trường Đại học Công nghệ Thông tin (gọi tắt là Trường) bao gồm: chương trình giảng dạy, kiểm tra xếp lớp đầu khóa, xét miễn học các môn học ngoại ngữ, chuẩn ngoại ngữ xét tốt nghiệp và tổ chức giảng dạy các môn học chuyên ngành bằng ngoại ngữ.\n2. Quy định này áp dụng với sinh viên các loại chương trình đại học chính quy, bao gồm: chương trình chuẩn (CTC), chương trình chất lượng cao (CLC), chương trình tài năng (CTTN), chương trình tiên tiến (CTTT), chương trình văn bằng hai (VB2), chương trình liên thông từ cao đẳng lên đại học (LT).\n3. Quy định này áp dụng bắt buộc cho các khóa tuyển sinh từ năm 2022. Các khóa tuyển sinh trước năm 2022 có thể lựa chọn áp dụng quy định này hoặc quy định được ban hành trước đó.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_2_muc_dich_dao_tao_ngoai_ngu",
+        "type": "Article",
+        "title": "Điều 2. Mục đích đào tạo ngoại ngữ",
+        "full_text": "1. Chương trình giảng dạy tiếng Anh nhằm mục đích giúp sinh viên:\na. Phát triển toàn diện 4 kỹ năng sử dụng tiếng Anh tổng quát: nghe, nói, đọc, viết; phát triển kỹ năng sử dụng tiếng Anh chuyên ngành ở mức độ phù hợp với trình độ đào tạo, ngành đào tạo và loại chương trình đào tạo.\nb. Đáp ứng được chuẩn ngoại ngữ tiếng Anh đầu ra theo quy định của ĐHQG-HCM.\n2. Các ngoại ngữ khác tiếng Anh được đưa vào nhằm khuyến khích sinh viên học để đáp ứng nhu cầu đa dạng của thị trường lao động.\n3. Sinh viên chương trình chuẩn, chương trình tài năng, chương trình văn bằng hai và chương trình liên thông được chọn một trong các chứng chỉ ngoại ngữ: tiếng Anh, tiếng Nhật hoặc tiếng Pháp để xét tốt nghiệp, tuy nhiên sinh viên vẫn phải hoàn thành chương trình ngoại ngữ quy định tại Điều 3 (ngoại trừ chương trình định hướng Nhật Bản). Các chuẩn quá trình được xây dựng nhằm thúc đẩy sinh viên học ngoại ngữ. Việc xét chuẩn quá trình thực hiện theo Điều 8 của Quy định này.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_3",
+        "type": "Article",
+        "title": "Điều 3. Chương trình giảng dạy tiếng Anh",
+        "full_text": "",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "dieu_4",
+        "type": "Article",
+        "title": "Điều 4. Kiểm tra xếp lớp đầu khoá cho sinh viên thuộc CTC, CTTN, CTTT",
+        "full_text": "",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "article_5",
+        "type": "Article",
+        "title": "Điều 5. Xét miễn các môn học tiếng Anh",
+        "full_text": "",
+        "page_range": [
+          4
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 4
+        }
+      },
+      {
+        "id": "article_6_page_5",
+        "type": "Article",
+        "title": "Điều 6. Xét miễn các môn học tiếng Nhật đối với sinh viên thuộc chương trình Công nghệ Thông tin Việt - Nhật (chương trình chất lượng cao định hướng Nhật Bản)",
+        "full_text": "Sinh viên được xét miễn học các môn tiếng Nhật tương ứng trong CTĐT nếu có một trong các chứng chỉ đạt trình độ theo quy định tại Bảng 4. Sinh viên được miễn môn học nào thì đồng thời được miễn những môn học ở cấp độ thấp hơn mà sinh viên chưa học hoặc chưa đạt.",
+        "page_range": [
+          5
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 5
+        }
+      },
+      {
+        "id": "dieu_7",
+        "type": "Article",
+        "title": "Điều 7. Thời điểm xét miễn, cách tính điểm miễn các môn học ngoại ngữ",
+        "full_text": "",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "dieu_8",
+        "type": "Article",
+        "title": "Điều 8. Chuẩn quá trình về ngoại ngữ",
+        "full_text": "",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "dieu_9",
+        "type": "Article",
+        "title": "Điều 9. Văn bằng, chứng chỉ/chứng nhận được sử dụng để công nhận đạt chuẩn xét tốt nghiệp",
+        "full_text": "Để được xét tốt nghiệp sinh viên phải hoàn tất các môn học tiếng Anh trong chương trình giảng dạy tiếng Anh tại Điều 3 và có một trong các văn bằng, chứng chỉ/chứng nhận được quy định như sau:",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "dieu_10",
+        "type": "Article",
+        "title": "Điều 10. Chương trình giảng dạy và tổ chức giảng dạy NNCM",
+        "full_text": "",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_11",
+        "type": "Article",
+        "title": "Điều 11. Yêu cầu về cán bộ giảng dạy NNCM",
+        "full_text": "",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_12",
+        "type": "Article",
+        "title": "Điều 12. Quyền lợi của sinh viên học NNCM",
+        "full_text": "",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_13",
+        "type": "Article",
+        "title": "Điều 13. Trách nhiệm của đơn vị quản lý đào tạo",
+        "full_text": "",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_14",
+        "type": "Article",
+        "title": "Điều 14. Trách nhiệm của đơn vị chuyên môn phụ trách các môn học ngoại ngữ",
+        "full_text": "",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_15",
+        "type": "Article",
+        "title": "Điều 15. Trách nhiệm của các Khoa/Bộ môn phụ trách các ngành đào tạo",
+        "full_text": "",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_16",
+        "type": "Article",
+        "title": "Điều 16. Điều khoản thi hành",
+        "full_text": "",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      }
+    ],
+    "clauses": [
+      {
+        "id": "dieu_1_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Văn bản này quy định về đào tạo ngoại ngữ đối với các chương trình đào tạo hệ đại học chính quy của Trường Đại học Công nghệ Thông tin (gọi tắt là Trường) bao gồm: chương trình giảng dạy, kiểm tra xếp lớp đầu khóa, xét miễn học các môn học ngoại ngữ, chuẩn ngoại ngữ xét tốt nghiệp và tổ chức giảng dạy các môn học chuyên ngành bằng ngoại ngữ.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_1_khoan_2",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Quy định này áp dụng với sinh viên các loại chương trình đại học chính quy, bao gồm: chương trình chuẩn (CTC), chương trình chất lượng cao (CLC), chương trình tài năng (CTTN), chương trình tiên tiến (CTTT), chương trình văn bằng hai (VB2), chương trình liên thông từ cao đẳng lên đại học (LT).",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_1_khoan_3",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Quy định này áp dụng bắt buộc cho các khóa tuyển sinh từ năm 2022. Các khóa tuyển sinh trước năm 2022 có thể lựa chọn áp dụng quy định này hoặc quy định được ban hành trước đó.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_2_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Chương trình giảng dạy tiếng Anh nhằm mục đích giúp sinh viên:\na. Phát triển toàn diện 4 kỹ năng sử dụng tiếng Anh tổng quát: nghe, nói, đọc, viết; phát triển kỹ năng sử dụng tiếng Anh chuyên ngành ở mức độ phù hợp với trình độ đào tạo, ngành đào tạo và loại chương trình đào tạo.\nb. Đáp ứng được chuẩn ngoại ngữ tiếng Anh đầu ra theo quy định của ĐHQG-HCM.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_2_khoan_2",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Các ngoại ngữ khác tiếng Anh được đưa vào nhằm khuyến khích sinh viên học để đáp ứng nhu cầu đa dạng của thị trường lao động.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_2_khoan_3",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Sinh viên chương trình chuẩn, chương trình tài năng, chương trình văn bằng hai và chương trình liên thông được chọn một trong các chứng chỉ ngoại ngữ: tiếng Anh, tiếng Nhật hoặc tiếng Pháp để xét tốt nghiệp, tuy nhiên sinh viên vẫn phải hoàn thành chương trình ngoại ngữ quy định tại Điều 3 (ngoại trừ chương trình định hướng Nhật Bản). Các chuẩn quá trình được xây dựng nhằm thúc đẩy sinh viên học ngoại ngữ. Việc xét chuẩn quá trình thực hiện theo Điều 8 của Quy định này.",
+        "page_range": [
+          2
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 2
+        }
+      },
+      {
+        "id": "dieu_3_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Chương trình giảng dạy tiếng Anh của từng loại chương trình bao gồm những môn học được liệt kê theo cấp độ khó tăng dần như trong Bảng 1 nhằm hỗ trợ sinh viên đạt chuẩn ngoại ngữ xét tốt nghiệp theo quy định của từng chương trình. Đối với những môn học tiếng Anh nằm trong chương trình đào tạo (CTĐT) được xét miễn học theo Điều 4 và Điều 5 của Quy định này thì sinh viên được nhận điểm Miễn cho môn học đó và không tính vào điểm trung bình chung, điểm trung bình chung tích lũy, điểm trung bình học kỳ.",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "dieu_3_khoan_2",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Ngoài các môn học tiếng Anh tại Khoản 1 của Điều 3, nếu sinh viên có nguyện vọng thì có thể đăng ký học môn Kỹ năng thuyết trình tiếng Anh (mã môn: ENG06), Kỹ năng viết tiếng Anh (mã môn: ENG07) để tích lũy thêm số tín chỉ ngoại số tín chỉ tối thiểu cần đạt theo chương trình đào tạo (các môn học này không dùng để thay thế cho những môn học thuộc khối kiến thức chuyên ngành).",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "dieu_3_khoan_3",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Đồng thời, trong CTĐT của ngành học có thể có những môn học chuyên ngành được giảng dạy bằng ngoại ngữ nhằm cung cấp kiến thức ngoại ngữ chuyên ngành và tạo môi trường cho sinh viên thực hành các kỹ năng ngoại ngữ, gọi tắt là môn học Ngoại ngữ chuyên môn (NNCN). Những môn học đó được thiết kế và tổ chức giảng dạy tuân thủ theo các quy định tại Chương III của Quy định này.",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "dieu_3_khoan_4",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Những loại chương trình không được liệt kê tại Bảng 1 thì thực hiện theo bản mô tả chương trình đào tạo và quy định riêng của loại chương trình tương đố (nếu có).",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "dieu_4_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Vào đầu khoá học, Trường tổ chức kiểm tra tiếng Anh để xếp lớp cho tất cả sinh viên khoá tuyển sinh. Để kiểm tra xếp lớp đầu khoá có dạng thức như đề thi TOEIC 2 kỹ năng (nghe và đọc). Căn cứ vào kết quả kiểm tra tiếng Anh, sinh viên được xếp vào lớp tiếng Anh phù hợp với trình độ của sinh viên theo Bảng 2. Tuỳ theo tình hình thực tế, các mức điểm có thể được hiệu trưởng quyết định điều chỉnh theo đề xuất hợp lý của bộ phận chuyên môn.",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "clause_2",
+        "type": "Clause",
+        "title": "",
+        "full_text": "2. Nếu sinh viên nộp chứng chỉ ngoại ngữ để được xét miễn các môn học tiếng Anh theo quy định tại Điều 5 thì không cần tham gia thi xếp lớp. Thời điểm nộp chứng chỉ để xét miễn: chậm nhất là 2 tuần trước khi bắt đầu học kỳ 1.",
+        "page_range": [
+          4
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 4
+        }
+      },
+      {
+        "id": "clause_3",
+        "type": "Clause",
+        "title": "",
+        "full_text": "3. Nếu không dự thi xếp lớp và không nộp chứng chỉ tiếng Anh, sinh viên được xếp vào trình độ tương ứng với điểm kiểm tra dưới 300 theo Bảng 2.",
+        "page_range": [
+          4
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 4
+        }
+      },
+      {
+        "id": "clause_1_article_5",
+        "type": "Clause",
+        "title": "",
+        "full_text": "1. Sinh viên được xét miễn học các môn tiếng Anh tương ứng nếu có một trong các chứng chỉ/chứng nhận đạt trình độ tối thiểu theo quy định tại Bảng 3. Sinh viên được miễn môn học nào thì đồng thời được miễn những môn học ở cấp độ thấp hơn mà sinh viên chưa học hoặc chưa đạt.",
+        "page_range": [
+          4
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 4
+        }
+      },
+      {
+        "id": "clause_2_page_5",
+        "type": "Clause",
+        "title": "2.",
+        "full_text": "Hằng năm, Trung tâm Ngoại ngữ của Trường tổ chức 04 đợt kiểm tra năng lực tiếng Anh với 04 kỹ năng nghe – đọc – nói – viết và cấp chứng nhận nội bộ. Sinh viên có thể dùng chứng nhận nội bộ này tương đương với chứng chỉ TOEIC để nộp xét miễn các môn tiếng Anh như trong Bảng 3.",
+        "page_range": [
+          5
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 5
+        }
+      },
+      {
+        "id": "khoan_1_dieu_7",
+        "type": "Clause",
+        "title": "",
+        "full_text": "1. Trường xét miễn các môn học ngoại ngữ trong vòng 4 học kỳ chính kể từ khi nhập học, sau thời gian này (nghĩa là sau học kỳ 2 của năm thứ hai) sinh viên không được xét miễn các môn học ngoại ngữ và phải đăng ký học những môn học ngoại ngữ trong chương trình đào tạo.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_2_dieu_7",
+        "type": "Clause",
+        "title": "",
+        "full_text": "2. Sinh viên đạt các văn bằng/chứng chỉ/chứng nhận tại Điều 5, Điều 6 của Quy định này thì nộp bản sao văn bằng/chứng chỉ/chứng nhận còn hiệu lực cho Trường để được xét miễn các môn học tương ứng. Văn bằng/chứng chỉ/chứng nhận phải còn thời hạn hai năm tính từ ngày cấp đến ngày đăng ký xét công nhận đạt chuẩn. Trường tổ chức xét miễn 4 đợt/năm tương ứng với 4 đợt xét tốt nghiệp đại học trong năm.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_3_dieu_7",
+        "type": "Clause",
+        "title": "",
+        "full_text": "3. Điểm Miễn được tính cho học kỳ kế tiếp trong tiến trình học.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_1_dieu_8",
+        "type": "Clause",
+        "title": "",
+        "full_text": "1. Sau 2 học kỳ chính kể từ thời điểm nhập học, sinh viên phải đạt môn Anh văn 1 (mã môn ENG01), nếu không đạt môn Anh văn 1, sinh viên chỉ được đăng ký tối đa 12 tín chỉ ngoại các môn học ngoại ngữ (bao gồm cả đăng ký học lại hoặc cải thiện) cho đến khi đạt chuẩn.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_2_dieu_8",
+        "type": "Clause",
+        "title": "",
+        "full_text": "2. Sau 4 học kỳ chính kể từ thời điểm nhập học, sinh viên phải đạt môn Anh văn 2 (mã môn ENG02). Nếu không đạt môn Anh văn 2, sinh viên chỉ được đăng ký tối đa 12 tín chỉ ngoại các môn học ngoại ngữ (bao gồm cả đăng ký học lại hoặc cải thiện) cho đến khi đạt chuẩn.\n\nSinh viên chương trình Công nghệ Thông tin Việt-Nhật (CLC định hướng Nhật Bản) phải đạt môn Tiếng Nhật 2 (mã môn JAN02) hoặc có chứng chỉ tương đương JLPT N5 hoặc NAT-TEST N5. Nếu không đạt thì sinh viên chỉ được đăng ký tối đa 12 tín chỉ ngoài các môn học ngoại ngữ (bao gồm cả đăng ký học lại hoặc cải thiện) cho đến khi đạt chuẩn.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_3_dieu_8",
+        "type": "Clause",
+        "title": "",
+        "full_text": "3. Sau 6 học kỳ chính kể từ thời điểm nhập học, sinh viên phải đạt môn Anh văn 3 (mã môn ENG03). Nếu không đạt môn Anh văn 3, sinh viên chỉ được đăng ký tối đa 12 tín chỉ ngoài các môn học ngoại ngữ (bao gồm cả đăng ký học lại hoặc cải thiện) cho đến khi đạt chuẩn.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_4_dieu_8",
+        "type": "Clause",
+        "title": "",
+        "full_text": "4. Thời điểm nộp chứng chỉ để xét chuẩn quá trình: 2 tuần trước khi bắt đầu thực hiện đăng ký học phần của mỗi học kỳ.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_5_dieu_8",
+        "type": "Clause",
+        "title": "",
+        "full_text": "5. Không xét chuẩn quá trình đối với chương trình có ngoại ngữ khác tiếng Anh và tiếng Nhật, chương trình văn bằng hai, chương trình liên thông từ cao đẳng lên đại học.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "khoan_1_dieu_9",
+        "type": "Clause",
+        "title": "",
+        "full_text": "1. Văn bằng tốt nghiệp đại học/trên đại học trong nước, nước ngoài mà ngành học hoặc ngôn ngữ sử dụng toàn phần trong đào tạo (không thông qua phiên dịch) là một trong ba ngoại ngữ: tiếng Anh, tiếng Pháp, tiếng Nhật.",
+        "page_range": [
+          6
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 6
+        }
+      },
+      {
+        "id": "dieu_10_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "1. Môn học NNCM đáp ứng các yêu cầu sau:\na. Là các môn học thuộc khối kiến thức cơ bản, cơ sở hoặc chuyên ngành được giảng dạy chủ yếu bằng tiếng Anh/tiếng Nhật. Nội dung giảng dạy hoàn toàn giống môn học được giảng dạy bằng tiếng Việt.\nb. Cán bộ giảng dạy (CBGD) lý thuyết phải giảng dạy bằng tiếng Anh/tiếng Nhật.\nc. Tài liệu giảng dạy và giáo trình chính của môn học bằng tiếng Anh/tiếng Nhật.",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_10_khoan_2",
+        "type": "Clause",
+        "title": "",
+        "full_text": "2. Để được tham gia học các lớp NNCM:\na. Đối với tiếng Anh: Sinh viên phải có một trong các loại chứng chỉ TOEIC 400 tại Bảng 3 hoặc đã đạt môn học Anh văn 2 (mã môn ENG02).\nb. Đối với tiếng Nhật: Sinh viên phải có một trong các loại chứng chỉ N4 tại Bảng 4 hoặc đã đạt môn học Tiếng Nhật 3 (mã môn JAN03).",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_10_khoan_3",
+        "type": "Clause",
+        "title": "",
+        "full_text": "3. Mỗi lớp học NNCM có tối thiểu 01 trợ giảng để hỗ trợ sinh viên trong quá trình học tập. Trợ giảng do CBGD lý thuyết giới thiệu. Trợ giảng có thể sử dụng tiếng Việt trong quá trình hỗ trợ sinh viên.",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_11_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "CBGD phải đáp ứng yêu cầu theo quy định chung của Trường; ngoài ra, CBGD lý thuyết phải đáp ứng thêm một trong các yêu cầu sau đây:\n1. Có trình độ tiếng Anh/tiếng Nhật tối thiểu tương đương cấp độ C1 tham chiếu theo khung Châu Âu (CEFR).\n2. Tốt nghiệp tại một trường đại học nước ngoài, có sử dụng tiếng Anh/tiếng Nhật trong quá trình học tập (có môn học bằng tiếng Anh/tiếng Nhật, hoặc luận án tốt nghiệp được viết bằng tiếng Anh/tiếng Nhật).\n3. Tốt nghiệp tại một trường đại học trong nước có chương trình đào tạo sử dụng hoàn toàn bằng tiếng Anh/tiếng Nhật (không thông qua phiên dịch).",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_12_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Môn học NNCM được ghi chú rõ về ngôn ngữ giảng dạy trong bảng điểm và giấy chứng nhận hoàn thành môn học.",
+        "page_range": [
+          8
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 8
+        }
+      },
+      {
+        "id": "dieu_13_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Quản lý đào tạo ngoại ngữ theo quy định này.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_13_khoan_2",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Chủ trì tổ chức thi xếp lớp đầu khóa.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_13_khoan_3",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Chủ trì tổ chức xét miễn học.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_14_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Biên soạn chương trình, phân công giảng viên giảng dạy các môn học ngoại ngữ.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_14_khoan_2",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Phối hợp tổ chức kiểm tra xếp lớp đầu khóa.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_14_khoan_3",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Phối hợp xét miễn học các môn học ngoại ngữ.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_14_khoan_4",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Phối hợp với Đơn vị quản lý đào tạo trong các công tác quản lý đào tạo ngoại ngữ.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_15_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Biên soạn chương trình, tổ chức giảng dạy các môn học NNCNM.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      },
+      {
+        "id": "dieu_16_khoan_1",
+        "type": "Clause",
+        "title": "",
+        "full_text": "Trong quá trình tổ chức thực hiện, tuỳ theo yêu cầu thực tế, Quy định này được Hiệu trưởng xem xét, quyết định sửa đổi, bổ sung cho phù hợp.",
+        "page_range": [
+          9
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 9
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "bang_1",
+        "type": "Table",
+        "title": "Bảng 1. Chương trình giảng dạy tiếng Anh áp dụng từ khóa tuyển sinh năm 2022",
+        "full_text": "| CTC và CTTN              | CTTT                                                                      |\n|--------------------------|---------------------------------------------------------------------------|\n| Gồm 3 môn học:           | Gồm 8 môn học:                                                            |\n| 1. Anh văn 1 (mã môn ENG01) | 1. Anh văn 1 (mã môn ENG01)                                             |\n| 2. Anh văn 2 (mã môn ENG02) | 2. Anh văn 2 (mã môn ENG02)                                             |\n| 3. Anh văn 3 (mã môn ENG03) | 3. Anh văn 3 (mã môn ENG03)                                             |\n|                          | 4. Anh văn 4 (mã môn ENG04)                                             |\n|                          | 5. Anh văn 5 (mã môn ENG05)                                             |\n|                          | 6. Tiếng Anh 1 (mã môn ENGL1113)                                        |\n|                          | 7. Tiếng Anh 2 (mã môn ENGL1213)                                        |\n|                          | 8. Tiếng Anh chuyên ngành công nghệ thông tin (mã môn SPCH3723)         |",
+        "page_range": [
+          3
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 3
+        }
+      },
+      {
+        "id": "table_fragment_bang_2",
+        "type": "Table",
+        "title": "Fragment",
+        "full_text": "| Điểm kiểm tra (dạng thức TOEIC nghe và đọc) | CTC và CTTN | CTTT |\n| --- | --- | --- |\n| < 300 | Không được học Anh văn 1 (mã môn ENG01), được đăng ký học Anh văn sơ cấp ngoài CTĐT chính quy do Trung tâm Ngoại ngữ phụ trách (không bắt buộc). | Học Anh văn 1 (mã môn ENG01) |\n| 300 – 345 | Học Anh văn 1 (mã môn ENG01) | |\n| 350 – 395 | Miễn Anh văn 1 (mã môn ENG01); Học Anh văn 2 (mã môn ENG02) | |\n| 400 – 445 | Miễn Anh văn 1 (mã môn ENG01) và Anh văn 2 (mã môn ENG02); Học Anh văn 3 (mã môn ENG03) | Miễn Anh văn 1 (mã môn ENG01) và Anh văn 2 (mã môn ENG02); Học Anh văn 3 (mã môn ENG03) |\n| 450 – 495 | Miễn Anh văn 1 (mã môn ENG01) đến Anh văn 3 (mã môn ENG03) | Miễn Anh văn 1 (mã môn ENG01) đến Anh văn 3 (mã môn ENG03); Học Anh văn 4 (mã môn ENG04) |\n| ≥ 500 | | Miễn Anh văn 1 (mã môn ENG01) đến Anh văn 4 (mã môn ENG04); Học Anh văn 5 (mã môn ENG05) |",
+        "page_range": [
+          4
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 4
+        }
+      },
+      {
+        "id": "table_bang_3",
+        "type": "Table",
+        "title": "Bảng 3. Điều kiện miễn học môn tiếng Anh",
+        "full_text": "| Chứng chỉ/Chứng nhận | Môn học được miễn |\n| --- | --- |\n| TOEIC Nghe - Đọc: 350 |\n| TOEIC Nói - Viết: 100 |\n| TOEFL iBT: 32 |\n| IELTS: 3.5 |\n| VNU-EPT: 152 |\n| Cambridge English (Tên cũ): KET (Merit) |\n| Cambridge English (Tên mới): A2 Key (Grade C) |\n| CTC/CTTN: Anh văn 1 (mã môn ENG01) |\n| CTTT: Anh văn 1 (mã môn ENG01) |\n| 400 | 120 | 35 | 4.0 | 165 | KET (Distinction) | A2 Key (Grade B) | Anh văn 2 (mã môn ENG02) | Anh văn 2 (mã môn ENG02) |\n| 450 | 140 | 45 | 4.5 | 176 | PET (Pass) Business Preliminary (Pass) | A2 Key (Grade A) B1 Preliminary (Grade C) B1 Business Preliminary (Pass) | Anh văn 3 (mã môn ENG03) | Anh văn 3 (mã môn ENG03) |\n| 500 | 160 | 50 | 5.0 | 201 | PET (Merit) Business Preliminary (Merit) | B1 Preliminary (Grade B) B1 Business Preliminary (Merit) | Anh văn 4 (mã môn ENG04) |\n| 555 | 180 | 60 | 5.5 | 251 | PET (Distinction) FCE (Grade C) Business Preliminary (Distinction) Business Vantage (Grade C) | B1 Preliminary (Grade A) B2 First (Grade C) B1 Business Preliminary (Distinction) B2 Business Vantage (Grade C) | Anh văn 5 (mã môn ENG05) |",
+        "page_range": [
+          4,
+          5
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 4
+        }
+      },
+      {
+        "id": "table_bang_4_page_5",
+        "type": "Table",
+        "title": "Bảng 4. Điều kiện miễn học môn tiếng Nhật",
+        "full_text": "| Chứng chỉ | Môn học được miễn |\n|-----------|-------------------|\n| JLPT | NAT-TEST            |\n| N5   | N5   | JAN01, JAN02         |\n| N4   | N4   | JAN01 đến JAN03      |\n| N3   | N3   | JAN01 đến JAN06      |\n| N2   | N2   | JAN01 đến JAN07      |\n| N1   | N1   | JAN01 đến JAN08      |",
+        "page_range": [
+          5
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 5
+        }
+      },
+      {
+        "id": "table_english_certificates",
+        "type": "Table",
+        "title": "Bảng 5. Chứng chỉ/Chứng nhận tiếng Anh dùng để xét công nhận tốt nghiệp",
+        "full_text": "| Chứng chỉ/Chương trình | TOEIC Nghe - Đọc | TOEIC Nói - Viết | TOEFL iBT | IELTS | Cambridge English Tên cũ | Cambridge English Tên mới | VNU-EPT | Chứng chỉ theo khung năng lực ngoại ngữ 6 bậc (*) |\n|------------------------|------------------|------------------|-----------|-------|------------------------|--------------------------|---------|-----------------------------------------------|\n| VB2, LT, CTC           | 450              | 185              | 45        | 4.5   | PET (Pass) Business Preliminary (Pass) | A2 Key (Grade A) B1 Preliminary (Grade C) B1 Business Preliminary (Pass) | 176     | B1                                              |\n| CTTN, CLC              | 555              | 205              | 60        | 5.5   | PET (Distinction) FCE (Grade C) Business Preliminary (Distinction) Business Vantage (Grade C) | B1 Preliminary (Grade B) B1 Business Preliminary (Merit) | 201     | B2                                              |\n| CTTT                   | 675              | 225              | 79        | 6.0   | FCE (Grade B) Business Vantage (Grade B) | B1 Preliminary (Grade A) B2 First (Grade C) B1 Business Preliminary (Distinction) B2 Business Vantage (Grade C) | 251     | C1                                              |",
+        "page_range": [
+          7
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 7
+        }
+      },
+      {
+        "id": "table_french_japanese_certificates",
+        "type": "Table",
+        "title": "Bảng 6. Chứng chỉ tiếng Pháp và tiếng Nhật dùng để xét công nhận tốt nghiệp",
+        "full_text": "| Chứng chỉ/Chương trình | Tiếng Pháp                        | Tiếng Nhật             |\n|------------------------|-----------------------------------|------------------------|\n| VB2, LT, CTC           | DELF B1 hoặc TCF Niveau 3         | JLPT N4 hoặc NAT-TEST N4|\n| CTTN, CLC              | DELF B2 hoặc TCF Niveau 4         | JLPT N3 hoặc NAT-TEST N3|",
+        "page_range": [
+          7
+        ],
+        "parent_id": null,
+        "metadata": {
+          "source_page": 7
+        }
+      }
+    ],
+    "relations": [
+      {
+        "source": "document_quyet_dinh_dao_tao_ngoai_ngu_uit",
+        "target": "article_dieu_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document_quyet_dinh_dao_tao_ngoai_ngu_uit",
+        "target": "article_dieu_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document_quy_dinh_dao_tao_ngoai_ngu_dai_hoc_cntt",
+        "target": "chuong_i_nhung_quy_dinh_chung",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_i_nhung_quy_dinh_chung",
+        "target": "dieu_1_pham_vi_va_doi_tuong_ap_dung",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_1_pham_vi_va_doi_tuong_ap_dung",
+        "target": "dieu_1_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_1_pham_vi_va_doi_tuong_ap_dung",
+        "target": "dieu_1_khoan_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_1_pham_vi_va_doi_tuong_ap_dung",
+        "target": "dieu_1_khoan_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_i_nhung_quy_dinh_chung",
+        "target": "dieu_2_muc_dich_dao_tao_ngoai_ngu",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_2_muc_dich_dao_tao_ngoai_ngu",
+        "target": "dieu_2_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_2_muc_dich_dao_tao_ngoai_ngu",
+        "target": "dieu_2_khoan_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_2_muc_dich_dao_tao_ngoai_ngu",
+        "target": "dieu_2_khoan_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_ii",
+        "target": "dieu_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_3",
+        "target": "dieu_3_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_3",
+        "target": "bang_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_3",
+        "target": "dieu_3_khoan_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_3",
+        "target": "dieu_3_khoan_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_3",
+        "target": "dieu_3_khoan_4",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_ii",
+        "target": "dieu_4",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_4",
+        "target": "dieu_4_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document",
+        "target": "table_fragment_bang_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document",
+        "target": "clause_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document",
+        "target": "clause_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document",
+        "target": "article_5",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "article_5",
+        "target": "clause_1_article_5",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "article_5",
+        "target": "table_bang_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "article_6_page_5",
+        "target": "table_bang_4_page_5",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_7",
+        "target": "khoan_1_dieu_7",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_7",
+        "target": "khoan_2_dieu_7",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_7",
+        "target": "khoan_3_dieu_7",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_8",
+        "target": "khoan_1_dieu_8",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_8",
+        "target": "khoan_2_dieu_8",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_8",
+        "target": "khoan_3_dieu_8",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_8",
+        "target": "khoan_4_dieu_8",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_8",
+        "target": "khoan_5_dieu_8",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_9",
+        "target": "khoan_1_dieu_9",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_iii",
+        "target": "dieu_10",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_10",
+        "target": "dieu_10_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_10",
+        "target": "dieu_10_khoan_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_10",
+        "target": "dieu_10_khoan_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_iii",
+        "target": "dieu_11",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_11",
+        "target": "dieu_11_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_iii",
+        "target": "dieu_12",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_12",
+        "target": "dieu_12_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "document",
+        "target": "chuong_iv",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_iv",
+        "target": "dieu_13",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_13",
+        "target": "dieu_13_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_13",
+        "target": "dieu_13_khoan_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_13",
+        "target": "dieu_13_khoan_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_iv",
+        "target": "dieu_14",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_14",
+        "target": "dieu_14_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_14",
+        "target": "dieu_14_khoan_2",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_14",
+        "target": "dieu_14_khoan_3",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_14",
+        "target": "dieu_14_khoan_4",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_iv",
+        "target": "dieu_15",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_15",
+        "target": "dieu_15_khoan_1",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "chuong_iv",
+        "target": "dieu_16",
+        "type": "CONTAINS"
+      },
+      {
+        "source": "dieu_16",
+        "target": "dieu_16_khoan_1",
+        "type": "CONTAINS"
+      }
+    ],
+    "page_count": 9,
+    "errors": []
+  }
+}
