@@ -1222,37 +1222,76 @@ class Neo4jGraphAdapter(GraphRepository):
         Search Article nodes by keywords in title and content.
         
         For CatRAG schema with Article nodes containing 'title', 'content' fields.
+        
+        ENHANCED: 
+        - Prioritize compound terms (phrases with spaces) by requiring exact match
+        - Use scoring to rank results by number of keywords matched
         """
         logger.info(f"🔍 search_articles_by_keyword called with keywords: {keywords}, limit: {limit}")
         driver = self._get_driver()
         
-        # Build search pattern for keywords
-        # Using CONTAINS for each keyword (case-insensitive via toLower)
-        keyword_conditions = []
-        for i, kw in enumerate(keywords):
-            keyword_conditions.append(
-                f"(toLower(a.title) CONTAINS toLower($kw{i}) OR toLower(a.full_text) CONTAINS toLower($kw{i}))"
-            )
+        # Separate compound terms (phrases with spaces) from single keywords
+        compound_terms = [kw for kw in keywords if ' ' in kw]
+        single_keywords = [kw for kw in keywords if ' ' not in kw]
         
-        where_clause = " OR ".join(keyword_conditions) if keyword_conditions else "true"
+        logger.info(f"   Compound terms: {compound_terms}")
+        logger.info(f"   Single keywords: {single_keywords}")
+        
+        # Build search pattern
+        # For compound terms: require exact match (AND logic within the compound)
+        # For single keywords: use OR logic
+        conditions = []
+        params = {"limit": limit}
+        
+        # Compound terms get higher priority - if any compound term matches, include
+        for i, ct in enumerate(compound_terms):
+            param_name = f"ct{i}"
+            conditions.append(
+                f"(toLower(a.title) CONTAINS toLower(${param_name}) OR toLower(a.full_text) CONTAINS toLower(${param_name}))"
+            )
+            params[param_name] = ct
+        
+        # Single keywords as fallback
+        for i, kw in enumerate(single_keywords):
+            param_name = f"kw{i}"
+            conditions.append(
+                f"(toLower(a.title) CONTAINS toLower(${param_name}) OR toLower(a.full_text) CONTAINS toLower(${param_name}))"
+            )
+            params[param_name] = kw
+        
+        where_clause = " OR ".join(conditions) if conditions else "true"
+        
+        # ENHANCED: Add scoring to prioritize articles matching more keywords
+        # and especially compound terms
+        score_parts = []
+        for i in range(len(compound_terms)):
+            param_name = f"ct{i}"
+            # Compound terms get weight 3 (higher priority)
+            score_parts.append(f"CASE WHEN toLower(a.title) CONTAINS toLower(${param_name}) THEN 3 ELSE 0 END")
+            score_parts.append(f"CASE WHEN toLower(a.full_text) CONTAINS toLower(${param_name}) THEN 2 ELSE 0 END")
+        
+        for i in range(len(single_keywords)):
+            param_name = f"kw{i}"
+            # Single keywords get weight 1
+            score_parts.append(f"CASE WHEN toLower(a.title) CONTAINS toLower(${param_name}) THEN 1 ELSE 0 END")
+            score_parts.append(f"CASE WHEN toLower(a.full_text) CONTAINS toLower(${param_name}) THEN 0.5 ELSE 0 END")
+        
+        score_expr = " + ".join(score_parts) if score_parts else "0"
         
         cypher = f"""
         MATCH (a:Article)
         WHERE {where_clause}
+        WITH a, ({score_expr}) as score
         RETURN elementId(a) as element_id, a.id as article_id, a.title as title, 
-               a.full_text as content
+               a.full_text as content, score
+        ORDER BY score DESC
         LIMIT $limit
         """
         
-        # Build params
-        params = {"limit": limit}
-        for i, kw in enumerate(keywords):
-            params[f"kw{i}"] = kw
-        
         results = []
         try:
-            logger.info(f"📝 Executing Cypher: {cypher[:200]}...")
-            logger.info(f"📝 With params: {params}")
+            logger.info(f"📝 Executing Cypher with scoring...")
+            logger.info(f"📝 With params: {list(params.keys())}")
             with driver.session(database=self.database) as session:
                 result = session.run(cypher, **params)
                 for record in result:
@@ -1261,9 +1300,12 @@ class Neo4jGraphAdapter(GraphRepository):
                         "article_id": record["article_id"],
                         "title": record["title"],
                         "content": record["content"][:500] if record["content"] else "",
-                        "type": "Article"
+                        "type": "Article",
+                        "score": record["score"]
                     })
             logger.info(f"✅ Found {len(results)} articles for keywords: {keywords}")
+            if results:
+                logger.info(f"   Top result: {results[0].get('title')} (score: {results[0].get('score')})")
         except Exception as e:
             logger.error(f"❌ Error searching articles: {e}", exc_info=True)
         

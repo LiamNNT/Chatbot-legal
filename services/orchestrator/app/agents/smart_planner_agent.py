@@ -721,10 +721,11 @@ class SmartPlannerAgent(SpecializedAgent):
                 filters.doc_types.append(doc_type)
         
         # === FACULTIES DETECTION ===
+        # Note: Using word boundaries to avoid false positives (e.g., "UIT" matching "it")
         faculty_patterns = {
-            "CNTT": ["công nghệ thông tin", "cntt", "khoa cntt", "it"],
-            "KHMT": ["khoa học máy tính", "khmt", "computer science", "cs"],
-            "HTTT": ["hệ thống thông tin", "httt", "information systems", "is"],
+            "CNTT": ["công nghệ thông tin", "cntt", "khoa cntt"],
+            "KHMT": ["khoa học máy tính", "khmt", "computer science"],
+            "HTTT": ["hệ thống thông tin", "httt", "information systems"],
             "MMT": ["mạng máy tính", "mmt", "mmtt", "truyền thông", "network"],
             "KTMT": ["kỹ thuật máy tính", "ktmt", "computer engineering"],
             "KHTN": ["khoa học tự nhiên", "khtn"],

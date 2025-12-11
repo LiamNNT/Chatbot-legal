@@ -155,16 +155,26 @@ class RAGServiceAdapter(RAGServicePort):
         
         for attempt in range(self.max_retries):
             try:
+                import logging
+                import json as json_module
+                logger = logging.getLogger(__name__)
+                logger.info(f"🔍 RAG Adapter: Sending request to {self.rag_service_url}/v1/search")
+                logger.info(f"   Full payload: {json_module.dumps(payload, ensure_ascii=False)}")
+                
                 async with session.post(
                     f"{self.rag_service_url}/v1/search",
                     json=payload
                 ) as response:
                     
+                    logger.info(f"   Response status: {response.status}")
+                    
                     if response.status == 200:
                         data = await response.json()
+                        logger.info(f"   Full response keys: {list(data.keys())}")
                         
                         # Transform response to standard format with enhanced citation data
                         hits = data.get("hits", [])
+                        logger.info(f"   Got {len(hits)} hits from RAG service")
                         
                         # Process hits to include citation information
                         processed_hits = []

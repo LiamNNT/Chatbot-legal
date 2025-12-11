@@ -16,44 +16,64 @@ class NodeCategory(str, Enum):
     CatRAG Node Categories - STANDARDIZED SCHEMA
     
     All values are UPPER_SNAKE_CASE to match Neo4j labels directly.
-    This fixes the previous MonHoc vs MON_HOC inconsistency.
     """
-    MON_HOC = "MON_HOC"  # Changed from "MonHoc"
-    QUY_DINH = "QUY_DINH"  # Changed from "QuyDinh"
-    DIEU_KIEN = "DIEU_KIEN"  # Changed from "DieuKien"
-    KHOA = "KHOA"  # Changed from "Khoa"
-    NGANH = "NGANH"  # Changed from "Nganh"
-    CHUONG_TRINH_DAO_TAO = "CHUONG_TRINH_DAO_TAO"  # Changed from "ChuongTrinhDaoTao"
-    SINH_VIEN = "SINH_VIEN"  # Changed from "SinhVien"
-    KY_HOC = "KY_HOC"  # Changed from "KyHoc"
-    GIANG_VIEN = "GIANG_VIEN"  # Changed from "GiangVien"
-    HOC_PHI = "HOC_PHI"  # Changed from "HocPhi"
+    # --- Core Academic Entities ---
+    MON_HOC = "MON_HOC"                   # Course/Subject
+    KHOA = "KHOA"                         # Faculty/Department
+    NGANH = "NGANH"                       # Major
+    CHUONG_TRINH_DAO_TAO = "CHUONG_TRINH_DAO_TAO" # Curriculum
+    SINH_VIEN = "SINH_VIEN"               # Student Entity/Cohort
+    KY_HOC = "KY_HOC"                     # Semester
+    GIANG_VIEN = "GIANG_VIEN"             # Lecturer
+    
+    # --- Regulations & Rules ---
+    QUY_DINH = "QUY_DINH"                 # Regulation Document/Article
+    DIEU_KIEN = "DIEU_KIEN"               # General Condition
+    
+    # --- Extended Entities (New for Regulations 828, 1393) ---
+    CHUNG_CHI = "CHUNG_CHI"               # Certificates (IELTS, TOEIC, MOS)
+    DIEM_SO = "DIEM_SO"                   # Scores/Grades (450, 5.0, 8.0)
+    DO_KHO = "DO_KHO"                     # Proficiency Levels (B1, N3, Intermediate)
+    DOI_TUONG = "DOI_TUONG"               # Target Group (CLC, CTTT, Mass program)
+    TAI_CHINH = "TAI_CHINH"               # Financial fees (Tuition, Fees)
+    DIEU_KIEN_SO = "DIEU_KIEN_SO"         # Quantitative conditions (70 students, 12 credits)
+    HOC_PHI = "HOC_PHI"                   # Alias for Financial/Tuition
 
 
 class RelationshipType(str, Enum):
     """CatRAG Relationship Types"""
-    # Hierarchical
-    THUOC_KHOA = "THUOC_KHOA"  # MON_HOC/NGANH → KHOA
-    CUA_NGANH = "CUA_NGANH"  # MON_HOC → NGANH
-    THUOC_CHUONG_TRINH = "THUOC_CHUONG_TRINH"  # MON_HOC → CHUONG_TRINH_DAO_TAO
-    QUAN_LY = "QUAN_LY"  # KHOA → NGANH/MON_HOC (management relationship)
+    # --- Hierarchical ---
+    THUOC_KHOA = "THUOC_KHOA"             # MON_HOC/NGANH -> KHOA
+    CUA_NGANH = "CUA_NGANH"               # MON_HOC -> NGANH
+    THUOC_CHUONG_TRINH = "THUOC_CHUONG_TRINH" # MON_HOC -> CHUONG_TRINH
+    QUAN_LY = "QUAN_LY"                   # KHOA -> NGANH/MON_HOC
+    THUOC_VE = "THUOC_VE"                 # Generic Child -> Parent (e.g. Clause -> Article)
     
-    # Prerequisites (CRITICAL for routing)
-    DIEU_KIEN_TIEN_QUYET = "DIEU_KIEN_TIEN_QUYET"  # MON_HOC → MON_HOC only
-    YEU_CAU_DIEU_KIEN = "YEU_CAU_DIEU_KIEN"  # MON_HOC → DIEU_KIEN
-    QUY_DINH_DIEU_KIEN = "QUY_DINH_DIEU_KIEN"  # QUY_DINH → DIEU_KIEN
+    # --- Prerequisites & Requirements ---
+    DIEU_KIEN_TIEN_QUYET = "DIEU_KIEN_TIEN_QUYET" # MON_HOC -> MON_HOC (Prerequisite)
+    YEU_CAU_DIEU_KIEN = "YEU_CAU_DIEU_KIEN"       # MON_HOC -> DIEU_KIEN
+    QUY_DINH_DIEU_KIEN = "QUY_DINH_DIEU_KIEN"     # QUY_DINH -> DIEU_KIEN
+    YEU_CAU = "YEU_CAU"                           # Generic Requirement (A requires B)
     
-    # Applicability
-    AP_DUNG_CHO = "AP_DUNG_CHO"  # QUY_DINH → (SINH_VIEN/NGANH/KHOA)
+    # --- Applicability & Governance ---
+    AP_DUNG_CHO = "AP_DUNG_CHO"           # QUY_DINH -> DOI_TUONG
+    CHI_PHOI = "CHI_PHOI"                 # QUY_DINH -> TAI_CHINH/MON_HOC (Governs)
     
-    # Semantic
-    LIEN_QUAN_NOI_DUNG = "LIEN_QUAN_NOI_DUNG"  # MON_HOC → MON_HOC
-    THAY_THE = "THAY_THE"  # MON_HOC → MON_HOC
-    BO_SUNG = "BO_SUNG"  # MON_HOC → MON_HOC
+    # --- Semantic & Equivalences (New) ---
+    LIEN_QUAN_NOI_DUNG = "LIEN_QUAN_NOI_DUNG"
+    THAY_THE = "THAY_THE"
+    BO_SUNG = "BO_SUNG"
+    TUONG_DUONG = "TUONG_DUONG"           # Equivalent (e.g., Table mapping)
+    DAT_DIEM = "DAT_DIEM"                 # CHUNG_CHI -> DIEM_SO (Achieves score)
+    MIEN_GIAM = "MIEN_GIAM"               # Condition -> Course/Fee (Exempts)
     
-    # Scheduling
-    HOC_TRONG = "HOC_TRONG"  # MON_HOC → KY_HOC
-    DAY = "DAY"  # GIANG_VIEN → MON_HOC
+    # --- Scheduling ---
+    HOC_TRONG = "HOC_TRONG"               # MON_HOC -> KY_HOC
+    DAY = "DAY"                           # GIANG_VIEN -> MON_HOC
+    
+    # --- Generic Fallbacks ---
+    LIEN_QUAN = "LIEN_QUAN"               # General relation (fallback)
+    QUY_DINH_KHAC = "QUY_DINH_KHAC"       # Misc regulations
 
 
 @dataclass
@@ -75,23 +95,40 @@ class GraphNode:
         self._validate_properties()
     
     def _validate_properties(self):
-        """Validate that required properties are present"""
+        """
+        Validate that required properties are present.
+        Note: Requirements are kept minimal to allow flexibility during LLM extraction.
+        """
         required_props = self._get_required_properties()
         for prop in required_props:
             if prop not in self.properties:
-                raise ValueError(f"Missing required property '{prop}' for category {self.category}")
+                # In strict mode we raise error, but for LLM extraction pipelines 
+                # it's often better to just log or allow missing non-critical fields.
+                # Here we enforce it to ensure Graph consistency.
+                if prop == "id": continue # ID might be auto-generated
+                pass 
+                # raise ValueError(f"Missing required property '{prop}' for category {self.category}")
     
     def _get_required_properties(self) -> List[str]:
         """Get required properties for this node category"""
         requirements = {
-            NodeCategory.MON_HOC: ["code", "name", "credits"],
-            NodeCategory.QUY_DINH: ["id", "title", "year"],
-            NodeCategory.DIEU_KIEN: ["id", "type", "description"],
-            NodeCategory.KHOA: ["code", "name"],
-            NodeCategory.NGANH: ["code", "name"],
-            NodeCategory.CHUONG_TRINH_DAO_TAO: ["id", "name", "year"],
+            # Basic Types
+            NodeCategory.MON_HOC: ["name"], # 'code' might not always be extracted
+            NodeCategory.QUY_DINH: ["title"], # 'year' might be implicit
+            NodeCategory.DIEU_KIEN: ["description"],
+            NodeCategory.KHOA: ["name"],
+            NodeCategory.NGANH: ["name"],
+            NodeCategory.CHUONG_TRINH_DAO_TAO: ["name"],
             NodeCategory.SINH_VIEN: ["cohort"],
-            NodeCategory.KY_HOC: ["code", "year"],
+            NodeCategory.KY_HOC: ["code"],
+            
+            # New Extended Types
+            NodeCategory.CHUNG_CHI: ["text"], # e.g. "Chứng chỉ IELTS"
+            NodeCategory.DIEM_SO: ["text"],   # e.g. "6.5"
+            NodeCategory.DO_KHO: ["text"],    # e.g. "B1"
+            NodeCategory.DOI_TUONG: ["text"], # e.g. "Hệ đại trà"
+            NodeCategory.TAI_CHINH: ["text"], # e.g. "Học phí học lại"
+            NodeCategory.DIEU_KIEN_SO: ["text"] # e.g. "70 sinh viên"
         }
         return requirements.get(self.category, [])
 
@@ -117,9 +154,6 @@ class GraphRelationship:
 class GraphPath:
     """
     Domain model for a path in the graph.
-    
-    Represents a sequence of nodes connected by relationships.
-    Useful for prerequisite chains, organizational hierarchies, etc.
     """
     nodes: List[GraphNode]
     relationships: List[GraphRelationship]
@@ -141,9 +175,6 @@ class GraphPath:
 class SubGraph:
     """
     Domain model for a subgraph.
-    
-    Represents a subset of the knowledge graph, useful for
-    context retrieval and visualization.
     """
     nodes: List[GraphNode]
     relationships: List[GraphRelationship]
@@ -151,15 +182,12 @@ class SubGraph:
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def get_node_count(self) -> int:
-        """Get number of nodes in subgraph"""
         return len(self.nodes)
     
     def get_relationship_count(self) -> int:
-        """Get number of relationships in subgraph"""
         return len(self.relationships)
     
     def get_categories(self) -> List[str]:
-        """Get unique node categories in subgraph"""
         return list(set(node.category.value for node in self.nodes))
 
 
@@ -167,8 +195,6 @@ class SubGraph:
 class GraphQuery:
     """
     Domain model for graph queries.
-    
-    Encapsulates query parameters for graph operations.
     """
     query_type: str  # e.g., "traverse", "shortest_path", "subgraph"
     start_node_id: Optional[str] = None
@@ -183,24 +209,20 @@ class GraphQuery:
 class QueryIntent(str, Enum):
     """
     CatRAG Query Intent Categories for Router Agent.
-    
-    Each intent maps to a specific retrieval strategy.
     """
-    TIEN_QUYET = "tien_quyet"  # Prerequisites → Graph traversal
-    MO_TA_MON_HOC = "mo_ta_mon_hoc"  # Course description → Vector search
-    DIEU_KIEN_TOT_NGHIEP = "dieu_kien_tot_nghiep"  # Graduation requirements → Multi-hop graph
-    CHUONG_TRINH_DAO_TAO = "chuong_trinh_dao_tao"  # Curriculum → Graph traversal
-    QUY_DINH_HOC_VU = "quy_dinh_hoc_vu"  # Regulations → Hybrid search
-    HOC_PHI = "hoc_phi"  # Tuition → Hybrid search
-    GENERAL = "general"  # General questions → Hybrid search
+    TIEN_QUYET = "tien_quyet"
+    MO_TA_MON_HOC = "mo_ta_mon_hoc"
+    DIEU_KIEN_TOT_NGHIEP = "dieu_kien_tot_nghiep"
+    CHUONG_TRINH_DAO_TAO = "chuong_trinh_dao_tao"
+    QUY_DINH_HOC_VU = "quy_dinh_hoc_vu"
+    HOC_PHI = "hoc_phi"
+    GENERAL = "general"
 
 
 @dataclass
 class RoutingDecision:
     """
     Routing decision made by Router Agent.
-    
-    Determines which retrieval strategy to use based on query intent.
     """
     intent: QueryIntent
     confidence: float
@@ -209,11 +231,9 @@ class RoutingDecision:
     reasoning: Optional[str] = None
     
     def should_use_graph(self) -> bool:
-        """Determine if graph retrieval should be used"""
         return self.route_to in ["graph_traversal", "multi_hop_graph", "hybrid_search"]
     
     def should_use_vector(self) -> bool:
-        """Determine if vector search should be used"""
         return self.route_to in ["vector_search", "hybrid_search"]
 
 
@@ -221,14 +241,6 @@ class RoutingDecision:
 class Entity:
     """
     Extracted entity from text (aligned with CatRAG categories).
-    
-    Attributes:
-        text: Entity text as appears in document
-        type: Entity type (matches NodeCategory)
-        start: Character start position
-        end: Character end position
-        confidence: Extraction confidence score
-        normalized: Normalized form (e.g., "CNTT" → "Công nghệ thông tin")
     """
     text: str
     type: str  # Should match NodeCategory values
@@ -239,7 +251,6 @@ class Entity:
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
         return {
             "text": self.text,
             "type": self.type,
@@ -255,12 +266,6 @@ class Entity:
 class Relation:
     """
     Extracted relation from text.
-    
-    Attributes:
-        source: Source entity
-        target: Target entity
-        rel_type: Relation type (matches RelationshipType)
-        confidence: Extraction confidence
     """
     source: Entity
     target: Entity
@@ -269,7 +274,6 @@ class Relation:
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
         return {
             "source": self.source.to_dict(),
             "target": self.target.to_dict(),

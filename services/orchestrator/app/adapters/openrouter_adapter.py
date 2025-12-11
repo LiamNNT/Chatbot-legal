@@ -316,7 +316,7 @@ class OpenRouterAdapter(AgentPort):
         
         return self._supported_models.copy()
     
-    async def generate(self, messages: list, temperature: float = 0.7, max_tokens: int = 1000) -> Any:
+    async def generate(self, messages: list, temperature: float = 0.7, max_tokens: int = 1000, model: Optional[str] = None) -> Any:
         """
         Generate a response using the chat completion endpoint.
         Alias method to support GraphReasoningAgent interface.
@@ -325,6 +325,7 @@ class OpenRouterAdapter(AgentPort):
             messages: List of message dictionaries with 'role' and 'content'
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
+            model: Optional model to use (defaults to self.default_model)
             
         Returns:
             Response object with .content attribute containing the generated text
@@ -341,7 +342,7 @@ class OpenRouterAdapter(AgentPort):
         # Override message preparation to use provided messages
         session = await self._get_session()
         payload = {
-            "model": self.default_model,
+            "model": model or self.default_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,

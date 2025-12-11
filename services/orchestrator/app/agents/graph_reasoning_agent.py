@@ -1456,11 +1456,23 @@ QUAN TRỌNG:
             r"nhập môn lập trình", r"lập trình hướng đối tượng",
             r"cấu trúc dữ liệu", r"giải thuật", r"cơ sở dữ liệu",
             r"mạng máy tính", r"hệ điều hành", r"công nghệ phần mềm",
-            r"trí tuệ nhân tạo", r"machine learning", r"deep learning"
+            r"trí tuệ nhân tạo", r"machine learning", r"deep learning",
+            # ENHANCED: Thêm ngoại ngữ và quy định
+            r"tiếng anh", r"tiếng nhật", r"tiếng pháp", r"ngoại ngữ",
+            r"quy định", r"quy chế", r"điều kiện", r"yêu cầu",
+            r"miễn học", r"xét miễn", r"chứng chỉ", r"toeic",
+            r"đào tạo ngoại ngữ", r"giảng dạy tiếng anh"
         ]
         for pattern in compound_patterns:
             if re.search(pattern, query.lower()):
                 compound_terms.append(pattern.replace(r" ", " "))
+        
+        # ENHANCED: If compound terms found, prioritize them over single keywords
+        # This prevents searching with fragmented keywords like "tiếng", "anh" separately
+        if compound_terms:
+            # Return compound terms first, then add remaining single keywords
+            remaining_keywords = [k for k in keywords if not any(k in ct for ct in compound_terms)]
+            return list(set(compound_terms + remaining_keywords[:5]))[:15]
         
         # ENHANCED: Extract course names without codes
         # Pattern: "Môn [Tên]" or just "[Tên môn học]"
