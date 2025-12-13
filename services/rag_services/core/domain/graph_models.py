@@ -40,6 +40,15 @@ class NodeCategory(str, Enum):
     HOC_PHI = "HOC_PHI"                   # Alias for Financial/Tuition
 
 
+class NodeStatus(str, Enum):
+    """
+    Status values for Article/Clause nodes to track legal modifications.
+    """
+    ACTIVE = "active"       # Currently in effect
+    AMENDED = "amended"     # Modified by a newer document
+    EXPIRED = "expired"     # No longer in effect (repealed)
+
+
 class RelationshipType(str, Enum):
     """CatRAG Relationship Types"""
     # --- Hierarchical ---
@@ -66,6 +75,12 @@ class RelationshipType(str, Enum):
     TUONG_DUONG = "TUONG_DUONG"           # Equivalent (e.g., Table mapping)
     DAT_DIEM = "DAT_DIEM"                 # CHUNG_CHI -> DIEM_SO (Achieves score)
     MIEN_GIAM = "MIEN_GIAM"               # Condition -> Course/Fee (Exempts)
+    
+    # --- Legal Modification Relationships ---
+    AMENDS = "AMENDS"                     # New document amends older document
+    REPLACES = "REPLACES"                 # New document replaces older document
+    SUPPLEMENTS = "SUPPLEMENTS"           # New document supplements older document
+    REPEALS = "REPEALS"                   # New document repeals older document
     
     # --- Scheduling ---
     HOC_TRONG = "HOC_TRONG"               # MON_HOC -> KY_HOC
@@ -114,7 +129,7 @@ class GraphNode:
         requirements = {
             # Basic Types
             NodeCategory.MON_HOC: ["name"], # 'code' might not always be extracted
-            NodeCategory.QUY_DINH: ["title"], # 'year' might be implicit
+            NodeCategory.QUY_DINH: ["title"], # 'status' and 'valid_from' are optional
             NodeCategory.DIEU_KIEN: ["description"],
             NodeCategory.KHOA: ["name"],
             NodeCategory.NGANH: ["name"],

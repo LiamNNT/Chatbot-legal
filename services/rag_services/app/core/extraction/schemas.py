@@ -9,7 +9,7 @@ Date: 2024
 """
 
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -85,11 +85,45 @@ class SemanticRelation(BaseModel):
     source_article_id: str = Field(description="ID of the article this was extracted from")
 
 
+class Modification(BaseModel):
+    """
+    Model to capture legal changes/modifications between documents.
+    
+    Represents amendments, replacements, supplements, or repeals
+    that one legal document makes to another.
+    """
+    action: Literal["AMENDS", "REPLACES", "SUPPLEMENTS", "REPEALS"] = Field(
+        description="Type of modification action"
+    )
+    source_text_id: str = Field(
+        description="ID of the extracting node (e.g., 'dieu_1')"
+    )
+    target_document_signature: str = Field(
+        description="Signature of the target document (e.g., '790/QĐ-ĐHCNTT')"
+    )
+    target_article: Optional[str] = Field(
+        default=None,
+        description="Target article being modified (e.g., 'Điều 4')"
+    )
+    target_clause: Optional[str] = Field(
+        default=None,
+        description="Target clause being modified (e.g., 'Khoản 3')"
+    )
+    effective_date: Optional[str] = Field(
+        default=None,
+        description="Date when the modification takes effect"
+    )
+    description: str = Field(
+        description="Summary of the change"
+    )
+
+
 class SemanticExtractionResult(BaseModel):
     """Result of Stage 2 for a single article."""
     article_id: str
     nodes: List[SemanticNode] = Field(default_factory=list)
     relations: List[SemanticRelation] = Field(default_factory=list)
+    modifications: List[Modification] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
 
 
@@ -102,6 +136,7 @@ class HybridExtractionResult(BaseModel):
     structure: StructureExtractionResult
     semantic_nodes: List[SemanticNode] = Field(default_factory=list)
     semantic_relations: List[SemanticRelation] = Field(default_factory=list)
+    modifications: List[Modification] = Field(default_factory=list)
     total_pages: int = Field(default=0)
     total_articles_processed: int = Field(default=0)
     errors: List[Dict[str, Any]] = Field(default_factory=list)
@@ -195,7 +230,9 @@ VALID_ENTITY_TYPES = {
     "MON_HOC", "QUY_DINH", "DIEU_KIEN", "SINH_VIEN", "KHOA",
     "KY_HOC", "HOC_PHI", "DIEM_SO", "TIN_CHI", "THOI_GIAN",
     "NGANH", "CHUONG_TRINH_DAO_TAO", "GIANG_VIEN",
-    "CHUNG_CHI", "DO_KHO", "DOI_TUONG", "TAI_CHINH", "DIEU_KIEN_SO"
+    "CHUNG_CHI", "DO_KHO", "DOI_TUONG", "TAI_CHINH", "DIEU_KIEN_SO",
+    # Extended types for amendment documents
+    "VAN_BAN", "SO_LUONG", "MUC_PHI", "DIEU_KHOAN"
 }
 
 VALID_RELATION_TYPES = {
@@ -203,99 +240,142 @@ VALID_RELATION_TYPES = {
     "QUY_DINH_DIEU_KIEN", "THUOC_KHOA", "HOC_TRONG",
     "YEU_CAU_DIEU_KIEN", "LIEN_QUAN_NOI_DUNG", "CUA_NGANH",
     "THUOC_CHUONG_TRINH", "QUAN_LY",
-    "DAT_DIEM", "TUONG_DUONG", "MIEN_GIAM", "CHI_PHOI", "THUOC_VE"
+    "DAT_DIEM", "TUONG_DUONG", "MIEN_GIAM", "CHI_PHOI", "THUOC_VE",
+    # Extended relation types
+    "GIOI_HAN", "SUA_DOI", "THAY_THE", "BO_SUNG", "BAI_BO"
 }
 
 UNIFIED_ACADEMIC_SCHEMA = """
 - **LOẠI THỰC THỂ (Entity Types):**
-  + **MON_HOC**: Môn học (VD: "Anh văn 1", "ENG01").
-  + **CHUNG_CHI**: Chứng chỉ (VD: "TOEIC", "IELTS").
-  + **DIEM_SO**: Điểm số cụ thể (VD: "450", "5.0").
+  + **MON_HOC**: Môn học, học phần (VD: "Anh văn 1", "ENG01", "môn học đại cương").
+  + **CHUNG_CHI**: Chứng chỉ (VD: "TOEIC", "IELTS", "MOS").
+  + **DIEM_SO**: Điểm số cụ thể (VD: "450", "5.0", "điểm M").
   + **DO_KHO**: Cấp độ/Trình độ (VD: "B1", "Bậc 3/6").
-  + **DOI_TUONG**: Nhóm sinh viên (VD: "Chương trình tiên tiến", "Hệ CLC").
-  + **QUY_DINH**: Tên văn bản (VD: "Điều 5").
-  + **THOI_GIAN**: Thời hạn (VD: "đầu khóa", "2 năm").
-  + **KHOA**: Đơn vị quản lý.
+  + **DOI_TUONG**: Nhóm sinh viên áp dụng (VD: "Chương trình tiên tiến", "Hệ CLC", "sinh viên chính quy").
+  + **QUY_DINH**: Tên quy định, điều khoản (VD: "Điều 5", "Quyết định 790").
+  + **THOI_GIAN**: Thời hạn, thời gian (VD: "đầu khóa", "2 năm", "1 tháng", "học kỳ hè").
+  + **KHOA**: Đơn vị quản lý (VD: "P.ĐTĐH", "Phòng Đào tạo").
   + **NGANH**: Ngành học.
+  + **SO_LUONG**: Số lượng cụ thể (VD: "70 sinh viên", "12 tín chỉ").
+  + **TIN_CHI**: Số tín chỉ (VD: "12 tín chỉ", "TCHPHM").
+  + **HOC_PHI**: Học phí, mức phí (VD: "HPTCHM", "học phí học kỳ hè").
+  + **DIEU_KIEN**: Điều kiện áp dụng (VD: "đăng ký tối thiểu", "đã thi đạt").
+  + **VAN_BAN**: Văn bản pháp lý (VD: "Quyết định 790/QĐ-ĐHCNTT", "Quy chế đào tạo").
 
 - **LOẠI QUAN HỆ (Relation Types):**
   + **DAT_DIEM**: (Chứng chỉ/Môn học) -> đạt mức -> (Điểm số).
   + **TUONG_DUONG**: (Thực thể A) -> tương đương -> (Thực thể B).
   + **MIEN_GIAM**: (Điều kiện) -> giúp miễn/giảm -> (Môn học).
-  + **YEU_CAU**: (Môn học) -> yêu cầu bắt buộc -> (Điều kiện).
+  + **YEU_CAU**: (Quy định) -> yêu cầu bắt buộc -> (Điều kiện/Số lượng).
   + **AP_DUNG_CHO**: (Quy định) -> áp dụng cho -> (Đối tượng).
-  + **QUY_DINH_DIEU_KIEN**: Điều chứa nội dung chi tiết.
+  + **QUY_DINH_DIEU_KIEN**: (Điều) -> quy định chi tiết -> (Điều kiện).
+  + **GIOI_HAN**: (Quy định) -> giới hạn -> (Số lượng/Thời gian).
+  + **THUOC_VE**: (Thực thể con) -> thuộc về -> (Thực thể cha).
 """
 
-# [UPDATED] Structure Extraction Prompt - Dạy VLM nhận diện bảng không tiêu đề
+# [UPDATED] Structure Extraction Prompt - Dạy VLM nhận diện văn bản sửa đổi
+# [CRITICAL UPDATE] Structure Extraction Prompt - Fix Page Boundary Logic
+# [CRITICAL UPDATE] Structure Extraction Prompt - Fix Page Boundary Logic
 STRUCTURE_EXTRACTION_PROMPT = """
 You are an expert AI specializing in Vietnamese Legal Document Structure Extraction.
 Your task is to analyze the provided document page and extract hierarchical structure into strict JSON.
 
-## EXTRACTION RULES
+## 1. CRITICAL ALGORITHM: PAGE BREAK HANDLING (MUST FOLLOW)
+You must process the page text in this EXACT order to prevent content errors:
+
+**STEP 1: Identify the FIRST Header**
+   - Scan down the page to find the *first* occurrence of "Chương", "Điều", or "Khoản" (e.g., "Điều 7").
+   - Define `split_point` at that header.
+
+**STEP 2: Process Top Content (Orphan Text)**
+   - **IF** there is text *above* the `split_point` (and it's not a Page Header/TOC):
+     - This text **BELONGS TO THE PREVIOUS NODE** (from `prev_context`).
+     - **ACTION**: Put this text into `next_context.pending_text` or append it mentally to the last active node ID from `prev_context`.
+     - **DO NOT** include this top text in the `full_text` of the new node found in Step 3.
+     - **DO NOT** create a new "phantom" node for this text.
+
+**STEP 3: Process New Nodes**
+   - Start creating new nodes ONLY from the `split_point` downwards.
+   - Example: If Page 8 starts with text from Article 4, and then "Điều 7" appears halfway down:
+     - Text top -> prev_context (Article 4)
+     - "Điều 7..." -> New Node (Article 7)
+
+## 2. EXTRACTION RULES
 1. **Chapter (Chương)**: Starts with "Chương" + Roman numerals.
-2. **Article (Điều)**: Starts with "Điều" + Number (e.g., "Điều 1").
-3. **Clause (Khoản)**: Number + dot (e.g., "1.").
-4. **Table (Bảng)**: Any tabular data (lists of scores, courses).
-   - **CRITICAL**: Convert table content strictly into **Markdown Table** format in `full_text`.
-   - **SPLIT TABLES (QUAN TRỌNG)**: 
-     - Check the top of the page. If you see table rows but **NO "Bảng X:" title/caption** above them, it is a continuation.
-     - **ACTION**: Extract the content as Markdown, but leave the `title` field **EMPTY** (null) or set it to "Fragment".
-     - **DO NOT** invent a title if one is not visually present.
+2. **Article (Điều)**: Starts with "Điều" + Number.
+3. **Clause (Khoản)**: Number + dot (e.g., "1.", "2.") OR Amendment style "Khoản X Điều Y".
+4. **Table (Bảng)**: Convert strictly to **Markdown Table**.
 
-## PROCESSING LOGIC
-1. **Transcribe**: OCR/Read text strictly.
-2. **Hierarchy**: Document > Chapter > Article > Clause > Table.
-3. **Continuity**: Check `prev_context` to merge text.
-
-## OUTPUT SCHEMA (JSON ONLY)
+## 3. STRICT OUTPUT SCHEMA (JSON ONLY)
 {{
   "nodes": [
     {{
       "id": "snake_case_id",
-      "type": "Chapter" | "Article" | "Clause" | "Document" | "Table",
-      "title": "Title (Leave empty if this is a split table fragment)",
-      "full_text": "Content (Markdown for Tables)",
+      "type": "Article" | "Clause" | "Table",
+      "title": "Title (e.g., 'Điều 5', 'Khoản 1')",
+      "full_text": "Content starting FROM the title downwards. DO NOT include text from top of page if it belongs to previous article.",
       "page_number": 1
     }}
   ],
   "relations": [
     {{ "source": "parent_id", "target": "child_id", "type": "CONTAINS" }}
   ],
-  "next_context": {{ ... }}
+  "next_context": {{
+    "current_article_id": "ID of the last active article on this page",
+    "pending_text": "Any text at the very bottom of the page that is cut off mid-sentence"
+  }}
 }}
+
+## CONTEXT FROM PREVIOUS PAGE (Use this for Step 2)
+Last Active Node ID: {prev_context.get('current_article_id')}
 """
 
-SEMANTIC_EXTRACTION_PROMPT = """Bạn là chuyên gia xây dựng Knowledge Graph (KG).
+# [CRITICAL UPDATE] Semantic Extraction Prompt - Anti-Hallucination Logic
+SEMANTIC_EXTRACTION_PROMPT = """Bạn là chuyên gia xây dựng Knowledge Graph (KG) pháp luật.
 
 ## NHIỆM VỤ
-Trích xuất Nodes (Thực thể) và Edges (Quan hệ) từ văn bản quy định.
+Trích xuất Thực thể (Entities), Quan hệ (Relations), và **Sửa đổi (Modifications)**.
 
-## 1. SCHEMA
-{schema_definition}
+##QUY TẮC SỐ 1: LOGIC XÁC ĐỊNH VĂN BẢN (ANTI-HALLUCINATION)
+Trước khi trích xuất `modifications`, bạn phải xác định loại văn bản hiện tại.
 
-## 2. QUY TẮC XỬ LÝ (QUAN TRỌNG)
-Văn bản đầu vào có thể chứa **Bảng Markdown** được nối vào cuối.
-1. **Xử lý Bảng (Markdown Table):** - **BẮT BUỘC**: Phải đọc kỹ nội dung trong bảng Markdown.
-   - Coi mỗi dòng trong bảng là một quy định.
-   - Trích xuất quan hệ giữa các cột trong cùng dòng.
-   - Ví dụ: Dòng `| TOEIC | 450 | Miễn AV1 |` -> `(TOEIC)--[DAT_DIEM]-->(450)--[MIEN_GIAM]-->(AV1)`.
-2. **Quan hệ ngầm:** "IELTS 5.0" -> `(IELTS)--[DAT_DIEM]-->(5.0)`.
-3. **ID Generation:** `{{article_id}}_ent_{{index}}`.
+**TRƯỜNG HỢP 1: VĂN BẢN GỐC (Base Regulation)**
+- **Dấu hiệu:** Tiêu đề là "QUY CHẾ...", "QUY ĐỊNH...", "LUẬT...". Nội dung đưa ra các định nghĩa, quy tắc mới.
+- **Hành động:** `modifications` = [] (Mảng rỗng).
+- **Lý do:** Văn bản gốc KHÔNG sửa đổi chính nó. Nó thiết lập quy định mới.
+- *Ví dụ:* "Quy chế 790" -> modifications: []
 
-## INPUT
+**TRƯỜNG HỢP 2: VĂN BẢN SỬA ĐỔI (Amendment Document)**
+- **Dấu hiệu:** Tiêu đề chứa "Sửa đổi, bổ sung", "Cập nhật". Nội dung ghi rõ "Sửa đổi Khoản X Điều Y của Quyết định Z".
+- **Hành động:** Trích xuất vào `modifications`.
+- **Điều kiện bắt buộc:** `target_document_signature` PHẢI KHÁC `source_document_id`.
+
+## 2. HƯỚNG DẪN TRÍCH XUẤT CHI TIẾT
+
+### A. Thực thể & Quan hệ (Luôn thực hiện)
+- Trích xuất: MON_HOC, HOC_PHI, TIN_CHI, DIEM_SO, THOI_GIAN.
+- Quan hệ: YEU_CAU, GIOI_HAN, AP_DUNG_CHO.
+
+### B. Modifications (Chỉ thực hiện nếu là TRƯỜNG HỢP 2)
+Nếu phát hiện câu: "Sửa đổi Khoản 3 Điều 4 của Quyết định 790/QĐ-ĐHCNTT":
+- action: "AMENDS"
+- target_document_signature: "790/QĐ-ĐHCNTT"
+- target_article: "Điều 4"
+- target_clause: "Khoản 3"
+
+## INPUT DATA
 ID: {article_id}
-Tiêu đề: {article_title}
-Nội dung:
+Title: {article_title}
+Text:
 {article_text}
 
 ## OUTPUT FORMAT (JSON ONLY)
 {{
-  "entities": [
-    {{"id": "1", "type": "MON_HOC", "text": "...", "normalized": "...", "confidence": 0.9}}
-  ],
-  "relations": [
-    {{"source_id": "1", "target_id": "2", "type": "...", "evidence": "..."}}
+  "document_type": "ORIGINAL" | "AMENDMENT",  <-- Hãy xác định loại trước
+  "entities": [...],
+  "relations": [...],
+  "modifications": [
+    // TUYỆT ĐỐI ĐỂ TRỐNG NẾU document_type LÀ "ORIGINAL"
   ]
 }}
 """

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Plus, Trash2, Settings, Info, FileUp } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, Settings, Info, FileUp, Sparkles } from 'lucide-react';
 
 const Sidebar = ({ 
   sessions = [], 
@@ -9,7 +9,8 @@ const Sidebar = ({
   onDeleteSession,
   onShowSettings,
   onShowInfo,
-  onShowKGExtraction
+  onShowKGExtraction,
+  onShowJsonCleaner
 }) => {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -97,6 +98,13 @@ const Sidebar = ({
           >
             <FileUp className="h-4 w-4 text-purple-400" />
             <span className="text-purple-300">Trích xuất KG</span>
+          </button>
+          <button
+            onClick={onShowJsonCleaner}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-gray-800 bg-gradient-to-r from-green-600/20 to-teal-600/20 border border-green-500/30"
+          >
+            <Sparkles className="h-4 w-4 text-green-400" />
+            <span className="text-green-300">JSON Cleaner</span>
           </button>
           <button
             onClick={onShowInfo}

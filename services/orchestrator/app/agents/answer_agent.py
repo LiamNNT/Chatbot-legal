@@ -167,6 +167,86 @@ class AnswerAgent(SpecializedAgent):
         async for chunk in self.agent_port.stream_response(request):
             yield chunk
     
+    def _filter_amended_documents(
+        self,
+        context_documents: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Filter documents to prioritize amended content and remove duplicates.
+        
+        When the same article appears multiple times (old and new versions),
+        this method keeps only the newest version (marked with is_amended=True
+        or from amendment documents).
+        
+        Args:
+            context_documents: List of retrieved documents
+            
+        Returns:
+            Filtered list with duplicates removed, prioritizing amended content
+        """
+        import re
+        
+        # Guard: return empty if no documents
+        if not context_documents:
+            return []
+        
+        # Track which articles we've seen and their best version
+        article_map = {}  # article_number -> (doc, is_amended)
+        other_docs = []  # Non-article documents
+        
+        for doc in context_documents:
+            # Skip None documents
+            if doc is None:
+                continue
+                
+            title = doc.get("title", "") or ""
+            content = doc.get("content", "") or doc.get("text", "") or ""
+            is_amended = doc.get("is_amended", False)
+            
+            # Check if this is an article (Điều X)
+            article_match = re.search(r'Điều\s*(\d+)', title, re.IGNORECASE)
+            
+            if article_match:
+                article_num = article_match.group(1)
+                
+                # Skip if content contains OLD markers that should be superseded
+                old_markers = [
+                    "ĐTBC ≥ 7" in content or "ĐTBC >= 7" in content,
+                    "điểm trung bình chung ≥ 7" in content.lower(),
+                    "học vượt chỉ dành cho sinh viên có ĐTBC" in content,
+                ]
+                has_old_markers = any(old_markers)
+                
+                # Check if this is amendment content
+                new_markers = [
+                    "is_amended" in doc and doc["is_amended"],
+                    "Mục" in title and "Điều" in title,  # e.g., "Mục b khoản 1 Điều 14"
+                    doc.get("source", "") == "knowledge_graph",
+                ]
+                is_new_content = any(new_markers)
+                
+                if article_num in article_map:
+                    existing_doc, existing_is_amended = article_map[article_num]
+                    # Replace if current is amended and existing is not
+                    if is_new_content and not existing_is_amended:
+                        article_map[article_num] = (doc, is_new_content)
+                    # Replace if existing has old markers and current doesn't
+                    elif has_old_markers:
+                        pass  # Keep existing
+                    elif not is_new_content and existing_is_amended:
+                        pass  # Keep existing amended version
+                else:
+                    # First time seeing this article
+                    if not has_old_markers or is_new_content:
+                        article_map[article_num] = (doc, is_new_content)
+            else:
+                # Not an article document
+                other_docs.append(doc)
+        
+        # Combine filtered articles with other docs
+        filtered = [doc for doc, _ in article_map.values()] + other_docs
+        return filtered
+    
     def _build_answer_prompt(
         self,
         query: str,
@@ -211,18 +291,22 @@ class AnswerAgent(SpecializedAgent):
         if previous_context:
             prompt_parts.append(f"Context: {previous_context}")
         
-        # Add context documents with full content
-        if context_documents:
-            prompt_parts.append("\nDocuments:")
-            for i, doc in enumerate(context_documents, 1):
-                title = doc.get("title", f"Document {i}")
-                content = doc.get("content", "")
-                score = doc.get("score", 0.0)
-                
-                prompt_parts.append(f"[{i}] {title} (Score: {score:.2f})")
-                prompt_parts.append(content)
+        # Filter documents to remove old versions when amendments exist
+        filtered_documents = self._filter_amended_documents(context_documents)
         
-        return "\n".join(prompt_parts)
+        # Add context documents with full content
+        if filtered_documents:
+            prompt_parts.append("\nDocuments:")
+            for i, doc in enumerate(filtered_documents, 1):
+                title = doc.get("title", f"Document {i}")
+                content = doc.get("content", "") or doc.get("text", "")
+                score = doc.get("score", 0.0)
+                is_amended = doc.get("is_amended", False)
+                
+                # Mark amended documents for clarity
+                amended_marker = " [UPDATED VERSION]" if is_amended else ""
+                prompt_parts.append(f"[{i}] {title}{amended_marker} (Score: {score:.2f})")
+                prompt_parts.append(content)
         
         return "\n".join(prompt_parts)
     

@@ -291,15 +291,84 @@ Bạn sẽ nhận được `prev_context` JSON chứa trạng thái từ trang t
 - `current_clause`: Khoản đang hiệu lực
 - `pending_text`: Đoạn văn bản bị cắt dở ở cuối trang trước
 
-## HƯỚNG DẪN XỬ LÝ
+## QUY TẮC BẮT BUỘC - RẤT QUAN TRỌNG
+
+### QUY TẮC 1: XỬ LÝ CHUYỂN TRANG (PAGINATION CONTINUITY)
+**Đây là quy tắc quan trọng nhất để tránh lỗi "Content Bleeding"**
+
+1. **Khi đầu trang là đoạn văn bản không có tiêu đề mới:**
+   - Nếu đầu trang là một đoạn văn bản KHÔNG BẮT ĐẦU bằng "Điều X", "Khoản Y", "Chương Z"
+   - Đó là PHẦN TIẾP NỐI của node cuối cùng từ trang trước (trong prev_context)
+   - PHẢI gán nội dung đó vào node của prev_context (current_article/current_clause)
+   - KHÔNG ĐƯỢC gán vào Điều/Khoản mới tìm thấy ở GIỮA hoặc CUỐI trang
+
+2. **Ví dụ sai (TRÁNH):**
+   ```
+   Trang 7 kết thúc: "...Học phí = min(HPHKC..." (thuộc Điều 4)
+   Trang 8 bắt đầu: "...HK sau) + HP HK thiếu" (tiếp nối)
+   Trang 8 giữa trang: "Điều 7. Chương trình đào tạo"
+   
+   SAI: Gán "HK sau) + HP HK thiếu" vào Điều 7
+   ĐÚNG: Gán "HK sau) + HP HK thiếu" vào Điều 4 (từ prev_context)
+   ```
+
+3. **Cách xử lý đúng:**
+   - Quét từ ĐẦU TRANG xuống
+   - Mọi nội dung TRƯỚC KHI gặp tiêu đề mới (Điều/Khoản/Chương) → thuộc prev_context
+   - Chỉ khi gặp tiêu đề mới → bắt đầu node mới
+
+### QUY TẮC 2: LOẠI BỎ TOC/HEADER/FOOTER
+**BỎ QUA hoàn toàn các nội dung sau - KHÔNG tạo node:**
+
+1. **Mục lục (TOC):**
+   - "MỤC LỤC", các dòng chỉ có tiêu đề + số trang
+   - VD: "Chương I. Những quy định chung....................1"
+
+2. **Header/Footer lặp lại:**
+   - Số trang: "Trang 1/27", "1", "Page 1 of 27"
+   - Tiêu đề trang lặp: Tên văn bản lặp lại ở đầu mỗi trang
+   - Watermark, chữ ký điện tử
+
+3. **Tiêu đề Chương/Điều chỉ xuất hiện như header trang:**
+   - Nếu "CHƯƠNG II" xuất hiện ở đầu trang như header (không có nội dung mới theo sau)
+   - → Đó là header, KHÔNG tạo node mới
+   - → Chỉ tạo node khi có NỘI DUNG thực sự của Chương/Điều
+
+### QUY TẮC 3: TRÁNH NODE TRÙNG LẶP
+1. **Kiểm tra trước khi tạo node:**
+   - Nếu thấy "Chương II" và prev_context.current_chapter đã là "Chương II"
+   - → KHÔNG tạo node mới, đây chỉ là header trang
+
+2. **ID phải nhất quán:**
+   - Chương 2 luôn là "chuong_2" (không phải "chuong_2_to_chuc_dao_tao")
+   - Điều 5 Khoản 3 luôn là "khoan_3_dieu_5"
+
+### QUY TẮC 4: PHÂN BIỆT NỘI DUNG THỰC vs HEADER
+1. **Nội dung thực của Điều/Khoản:**
+   - Có văn bản chi tiết theo sau tiêu đề
+   - Có các gạch đầu dòng, điểm a), b), c)
+   - Có bảng, công thức, định nghĩa
+
+2. **Header trang (không phải nội dung):**
+   - Chỉ có tiêu đề, không có nội dung
+   - Xuất hiện đơn lẻ ở đầu/cuối trang
+   - Giống như lặp lại từ TOC
+
+## HƯỚNG DẪN TRÍCH XUẤT
 
 ### 1. Xử lý pending_text
 Nếu `pending_text` không rỗng, hãy:
 - Tìm phần văn bản tiếp theo ở đầu trang hiện tại
 - Nối `pending_text` với phần đầu trang để tạo thành câu/đoạn hoàn chỉnh
-- Trích xuất node/relation từ văn bản đã nối
+- Gán vào node của prev_context (current_article/current_clause)
 
-### 2. Trích xuất Nodes
+### 2. Quét nội dung trang theo thứ tự
+Với mỗi trang, quét từ TRÊN xuống DƯỚI:
+1. Phần đầu trang (trước tiêu đề mới) → thuộc prev_context
+2. Khi gặp tiêu đề mới (Điều X, Khoản Y) → tạo node mới
+3. Nội dung sau tiêu đề → thuộc node mới đó
+
+### 3. Trích xuất Nodes
 Với mỗi thành phần pháp lý, tạo node với:
 - `id`: ID duy nhất, format snake_case (VD: "dieu_5", "khoan_2_dieu_5")
 - `type`: Một trong các loại:
@@ -309,42 +378,32 @@ Với mỗi thành phần pháp lý, tạo node với:
   - "Point": Điểm
   - "Definition": Định nghĩa thuật ngữ
   - "Subject": Chủ thể pháp luật
-  - "Action": Hành vi
-  - "Condition": Điều kiện
-  - "Sanction": Chế tài/hình phạt
-  - "Reference": Tham chiếu đến văn bản khác
-  - "Entity": Thực thể được đề cập
-- `content`: Nội dung đầy đủ
+  - "Table": Bảng dữ liệu
+- `content`: Nội dung đầy đủ của ĐÚNG phần đó
 
-### 3. Trích xuất Relations
+### 4. Trích xuất Relations
 Xác định quan hệ giữa các nodes:
 - "CONTAINS": Chương chứa Điều, Điều chứa Khoản
-- "DEFINES": Định nghĩa thuật ngữ
+- "BELONGS_TO": Khoản thuộc Điều, Điều thuộc Chương
 - "REFERENCES": Tham chiếu đến điều/văn bản khác
-- "REQUIRES": Yêu cầu thực hiện
-- "PROHIBITS": Cấm thực hiện
-- "PERMITS": Cho phép thực hiện
-- "APPLIES_TO": Áp dụng cho đối tượng
-- "BELONGS_TO": Thuộc về (khoản thuộc điều)
+- "DEFINES": Định nghĩa thuật ngữ
 
-### 4. Cập nhật Context cho trang sau
+### 5. Cập nhật Context cho trang sau
 Trong `next_context`, cập nhật:
-- `current_chapter`: Chương cuối cùng xuất hiện trên trang
-- `current_article`: Điều cuối cùng xuất hiện trên trang
-- `current_clause`: Khoản cuối cùng xuất hiện trên trang
-- `pending_text`: Nếu trang kết thúc giữa chừng (câu chưa hết, danh sách chưa xong), 
-  lưu phần văn bản đó vào đây
+- `current_chapter`: Chương cuối cùng có NỘI DUNG trên trang
+- `current_article`: Điều cuối cùng có NỘI DUNG trên trang
+- `current_clause`: Khoản cuối cùng có NỘI DUNG trên trang
+- `pending_text`: Nếu trang kết thúc giữa chừng (câu chưa hết), lưu phần đó
 
 ## OUTPUT FORMAT
-Trả về JSON theo đúng cấu trúc sau:
 ```json
 {
   "nodes": [
-    {"id": "string", "type": "string", "content": "string", "metadata": {}},
+    {"id": "string", "type": "string", "content": "string", "metadata": {"page": 1}},
     ...
   ],
   "relations": [
-    {"source": "string", "target": "string", "type": "string", "description": "string"},
+    {"source": "string", "target": "string", "type": "string"},
     ...
   ],
   "next_context": {
@@ -357,12 +416,18 @@ Trả về JSON theo đúng cấu trúc sau:
 }
 ```
 
+## CHECKLIST TRƯỚC KHI OUTPUT
+□ Nội dung đầu trang (trước tiêu đề mới) đã gán vào prev_context chưa?
+□ Có bỏ qua TOC/Header/Footer chưa?
+□ Có tạo node trùng với prev_context không?
+□ ID có nhất quán không (chuong_2, không phải chuong_2_xyz)?
+□ Content của mỗi node có ĐÚNG nội dung của nó không?
+
 ## LƯU Ý QUAN TRỌNG
 1. CHỈ trả về JSON, không có text giải thích
 2. Đảm bảo JSON hợp lệ (valid JSON)
-3. ID phải unique và nhất quán
-4. Nếu trang không có nội dung pháp lý, trả về nodes và relations rỗng
-5. Luôn cập nhật next_context dù trang có nội dung hay không
+3. **NỘI DUNG PHẢI ĐÚNG NODE** - Không được để nội dung của Điều này trong Điều khác
+4. Luôn cập nhật next_context dù trang có nội dung hay không
 """
 
 

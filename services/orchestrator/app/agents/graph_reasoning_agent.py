@@ -176,10 +176,11 @@ class GraphReasoningResult:
                 node_type = node.get("type", "Node")
                 
                 # FIX: Include content/full_text in context!
-                content = node.get("content") or node.get("full_text") or node.get("noi_dung")
+                content = node.get("content") or node.get("full_text") or node.get("noi_dung") or node.get("text")
                 
                 if content:
                     # Add title and content
+                    # Note: If article was amended, the content is already replaced with new version
                     parts.append(f"• [{node_type}] {name}")
                     parts.append(f"  Content: {content}")
                     parts.append("")  # Add blank line for readability
@@ -270,6 +271,12 @@ class GraphReasoningAgent:
             examples=['scan_relationships("YEU_CAU")', 'scan_relationships("YEU_CAU, QUY_DINH_DIEU_KIEN")']
         ),
         Tool(
+            name="check_amendments",
+            description="Kiểm tra xem một điều khoản đã bị sửa đổi/thay thế chưa và lấy nội dung mới nhất. QUAN TRỌNG: Luôn gọi tool này khi tìm thấy điều khoản để đảm bảo trả lời với thông tin mới nhất.",
+            parameters={"article_title": "tiêu đề điều khoản cần kiểm tra (ví dụ: 'Điều 14')"},
+            examples=['check_amendments("Điều 14")', 'check_amendments("Điều 4")']
+        ),
+        Tool(
             name="done",
             description="Kết thúc reasoning khi đã có đủ thông tin để trả lời",
             parameters={"summary": "tóm tắt kết quả tìm được"},
@@ -353,6 +360,7 @@ QUAN TRỌNG:
             "find_prerequisites": self._tool_find_prerequisites,
             "find_dependents": self._tool_find_dependents,
             "scan_relationships": self._tool_scan_relationships,
+            "check_amendments": self._tool_check_amendments,
             "done": self._tool_done,
         }
     
@@ -641,11 +649,45 @@ QUAN TRỌNG:
     # ========== TOOL IMPLEMENTATIONS ==========
     
     async def _tool_search_articles(self, keywords: str) -> ToolResult:
-        """Tool: Search articles by keywords."""
+        """Tool: Search articles by keywords, automatically including amendment info."""
         try:
             keyword_list = [k.strip() for k in keywords.split(",")]
-            results = await self.graph_adapter.search_articles_by_keyword(keyword_list, limit=5)
+            
+            # Use search_with_amendments to get both original and amended content
+            if hasattr(self.graph_adapter, 'search_with_amendments'):
+                results = await self.graph_adapter.search_with_amendments(keyword_list, limit=5)
+            else:
+                # Fallback to regular search if method not available
+                results = await self.graph_adapter.search_articles_by_keyword(keyword_list, limit=5)
+            
             return ToolResult(success=True, data=results)
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+    
+    async def _tool_check_amendments(self, article_title: str) -> ToolResult:
+        """Tool: Check if an article has been amended and get the latest version."""
+        try:
+            if hasattr(self.graph_adapter, 'get_latest_version_of_article'):
+                result = await self.graph_adapter.get_latest_version_of_article(article_title)
+                if result["is_amended"]:
+                    return ToolResult(
+                        success=True, 
+                        data={
+                            "message": f"Điều '{article_title}' đã được sửa đổi",
+                            "amendment_description": result["amendment_description"],
+                            "amending_article": result["amending_article"],
+                            "original_article": result["original_article"]
+                        }
+                    )
+                else:
+                    return ToolResult(
+                        success=True, 
+                        data={"message": f"Điều '{article_title}' chưa có sửa đổi", "original_article": result["original_article"]}
+                    )
+            else:
+                return ToolResult(success=False, error="Amendment check not available")
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
         except Exception as e:
             return ToolResult(success=False, error=str(e))
     

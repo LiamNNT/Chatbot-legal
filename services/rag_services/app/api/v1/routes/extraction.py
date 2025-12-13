@@ -14,12 +14,16 @@ import json
 import asyncio
 import uuid
 import shutil
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Load .env file for Neo4j credentials
 from dotenv import load_dotenv
@@ -136,6 +140,34 @@ async def run_stage1_pipeline(
         else:
             structure_dict = structure_result
         
+        # POST-PROCESSING: Auto-fix relations for amendment documents
+        from app.core.extraction.page_merger import auto_fix_amendment_relations
+        structure_dict = auto_fix_amendment_relations(structure_dict)
+        
+        # POST-PROCESSING: Clean and validate extraction result
+        from app.core.extraction.cleaner import clean_extraction_result
+        
+        extraction_jobs[job_id]["current_step"] = "Đang dọn dẹp và xác thực kết quả..."
+        extraction_jobs[job_id]["progress"] = 85
+        
+        # Wrap structure in result format for cleaner
+        temp_result = {
+            "source_file": pdf_path.name,
+            "structure": structure_dict
+        }
+        cleaned_result, cleaning_stats = clean_extraction_result(temp_result)
+        structure_dict = cleaned_result.get("structure", structure_dict)
+        
+        # Log cleaning stats
+        if cleaning_stats.duplicate_nodes_removed > 0:
+            logger.info(f"Removed {cleaning_stats.duplicate_nodes_removed} duplicate nodes")
+        if cleaning_stats.invalid_modifications_removed > 0:
+            logger.info(f"Removed {cleaning_stats.invalid_modifications_removed} invalid modifications")
+        if cleaning_stats.is_original_document:
+            logger.info("Document detected as ORIGINAL (not amendment) - modifications cleared")
+        if cleaning_stats.errors:
+            logger.warning(f"Cleaning detected {len(cleaning_stats.errors)} issues")
+        
         extraction_jobs[job_id]["progress"] = 90
         extraction_jobs[job_id]["current_step"] = f"Stage 1 hoàn thành: {len(structure_dict.get('articles', []))} điều"
         
@@ -148,7 +180,17 @@ async def run_stage1_pipeline(
             "extracted_at": datetime.now().isoformat(),
             "category": category,
             "page_count": len(pages),
-            "structure": structure_dict
+            "structure": structure_dict,
+            "cleaning_applied": True,
+            "document_type": "original" if cleaning_stats.is_original_document else "amendment",
+            "cleaning_stats": {
+                "duplicates_removed": cleaning_stats.duplicate_nodes_removed,
+                "orphan_relations_removed": cleaning_stats.orphan_relations_removed,
+                "invalid_modifications_removed": cleaning_stats.invalid_modifications_removed,
+                "is_original_document": cleaning_stats.is_original_document,
+                "issues_detected": len(cleaning_stats.errors),
+                "issues": cleaning_stats.errors[:10] if cleaning_stats.errors else []
+            }
         }
         
         result_file = RESULTS_DIR / f"stage1_{timestamp}_{job_id[:8]}.json"
@@ -165,7 +207,9 @@ async def run_stage1_pipeline(
             "pages": len(pages),
             "chapters": len(structure_dict.get("chapters", [])),
             "articles": len(structure_dict.get("articles", [])),
-            "clauses": len(structure_dict.get("clauses", []))
+            "clauses": len(structure_dict.get("clauses", [])),
+            "duplicates_removed": cleaning_stats.duplicate_nodes_removed,
+            "issues_detected": len(cleaning_stats.errors)
         }
         
         # Cleanup images
@@ -217,15 +261,16 @@ async def run_stage2_pipeline(
             structure = stage1_data
 
         articles = structure.get("articles", [])
+        clauses = structure.get("clauses", [])
         tables = structure.get("tables", [])
         relations = structure.get("relations", [])
         
         if not articles:
             raise ValueError(f"Không tìm thấy điều khoản trong dữ liệu Stage 1. Keys: {list(stage1_data.keys())}")
         
-        # 2. CRITICAL: MERGE TABLES INTO ARTICLES LOGIC
+        # 2. CRITICAL: MERGE CLAUSES AND TABLES INTO ARTICLES LOGIC
         # ---------------------------------------------------------------------
-        extraction_jobs[job_id]["current_step"] = f"Đang gộp {len(tables)} bảng vào văn bản..."
+        extraction_jobs[job_id]["current_step"] = f"Đang gộp {len(clauses)} khoản và {len(tables)} bảng vào văn bản..."
         
         # Map article by ID
         article_map = {a['id']: a for a in articles}
@@ -236,7 +281,23 @@ async def run_stage2_pipeline(
             if rel.get("type") == "CONTAINS":
                 child_to_parent[rel["target"]] = rel["source"]
         
-        merged_count = 0
+        # MERGE CLAUSES INTO ARTICLES
+        clause_merged_count = 0
+        for clause in clauses:
+            parent_id = child_to_parent.get(clause["id"])
+            if parent_id and parent_id in article_map:
+                parent_article = article_map[parent_id]
+                # Append Clause content to Article Text
+                clause_title = clause.get('title', '')
+                clause_text = clause.get('full_text', '')
+                append_text = f"\n\n--- {clause_title} ---\n{clause_text}\n"
+                parent_article["full_text"] += append_text
+                clause_merged_count += 1
+        
+        print(f"Job {job_id}: Successfully merged {clause_merged_count} clauses into articles.")
+        
+        # MERGE TABLES INTO ARTICLES
+        table_merged_count = 0
         for table in tables:
             parent_id = child_to_parent.get(table["id"])
             if parent_id and parent_id in article_map:
@@ -244,9 +305,9 @@ async def run_stage2_pipeline(
                 # Append Markdown Table to Article Text
                 append_text = f"\n\n=== BẢNG THAM CHIẾU ({table.get('title', 'Bảng')}) ===\n{table.get('full_text', '')}\n========================\n"
                 parent_article["full_text"] += append_text
-                merged_count += 1
+                table_merged_count += 1
         
-        print(f"Job {job_id}: Successfully merged {merged_count} tables into articles.")
+        print(f"Job {job_id}: Successfully merged {table_merged_count} tables into articles.")
         # ---------------------------------------------------------------------
 
         extraction_jobs[job_id]["progress"] = 20
@@ -256,6 +317,7 @@ async def run_stage2_pipeline(
         MAX_CONCURRENT = 5
         all_entities = []
         all_relations = []
+        all_modifications = []
         errors = []
         
         async def process_article(article):
@@ -284,10 +346,13 @@ async def run_stage2_pipeline(
                     rel['source_article_id'] = article.get('id', '')
                     relations.append(rel)
                 
-                return {"entities": entities, "relations": relations, "error": None}
+                # Collect modifications (for amendment documents)
+                modifications = article_dict.get('modifications', [])
+                
+                return {"entities": entities, "relations": relations, "modifications": modifications, "error": None}
                 
             except Exception as e:
-                return {"entities": [], "relations": [], "error": {"article_id": article.get('id', ''), "error": str(e)}}
+                return {"entities": [], "relations": [], "modifications": [], "error": {"article_id": article.get('id', ''), "error": str(e)}}
         
         # Process in batches
         for batch_start in range(0, len(articles), MAX_CONCURRENT):
@@ -298,6 +363,7 @@ async def run_stage2_pipeline(
             for result in batch_results:
                 all_entities.extend(result["entities"])
                 all_relations.extend(result["relations"])
+                all_modifications.extend(result.get("modifications", []))
                 if result["error"]:
                     errors.append(result["error"])
             
@@ -309,10 +375,12 @@ async def run_stage2_pipeline(
         semantic_result = {
             "entities": all_entities,
             "relations": all_relations,
+            "modifications": all_modifications,
             "errors": errors,
             "stats": {
                 "entities": len(all_entities),
                 "relations": len(all_relations),
+                "modifications": len(all_modifications),
                 "errors": len(errors)
             }
         }
@@ -370,7 +438,8 @@ async def run_stage2_pipeline(
         extraction_jobs[job_id]["result_file"] = str(result_file.name)
         extraction_jobs[job_id]["stats"] = {
             "articles_processed": len(articles),
-            "tables_merged": merged_count,
+            "clauses_merged": clause_merged_count,
+            "tables_merged": table_merged_count,
             "entities": len(all_entities),
             "relations": len(all_relations),
             "errors": len(errors)
@@ -451,29 +520,45 @@ async def run_extraction_pipeline(
         else:
             structure_dict = structure_result
         
+        # POST-PROCESSING: Auto-fix relations for amendment documents
+        from app.core.extraction.page_merger import auto_fix_amendment_relations
+        structure_dict = auto_fix_amendment_relations(structure_dict)
+        
         extraction_jobs[job_id]["progress"] = 50
         
         # ---------------------------------------------------------------------
-        # CRITICAL: MERGE TABLES LOGIC HERE (Fixes missing data in Stage 2)
+        # CRITICAL: MERGE CLAUSES AND TABLES INTO ARTICLES (Fixes missing data in Stage 2)
         # ---------------------------------------------------------------------
-        extraction_jobs[job_id]["current_step"] = "Đang gộp bảng vào văn bản..."
+        extraction_jobs[job_id]["current_step"] = "Đang gộp khoản và bảng vào văn bản..."
         
         articles = structure_dict.get('articles', [])
+        clauses = structure_dict.get('clauses', [])
         tables = structure_dict.get('tables', [])
         relations = structure_dict.get('relations', [])
         
         article_map = {a['id']: a for a in articles}
         child_to_parent = {r["target"]: r["source"] for r in relations if r["type"] == "CONTAINS"}
         
-        merged_count = 0
+        # MERGE CLAUSES INTO ARTICLES
+        clause_merged = 0
+        for clause in clauses:
+            parent_id = child_to_parent.get(clause['id'])
+            if parent_id and parent_id in article_map:
+                clause_title = clause.get('title', '')
+                clause_text = clause.get('full_text', '')
+                article_map[parent_id]['full_text'] += f"\n\n--- {clause_title} ---\n{clause_text}\n"
+                clause_merged += 1
+        
+        # MERGE TABLES INTO ARTICLES
+        table_merged = 0
         for table in tables:
             parent_id = child_to_parent.get(table['id'])
             if parent_id and parent_id in article_map:
                 # Update article text with table content
                 article_map[parent_id]['full_text'] += f"\n\n=== BẢNG ({table.get('title')}) ===\n{table.get('full_text')}\n"
-                merged_count += 1
+                table_merged += 1
         
-        print(f"Full pipeline: Merged {merged_count} tables.")
+        print(f"Full pipeline: Merged {clause_merged} clauses, {table_merged} tables.")
         # ---------------------------------------------------------------------
         
         # Stage 2: LLM Semantic Extraction
@@ -503,19 +588,23 @@ async def run_extraction_pipeline(
                     entities.append(entity)
                 
                 relations = []
-                for rel in article_dict.get('relations', []): # Corrected key 'relations'
+                for rel in article_dict.get('relations', []):
                     rel['source_article_id'] = article.get('id', '')
                     relations.append(rel)
                 
-                return {"entities": entities, "relations": relations, "error": None}
+                # Collect modifications (for amendment documents)
+                modifications = article_dict.get('modifications', [])
+                
+                return {"entities": entities, "relations": relations, "modifications": modifications, "error": None}
                 
             except Exception as e:
-                return {"entities": [], "relations": [], "error": {"article_id": article.get('id', ''), "error": str(e)}}
+                return {"entities": [], "relations": [], "modifications": [], "error": {"article_id": article.get('id', ''), "error": str(e)}}
         
         # Run all articles in parallel
         MAX_CONCURRENT = 5
         all_entities = []
         all_relations = []
+        all_modifications = []
         errors = []
         
         for batch_start in range(0, len(articles), MAX_CONCURRENT):
@@ -526,6 +615,7 @@ async def run_extraction_pipeline(
             for result in batch_results:
                 all_entities.extend(result["entities"])
                 all_relations.extend(result["relations"])
+                all_modifications.extend(result.get("modifications", []))
                 if result["error"]:
                     errors.append(result["error"])
             
@@ -537,10 +627,12 @@ async def run_extraction_pipeline(
         semantic_result = {
             "entities": all_entities,
             "relations": all_relations,
+            "modifications": all_modifications,
             "errors": errors,
             "stats": {
                 "entities": len(all_entities),
                 "relations": len(all_relations),
+                "modifications": len(all_modifications),
                 "errors": len(errors)
             }
         }
@@ -598,7 +690,8 @@ async def run_extraction_pipeline(
         extraction_jobs[job_id]["stats"] = {
             "pages": len(pages),
             "articles": len(structure_dict.get("articles", [])),
-            "tables_merged": merged_count,
+            "clauses_merged": clause_merged,
+            "tables_merged": table_merged,
             "entities": semantic_result.get("stats", {}).get("entities", 0),
             "relations": semantic_result.get("stats", {}).get("relations", 0)
         }

@@ -548,3 +548,111 @@ def _test_merge():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     _test_merge()
+
+
+# =============================================================================
+# POST-PROCESSING: Auto-fix missing relations for amendment documents
+# =============================================================================
+
+def auto_fix_amendment_relations(
+    structure_data: Dict[str, Any],
+    logger_instance: Optional[logging.Logger] = None
+) -> Dict[str, Any]:
+    """
+    Automatically fix missing CONTAINS relations for amendment documents.
+    
+    For amendment documents (văn bản sửa đổi), clauses like "Khoản 3 Điều 4"
+    often don't have proper parent relations. This function:
+    1. Identifies orphan clauses (no parent relation)
+    2. Links them to the main Article (usually Điều 1)
+    3. Adds metadata about what they modify
+    
+    Args:
+        structure_data: Dict with articles, clauses, relations keys
+        logger_instance: Optional logger
+        
+    Returns:
+        Updated structure_data with fixed relations
+    """
+    log = logger_instance or logger
+    
+    articles = structure_data.get("articles", [])
+    clauses = structure_data.get("clauses", [])
+    relations = structure_data.get("relations", [])
+    document = structure_data.get("document", {})
+    
+    # Check if this is an amendment document
+    doc_title = document.get("title", "") if document else ""
+    is_amendment = any(kw in doc_title.lower() for kw in 
+                       ["sửa đổi", "bổ sung", "cập nhật", "thay thế"])
+    
+    if not is_amendment:
+        log.debug("Not an amendment document, skipping auto-fix")
+        return structure_data
+    
+    log.info(f"Detected amendment document: '{doc_title[:50]}...'")
+    
+    # Build set of existing relations (target -> source)
+    existing_targets = set()
+    for rel in relations:
+        if rel.get("type") == "CONTAINS":
+            existing_targets.add(rel["target"])
+    
+    # Find main amendment article (usually Điều 1 or first article mentioning modifications)
+    main_article_id = None
+    for article in articles:
+        article_text = article.get("full_text", "").lower()
+        if any(kw in article_text for kw in ["cập nhật", "sửa đổi", "bổ sung", "như sau"]):
+            main_article_id = article.get("id")
+            break
+    
+    if not main_article_id and articles:
+        # Fallback to first article
+        main_article_id = articles[0].get("id")
+    
+    if not main_article_id:
+        log.warning("No main article found for amendment relations")
+        return structure_data
+    
+    log.info(f"Using '{main_article_id}' as main amendment article")
+    
+    # Find orphan clauses and create relations
+    added_relations = 0
+    for clause in clauses:
+        clause_id = clause.get("id", "")
+        clause_title = clause.get("title", "")
+        
+        # Skip if already has relation or is not a modification clause
+        if clause_id in existing_targets:
+            continue
+        
+        # Check if this looks like a modification clause (Khoản X Điều Y)
+        import re
+        is_modification_clause = bool(
+            re.search(r'(khoản|mục|điểm)\s*\d+.*điều\s*\d+', clause_title.lower()) or
+            re.search(r'(khoản|mục|điểm)\s*\w+.*điều\s*\d+', clause_id.lower())
+        )
+        
+        if is_modification_clause or clause_id not in existing_targets:
+            # Create CONTAINS relation from main article
+            new_relation = {
+                "source": main_article_id,
+                "target": clause_id,
+                "type": "CONTAINS"
+            }
+            relations.append(new_relation)
+            existing_targets.add(clause_id)
+            added_relations += 1
+            
+            log.info(f"Added relation: {main_article_id} -> {clause_id}")
+            
+            # Also try to extract modification metadata
+            match = re.search(r'(khoản\s*\d+)?\s*(điều\s*\d+)', clause_title.lower())
+            if match:
+                clause["metadata"] = clause.get("metadata", {})
+                clause["metadata"]["modifies"] = match.group(0).title()
+    
+    log.info(f"Auto-fixed {added_relations} missing relations for amendment document")
+    
+    structure_data["relations"] = relations
+    return structure_data

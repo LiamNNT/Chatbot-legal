@@ -285,17 +285,15 @@ class SmartPlannerAgent(SpecializedAgent):
         # 4. Queries about relationships between concepts/articles/regulations
         needs_relationship_search = self._needs_knowledge_graph(original_query)
         
-        # CRITICAL FIX: Read use_knowledge_graph from LLM response first!
+        # CRITICAL FIX: Always use Knowledge Graph when RAG is needed
+        # This ensures the LLM gets modification context (replaced/amended articles)
+        # Knowledge Graph contains relationship data that vector search misses
         use_knowledge_graph = data.get("use_knowledge_graph", None)
         if use_knowledge_graph is None:
-            # Fallback to rule-based logic if LLM didn't provide it
-            use_knowledge_graph = (
-                requires_rag and 
-                (complexity == "complex" or 
-                 strategy == "advanced_rag" or 
-                 needs_relationship_search or
-                 intent == "comparative")
-            )
+            # NEW: Always enable KG when RAG is needed for modification awareness
+            # Previously: Only enabled for complex queries, advanced_rag, relationship queries
+            # Now: Always enabled with RAG to provide article modification context
+            use_knowledge_graph = requires_rag  # Simple: if we need RAG, we also need KG
         
         # Always use vector search for RAG queries (primary source)
         use_vector_search = requires_rag
@@ -708,17 +706,20 @@ class SmartPlannerAgent(SpecializedAgent):
         filters = ExtractedFilters()
         
         # === DOC_TYPES DETECTION ===
-        doc_type_patterns = {
-            "regulation": ["quy chế", "quy định", "điều lệ", "nội quy"],
-            "syllabus": ["đề cương", "chương trình đào tạo", "ctđt", "curriculum"],
-            "announcement": ["thông báo", "công văn", "hướng dẫn"],
-            "form": ["biểu mẫu", "đơn", "form"],
-            "handbook": ["sổ tay", "cẩm nang", "hướng dẫn sinh viên"],
-        }
-        
-        for doc_type, patterns in doc_type_patterns.items():
-            if any(p in query_lower for p in patterns):
-                filters.doc_types.append(doc_type)
+        # TEMPORARILY DISABLED: Current data has doc_type="Quy chế Đào tạo" which doesn't match
+        # the filter values like "regulation". Need to fix data indexing or add mapping layer.
+        # TODO: Re-enable when doc_type values are normalized in the data.
+        # doc_type_patterns = {
+        #     "regulation": ["quy chế", "quy định", "điều lệ", "nội quy"],
+        #     "syllabus": ["đề cương", "chương trình đào tạo", "ctđt", "curriculum"],
+        #     "announcement": ["thông báo", "công văn", "hướng dẫn"],
+        #     "form": ["biểu mẫu", "đơn", "form"],
+        #     "handbook": ["sổ tay", "cẩm nang", "hướng dẫn sinh viên"],
+        # }
+        # 
+        # for doc_type, patterns in doc_type_patterns.items():
+        #     if any(p in query_lower for p in patterns):
+        #         filters.doc_types.append(doc_type)
         
         # === FACULTIES DETECTION ===
         # Note: Using word boundaries to avoid false positives (e.g., "UIT" matching "it")

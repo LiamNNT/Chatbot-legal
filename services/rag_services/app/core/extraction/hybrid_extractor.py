@@ -31,7 +31,7 @@ from app.core.extraction.page_merger import merge_nodes_into_dict
 # Import updated schemas
 from app.core.extraction.schemas import (
     StructureNodeType, VLMProvider, StructureNode, StructureRelation, 
-    StructureExtractionResult, SemanticNode, SemanticRelation, 
+    StructureExtractionResult, SemanticNode, SemanticRelation, Modification,
     SemanticExtractionResult, HybridExtractionResult, PageContext, 
     VLMConfig, LLMConfig, VALID_ENTITY_TYPES, VALID_RELATION_TYPES, 
     UNIFIED_ACADEMIC_SCHEMA, STRUCTURE_EXTRACTION_PROMPT, 
@@ -262,7 +262,7 @@ class SemanticExtractor:
     
     def _parse_llm_response(self, response_text: str) -> Dict[str, Any]:
         data, errors = clean_and_parse_json(response_text, logger)
-        if not isinstance(data, dict): return {"entities": [], "relations": []}
+        if not isinstance(data, dict): return {"entities": [], "relations": [], "modifications": []}
         return data
     
     def _post_process_extraction(self, data: Dict[str, Any], parent_article_id: str) -> Dict[str, Any]:
@@ -282,31 +282,100 @@ class SemanticExtractor:
             new_src = id_mapping.get(src, f"{parent_article_id}_ent_{src}")
             new_tgt = id_mapping.get(tgt, f"{parent_article_id}_ent_{tgt}")
             processed_relations.append({**rel, "source_id": new_src, "target_id": new_tgt})
+        
+        # Process modifications - ensure source_text_id is set
+        processed_modifications = []
+        for mod in data.get("modifications", []):
+            mod_copy = {**mod}
+            if not mod_copy.get("source_text_id"):
+                mod_copy["source_text_id"] = parent_article_id
+            processed_modifications.append(mod_copy)
             
-        return {"entities": processed_entities, "relations": processed_relations}
+        return {"entities": processed_entities, "relations": processed_relations, "modifications": processed_modifications}
 
     def _validate_entity_type(self, entity_type: str) -> bool:
         return entity_type.upper() in VALID_ENTITY_TYPES
 
     def _validate_relation_type(self, rel_type: str) -> bool:
         return rel_type.upper() in VALID_RELATION_TYPES
+    
+    def _detect_amendment_pattern(self, article_title: str, article_text: str) -> Optional[str]:
+        """
+        Detect if this article contains amendment patterns like "Khoản X Điều Y".
+        Returns a hint string to append to prompt if detected.
+        """
+        import re
+        
+        # Patterns indicating amendments
+        amendment_keywords = ["sửa đổi", "bổ sung", "cập nhật", "thay thế", "điều chỉnh"]
+        clause_article_pattern = r"[Kk]hoản\s+\d+\s+[Đđ]iều\s+\d+"
+        point_pattern = r"[Đđ]iểm\s+[a-z]\s+[Kk]hoản\s+\d+\s+[Đđ]iều\s+\d+"
+        article_ref_pattern = r"[Qq]uyết\s+định\s+(?:số\s+)?(\d+)"
+        
+        combined_text = f"{article_title} {article_text}".lower()
+        
+        # Check for amendment keywords
+        has_amendment_keyword = any(kw in combined_text for kw in amendment_keywords)
+        
+        # Check for "Khoản X Điều Y" patterns
+        clause_matches = re.findall(clause_article_pattern, article_title + " " + article_text, re.IGNORECASE)
+        point_matches = re.findall(point_pattern, article_title + " " + article_text, re.IGNORECASE)
+        
+        # Check for target document reference
+        doc_refs = re.findall(article_ref_pattern, article_title + " " + article_text, re.IGNORECASE)
+        target_doc = doc_refs[0] if doc_refs else "790"  # Default to 790 if not found
+        
+        if clause_matches or point_matches or has_amendment_keyword:
+            hint = f"""
+
+**GỢI Ý TỪ HỆ THỐNG**: Đây là văn bản SỬA ĐỔI. Phát hiện các patterns sau:
+- Số văn bản gốc được tham chiếu: QĐ {target_doc}/QĐ-ĐHCNTT
+- Các điều khoản được sửa đổi: {', '.join(clause_matches[:5]) if clause_matches else 'Không rõ'}
+- Các điểm được sửa đổi: {', '.join(point_matches[:3]) if point_matches else 'Không có'}
+
+→ BẮT BUỘC tạo modifications cho mỗi "Khoản X Điều Y" hoặc "Điểm x Khoản Y Điều Z"!
+"""
+            return hint
+        return None
 
     def extract_from_article(self, article_id: str, article_title: str, article_text: str) -> SemanticExtractionResult:
+        # Detect amendment patterns and add hint
+        amendment_hint = self._detect_amendment_pattern(article_title, article_text)
+        
         prompt = SEMANTIC_EXTRACTION_PROMPT.format(
             schema_definition=UNIFIED_ACADEMIC_SCHEMA,
             article_id=article_id, article_title=article_title, article_text=article_text
         )
+        
+        # Append amendment hint if detected
+        if amendment_hint:
+            prompt += amendment_hint
+            logger.info(f"[Stage2] Amendment patterns detected in {article_id}, adding extraction hint")
+        
         try:
+            # DEBUG: Log input text length
+            logger.info(f"[Stage2] Processing {article_id}: {len(article_text)} chars, title: {article_title}")
+            
             raw_text = self._call_llm_api(prompt)
+            
+            # DEBUG: Log raw LLM response
+            logger.info(f"[Stage2] LLM response for {article_id}: {raw_text[:500]}...")
+            
             data = self._parse_llm_response(raw_text)
             data = self._post_process_extraction(data, article_id)
             
+            # DEBUG: Log extraction results
+            logger.info(f"[Stage2] Extracted from {article_id}: {len(data.get('entities', []))} entities, {len(data.get('relations', []))} relations, {len(data.get('modifications', []))} modifications")
+            
             nodes = [SemanticNode(**e, source_article_id=article_id) for e in data["entities"] if self._validate_entity_type(e.get("type", ""))]
             relations = [SemanticRelation(**r, source_article_id=article_id) for r in data["relations"] if self._validate_relation_type(r.get("type", ""))]
+            modifications = [Modification(**m) for m in data.get("modifications", [])]
             
-            return SemanticExtractionResult(article_id=article_id, nodes=nodes, relations=relations)
+            return SemanticExtractionResult(article_id=article_id, nodes=nodes, relations=relations, modifications=modifications)
         except Exception as e:
             logger.error(f"Error extracting {article_id}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return SemanticExtractionResult(article_id=article_id, errors=[str(e)])
 
 
@@ -331,10 +400,19 @@ class ParallelSemanticExtractor:
         return response.choices[0].message.content
 
     async def _extract_single(self, article: Dict[str, str], pbar=None):
+        # Detect amendment patterns and add hint
+        amendment_hint = self.sync_extractor._detect_amendment_pattern(article["title"], article["full_text"])
+        
         prompt = SEMANTIC_EXTRACTION_PROMPT.format(
             schema_definition=UNIFIED_ACADEMIC_SCHEMA,
             article_id=article["id"], article_title=article["title"], article_text=article["full_text"]
         )
+        
+        # Append amendment hint if detected
+        if amendment_hint:
+            prompt += amendment_hint
+            logger.info(f"[Stage2-Async] Amendment patterns detected in {article['id']}, adding extraction hint")
+        
         async with self.semaphore:
             try:
                 raw = await self._call_llm(prompt)
@@ -353,8 +431,10 @@ class ParallelSemanticExtractor:
                     if self.sync_extractor._validate_relation_type(r.get("type", "")):
                         relations.append(SemanticRelation(**r, source_article_id=article["id"]))
                 
+                modifications = [Modification(**m) for m in data.get("modifications", [])]
+                
                 if pbar: pbar.update(1)
-                return SemanticExtractionResult(article_id=article["id"], nodes=nodes, relations=relations)
+                return SemanticExtractionResult(article_id=article["id"], nodes=nodes, relations=relations, modifications=modifications)
             except Exception as e:
                 return SemanticExtractionResult(article_id=article["id"], errors=[str(e)])
 
@@ -482,7 +562,8 @@ def run_pipeline(image_paths=None, pdf_path=None, vlm_config=None, llm_config=No
     hybrid_result = HybridExtractionResult(
         structure=structure_result,
         semantic_nodes=[n for r in semantic_results for n in r.nodes],
-        semantic_relations=[r for r in semantic_results for r in r.relations],
+        semantic_relations=[rel for r in semantic_results for rel in r.relations],
+        modifications=[m for r in semantic_results for m in r.modifications],
         total_pages=structure_result.page_count,
         total_articles_processed=len(articles_data),
         errors=structure_result.errors

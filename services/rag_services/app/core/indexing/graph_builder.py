@@ -37,6 +37,7 @@ class GraphStats:
     semantic_relations: int = 0
     mentions: int = 0
     categories: int = 0
+    modifications: int = 0  # Legal modification relationships created
 
 
 class Neo4jGraphBuilder:
@@ -222,11 +223,19 @@ class Neo4jGraphBuilder:
             stats.semantic_relations = session.execute_write(
                 self._create_semantic_relations, stage2
             )
+            
+            # 5. Process legal modifications (amendments, replacements, etc.)
+            modifications_list = stage2.get("modifications", [])
+            if modifications_list:
+                stats.modifications = session.execute_write(
+                    self._process_modifications, modifications_list
+                )
         
         logger.info(
             f"Graph built: {stats.documents} docs, {stats.articles} articles, "
             f"{stats.clauses} clauses, {stats.entities} entities "
-            f"({stats.entities_merged} merged), {stats.semantic_relations} semantic relations"
+            f"({stats.entities_merged} merged), {stats.semantic_relations} semantic relations, "
+            f"{stats.modifications} modifications"
         )
         
         return stats
@@ -575,6 +584,165 @@ class Neo4jGraphBuilder:
         return count
     
     # =========================================================================
+    # LEGAL MODIFICATIONS PROCESSING
+    # =========================================================================
+    
+    @staticmethod
+    def _process_modifications(
+        tx,
+        modifications_list: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Process legal modifications (amendments, replacements, supplements, repeals).
+        
+        For each modification:
+        1. Find the Source Node (new regulation) by source_text_id
+        2. Find the Target Node (old regulation) by document signature, article, clause
+        3. Create modification relationship (AMENDS, REPLACES, SUPPLEMENTS, REPEALS)
+        4. Update status of Target Node based on action type
+        
+        Args:
+            tx: Neo4j transaction
+            modifications_list: List of modification dictionaries
+            
+        Returns:
+            Number of modification relationships created
+        """
+        count = 0
+        
+        # Mapping of action to target status
+        action_to_status = {
+            "AMENDS": "amended",
+            "REPLACES": "expired",
+            "SUPPLEMENTS": "amended",
+            "REPEALS": "expired"
+        }
+        
+        for mod in modifications_list:
+            action = mod.get("action", "AMENDS")
+            source_text_id = mod.get("source_text_id", "")
+            target_doc_sig = mod.get("target_document_signature", "")
+            target_article = mod.get("target_article", "")
+            target_clause = mod.get("target_clause", "")
+            effective_date = mod.get("effective_date")
+            description = mod.get("description", "")
+            
+            if not source_text_id or not target_doc_sig:
+                logger.warning(f"Modification skipped: missing source_text_id or target_document_signature")
+                continue
+            
+            # Determine target status based on action
+            new_status = action_to_status.get(action, "amended")
+            
+            # Build dynamic Cypher query to find and link nodes
+            # The query tries to match target by document signature and optionally article/clause
+            query = f"""
+            // Find source node (the new regulation making the modification)
+            MATCH (source)
+            WHERE source.id = $source_text_id
+              AND (source:Article OR source:Clause OR source:Document)
+            
+            // Find target node by document signature pattern
+            // Try to match against Document, Article, or Clause nodes
+            OPTIONAL MATCH (target_doc:Document)
+            WHERE target_doc.id CONTAINS $target_doc_sig
+               OR target_doc.title CONTAINS $target_doc_sig
+            
+            // Try to find target article within that document or by ID pattern
+            OPTIONAL MATCH (target_art:Article)
+            WHERE (target_art.id CONTAINS $target_doc_sig OR 
+                   target_art.title CONTAINS $target_article_pattern)
+              AND ($target_article = '' OR 
+                   target_art.title CONTAINS $target_article OR 
+                   target_art.id CONTAINS $target_article_id_pattern)
+            
+            // Try to find target clause
+            OPTIONAL MATCH (target_cl:Clause)
+            WHERE target_cl.id CONTAINS $target_doc_sig
+              AND ($target_clause = '' OR 
+                   target_cl.title CONTAINS $target_clause OR
+                   target_cl.id CONTAINS $target_clause_id_pattern)
+            
+            // Determine the most specific target node
+            WITH source,
+                 CASE 
+                     WHEN target_cl IS NOT NULL AND $target_clause <> '' THEN target_cl
+                     WHEN target_art IS NOT NULL THEN target_art
+                     WHEN target_doc IS NOT NULL THEN target_doc
+                     ELSE NULL
+                 END AS target
+            
+            WHERE target IS NOT NULL
+            
+            // Create the modification relationship
+            MERGE (source)-[r:{action}]->(target)
+            ON CREATE SET
+                r.description = $description,
+                r.effective_date = $effective_date,
+                r.created_at = datetime()
+            
+            // Update target node status
+            SET target.status = $new_status,
+                target.modified_by = source.id,
+                target.modification_date = CASE 
+                    WHEN $effective_date IS NOT NULL THEN $effective_date 
+                    ELSE toString(datetime()) 
+                END
+            
+            RETURN source.id AS source_id, target.id AS target_id, type(r) AS rel_type
+            """
+            
+            # Extract article/clause ID patterns (e.g., "Điều 4" -> "dieu_4")
+            target_article_id = ""
+            if target_article:
+                # Convert "Điều 4" or "Điều 10" to "dieu_4" or "dieu_10"
+                import re
+                match = re.search(r'[Đđ]i[eề]u\s*(\d+)', target_article)
+                if match:
+                    target_article_id = f"dieu_{match.group(1)}"
+            
+            target_clause_id = ""
+            if target_clause:
+                # Convert "Khoản 3" to "khoan_3"
+                import re
+                match = re.search(r'[Kk]ho[aả]n\s*(\d+)', target_clause)
+                if match:
+                    target_clause_id = f"khoan_{match.group(1)}"
+            
+            try:
+                result = tx.run(query,
+                    source_text_id=source_text_id,
+                    target_doc_sig=target_doc_sig,
+                    target_article=target_article or "",
+                    target_article_pattern=target_article or "",
+                    target_article_id_pattern=target_article_id,
+                    target_clause=target_clause or "",
+                    target_clause_id_pattern=target_clause_id,
+                    description=description,
+                    effective_date=effective_date,
+                    new_status=new_status
+                )
+                
+                records = list(result)
+                if records:
+                    for rec in records:
+                        logger.info(
+                            f"Modification created: ({rec['source_id']})-[:{rec['rel_type']}]->({rec['target_id']})"
+                        )
+                        count += 1
+                else:
+                    logger.warning(
+                        f"Modification target not found: {target_doc_sig} / {target_article} / {target_clause}"
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Error creating modification relationship: {e}")
+                continue
+        
+        logger.info(f"Legal modifications processed: {count}")
+        return count
+    
+    # =========================================================================
     # QUERY HELPERS
     # =========================================================================
     
@@ -709,6 +877,7 @@ def main():
             print(f"  Mentions:  {stats.mentions}")
             print(f"  Structural Relations: {stats.structural_relations}")
             print(f"  Semantic Relations:   {stats.semantic_relations}")
+            print(f"  Legal Modifications:  {stats.modifications}")
             
             # Show graph stats
             print(f"\nGraph Statistics:")

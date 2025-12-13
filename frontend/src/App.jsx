@@ -4,6 +4,7 @@ import ChatInterface from './components/ChatInterface';
 import SettingsModal from './components/SettingsModal';
 import SystemInfoModal from './components/SystemInfoModal';
 import KGExtractionPanel from './components/KGExtractionPanel';
+import JsonCleanerModal from './components/JsonCleanerModal';
 import { useChat } from './hooks/useChat';
 import { saveToStorage, loadFromStorage } from './utils/helpers';
 
@@ -31,6 +32,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showKGExtraction, setShowKGExtraction] = useState(false);
+  const [showJsonCleaner, setShowJsonCleaner] = useState(false);
   const [sessions, setSessions] = useState(() => 
     loadFromStorage('chatbot-sessions', [])
   );
@@ -101,6 +103,7 @@ function App() {
         onShowSettings={() => setShowSettings(true)}
         onShowInfo={() => setShowInfo(true)}
         onShowKGExtraction={() => setShowKGExtraction(true)}
+        onShowJsonCleaner={() => setShowJsonCleaner(true)}
       />
 
       {/* Main Chat */}
@@ -132,6 +135,12 @@ function App() {
       {showKGExtraction && (
         <KGExtractionPanel onClose={() => setShowKGExtraction(false)} />
       )}
+
+      {/* JSON Cleaner Modal */}
+      <JsonCleanerModal
+        isOpen={showJsonCleaner}
+        onClose={() => setShowJsonCleaner(false)}
+      />
 
       {/* Error Toast (simple implementation) */}
       {error && (

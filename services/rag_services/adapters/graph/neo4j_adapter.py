@@ -1555,6 +1555,305 @@ class Neo4jGraphAdapter(GraphRepository):
         
         return results
 
+    async def get_latest_version_of_article(
+        self,
+        article_title: str
+    ) -> Dict[str, Any]:
+        """
+        Find the latest version of an article by checking AMENDS relationships.
+        
+        If Article A AMENDS Article B, then A is the newer version.
+        Returns the amending article (source of AMENDS) with the original article info.
+        
+        Use case: When user asks about "Điều 14", check if it has been amended
+        and return the newer content along with amendment info.
+        
+        Args:
+            article_title: Title or partial title of the article to check
+            
+        Returns:
+            Dict with:
+            - original_article: The article that was searched for
+            - amending_article: The article that amends it (if any)
+            - amendment_description: Description of the amendment
+            - is_amended: Boolean indicating if article has been amended
+        """
+        driver = self._get_driver()
+        
+        # First find the article being queried
+        # Then check if any article AMENDS it
+        cypher = """
+        MATCH (original:Article)
+        WHERE toLower(original.title) CONTAINS toLower($title_search)
+        OPTIONAL MATCH (amending:Article)-[r:AMENDS]->(original)
+        RETURN original.title as original_title,
+               original.full_text as original_text,
+               amending.title as amending_title,
+               amending.full_text as amending_text,
+               r.description as amendment_description
+        LIMIT 5
+        """
+        
+        results = {
+            "original_article": None,
+            "amending_article": None,
+            "amendment_description": None,
+            "is_amended": False,
+            "all_amendments": []
+        }
+        
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, title_search=article_title)
+                
+                for record in result:
+                    # Set original article info (first match)
+                    if results["original_article"] is None:
+                        results["original_article"] = {
+                            "title": record["original_title"],
+                            "text": record["original_text"]
+                        }
+                    
+                    # Check for amendments
+                    if record["amending_title"]:
+                        results["is_amended"] = True
+                        
+                        # Extract ONLY the relevant section for this article
+                        amending_text = record["amending_text"] or ""
+                        original_title = record["original_title"] or article_title
+                        
+                        extracted_section = self._extract_amendment_section(
+                            amending_text, 
+                            original_title
+                        )
+                        
+                        amendment_info = {
+                            "amending_title": record["amending_title"],
+                            "amending_text": extracted_section or amending_text,
+                            "description": record["amendment_description"],
+                            "extracted": extracted_section is not None
+                        }
+                        results["all_amendments"].append(amendment_info)
+                        
+                        # Set primary amending article (first one found)
+                        if results["amending_article"] is None:
+                            results["amending_article"] = {
+                                "title": record["amending_title"],
+                                "text": extracted_section or amending_text,
+                                "extracted": extracted_section is not None
+                            }
+                            results["amendment_description"] = record["amendment_description"]
+                
+                if results["is_amended"]:
+                    logger.info(f"Found {len(results['all_amendments'])} amendments for '{article_title}'")
+                else:
+                    logger.info(f"No amendments found for '{article_title}'")
+                    
+        except Exception as e:
+            logger.error(f"Error finding article amendments: {e}")
+        
+        return results
+
+    async def get_all_amendments(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get all AMENDS relationships in the graph.
+        
+        Returns list of amendment info for displaying to user or debugging.
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (amending:Article)-[r:AMENDS]->(original:Article)
+        RETURN amending.title as amending_title,
+               original.title as original_title,
+               r.description as description,
+               amending.full_text as amending_text
+        LIMIT $limit
+        """
+        
+        results = []
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, limit=limit)
+                for record in result:
+                    results.append({
+                        "amending_title": record["amending_title"],
+                        "original_title": record["original_title"],
+                        "description": record["description"],
+                        "amending_text": record["amending_text"][:500] if record["amending_text"] else None
+                    })
+            logger.info(f"Found {len(results)} AMENDS relationships")
+        except Exception as e:
+            logger.error(f"Error getting amendments: {e}")
+        
+        return results
+
+    async def search_with_amendments(
+        self,
+        keywords: List[str],
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Search articles by keywords and automatically include amendment info.
+        
+        This is the KEY method for ensuring chatbot answers with latest info.
+        When an article is found that has been amended, include BOTH:
+        1. The original article (for context)
+        2. The amending article with updated content (marked as priority)
+        
+        Args:
+            keywords: List of search keywords
+            limit: Max results
+            
+        Returns:
+            List of articles with amendment enrichment
+        """
+        driver = self._get_driver()
+        
+        # Search for articles and include any amendments
+        # Priority: title match > full_text match
+        cypher = """
+        // First find articles matching keywords
+        MATCH (a:Article)
+        WHERE any(kw IN $keywords WHERE 
+            toLower(a.full_text) CONTAINS toLower(kw) OR
+            toLower(a.title) CONTAINS toLower(kw)
+        )
+        
+        // Calculate relevance score: title match gets higher priority
+        WITH a,
+            REDUCE(score = 0, kw IN $keywords | 
+                score + CASE WHEN toLower(a.title) CONTAINS toLower(kw) THEN 10 ELSE 0 END +
+                CASE WHEN toLower(a.full_text) CONTAINS toLower(kw) THEN 1 ELSE 0 END
+            ) as relevance
+        
+        // Check if this article has been amended
+        OPTIONAL MATCH (amending:Article)-[r:AMENDS]->(a)
+        
+        // Return both original and amendment info, sorted by relevance
+        RETURN a.title as title,
+               a.full_text as text,
+               a.id as id,
+               CASE WHEN amending IS NOT NULL THEN true ELSE false END as is_amended,
+               amending.title as amending_title,
+               amending.full_text as amending_text,
+               r.description as amendment_description,
+               relevance
+        ORDER BY relevance DESC
+        LIMIT $limit
+        """
+        
+        results = []
+        try:
+            with driver.session(database=self.database) as session:
+                result = session.run(cypher, keywords=keywords, limit=limit)
+                
+                for record in result:
+                    article = {
+                        "title": record["title"],
+                        "text": record["text"],
+                        "id": record["id"],
+                        "is_amended": record["is_amended"],
+                        "type": "Article"
+                    }
+                    
+                    # If article has been amended, extract ONLY the relevant section
+                    if record["is_amended"] and record["amending_text"]:
+                        original_title = record["title"] or ""
+                        amending_text = record["amending_text"] or ""
+                        
+                        # Extract the specific section for THIS article from the amending document
+                        extracted_section = self._extract_amendment_section(
+                            amending_text, 
+                            original_title
+                        )
+                        
+                        if extracted_section:
+                            # Use extracted section as the new content
+                            article["text"] = extracted_section
+                            article["is_amended"] = True
+                            article["_replaced_from"] = original_title
+                        else:
+                            # Fallback: keep original but mark as amended
+                            article["is_amended"] = True
+                            article["amendment_note"] = record["amendment_description"]
+                    
+                    results.append(article)
+                    
+            logger.info(f"Found {len(results)} articles for keywords {keywords}")
+            
+        except Exception as e:
+            logger.error(f"Error searching with amendments: {e}")
+        
+        return results
+
+    def _extract_amendment_section(
+        self, 
+        amending_text: str, 
+        original_title: str
+    ) -> Optional[str]:
+        """
+        Extract the specific amendment section from the amending document
+        that corresponds to the original article.
+        
+        For example, if original_title is "Điều 14" and amending_text contains:
+        "--- Mục b khoản 1 Điều 14 ---\nContent here...\n--- Điều 23 ---"
+        
+        This method extracts ONLY the content between those markers.
+        
+        Args:
+            amending_text: Full text of the amending document (e.g., Điều 1)
+            original_title: Title of the original article being amended (e.g., "Điều 14")
+            
+        Returns:
+            The extracted section text, or None if not found
+        """
+        import re
+        
+        if not amending_text or not original_title:
+            return None
+            
+        # Extract the article number from title (e.g., "Điều 14" -> "14")
+        article_match = re.search(r'Điều\s*(\d+)', original_title, re.IGNORECASE)
+        if not article_match:
+            return None
+            
+        article_number = article_match.group(1)
+        
+        # Pattern to find section markers like:
+        # "--- Khoản X Điều Y ---" or "--- Mục X khoản Y Điều Z ---"
+        # The content follows until the next "---" marker or end of text
+        
+        # Build pattern to find this article's section
+        # Match variations like:
+        # - "--- Điều 14 ---"
+        # - "--- Khoản 1 Điều 14 ---"
+        # - "--- Mục b khoản 1 Điều 14 ---"
+        section_pattern = rf'---[^-]*Điều\s*{article_number}\s*---\s*(.*?)(?=---|\Z)'
+        
+        match = re.search(section_pattern, amending_text, re.DOTALL | re.IGNORECASE)
+        
+        if match:
+            extracted = match.group(1).strip()
+            if extracted:
+                logger.info(f"Extracted amendment section for {original_title}: {len(extracted)} chars")
+                return extracted
+        
+        # Alternative: Try finding content that mentions the article directly
+        # This handles cases where formatting is different
+        alt_pattern = rf'(?:sửa đổi|thay thế|bổ sung)[^.]*Điều\s*{article_number}[^:]*:\s*(.*?)(?=(?:sửa đổi|thay thế|bổ sung)[^.]*Điều|\Z)'
+        
+        alt_match = re.search(alt_pattern, amending_text, re.DOTALL | re.IGNORECASE)
+        
+        if alt_match:
+            extracted = alt_match.group(1).strip()
+            if extracted:
+                logger.info(f"Extracted amendment (alt pattern) for {original_title}: {len(extracted)} chars")
+                return extracted
+        
+        logger.warning(f"Could not extract specific section for {original_title}")
+        return None
+
     def close(self):
         """Close Neo4j driver"""
         if self._driver:
