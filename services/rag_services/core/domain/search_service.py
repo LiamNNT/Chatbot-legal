@@ -3,8 +3,15 @@
 # Description:
 # Core domain service implementing the business logic for search operations.
 # This service is completely independent of external frameworks and technologies.
+#
+# DEPRECATION NOTICE:
+# This module is deprecated and will be removed in a future version.
+# Please use LlamaIndexSearchService from core.domain.llamaindex_search_service instead.
+# Set USE_LLAMAINDEX=true in your environment to automatically use the new implementation.
+# See docs/LLAMAINDEX_INTEGRATION.md for migration details.
 
 import logging
+import warnings
 from typing import List, Optional, Dict, Any
 from .models import SearchQuery, SearchResponse, SearchResult, SearchMode, DocumentChunk
 from ..ports.repositories import VectorSearchRepository, KeywordSearchRepository
@@ -20,6 +27,10 @@ class SearchService:
     This service orchestrates search operations using various repositories and services
     through well-defined ports, ensuring the business logic remains independent of
     infrastructure concerns.
+    
+    .. deprecated::
+        This class is deprecated. Use :class:`LlamaIndexSearchService` instead.
+        Set USE_LLAMAINDEX=true in environment to use the new implementation automatically.
     """
     
     def __init__(
@@ -30,6 +41,13 @@ class SearchService:
         fusion_service: Optional[FusionService] = None,
         highlighting_service: Optional[HighlightingService] = None
     ):
+        warnings.warn(
+            "SearchService is deprecated and will be removed in a future version. "
+            "Use LlamaIndexSearchService instead by setting USE_LLAMAINDEX=true in your environment. "
+            "See docs/LLAMAINDEX_INTEGRATION.md for migration details.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.vector_repository = vector_repository
         self.keyword_repository = keyword_repository
         self.reranking_service = reranking_service

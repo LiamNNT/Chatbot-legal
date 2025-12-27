@@ -7,14 +7,23 @@
 # we wire together all the dependencies. It belongs in the infrastructure
 # layer because it knows about concrete implementations.
 
+from __future__ import annotations
+
+import os
 import logging
-from typing import Optional
+from typing import Optional, Union, TYPE_CHECKING
 
 from core.domain.search_service import SearchService
 from core.ports.repositories import VectorSearchRepository, KeywordSearchRepository
 from core.ports.services import RerankingService, FusionService
 
+if TYPE_CHECKING:
+    from core.domain.llamaindex_search_service import LlamaIndexSearchService
+
 logger = logging.getLogger(__name__)
+
+# Check if LlamaIndex should be used
+USE_LLAMAINDEX = os.getenv("USE_LLAMAINDEX", "false").lower() in ("true", "1", "yes")
 
 
 # Lazy imports to avoid circular dependencies and maintain clean architecture
@@ -155,23 +164,51 @@ class DIContainer:
         
         return self._fusion_service
     
-    def get_search_service(self) -> SearchService:
-        """Get or create the main search service."""
+    def get_search_service(self) -> Union[SearchService, LlamaIndexSearchService]:
+        """
+        Get or create the main search service.
+        
+        Returns LlamaIndexSearchService if USE_LLAMAINDEX=true,
+        otherwise returns the legacy SearchService.
+        """
         if self._search_service is None:
             vector_repo = self.get_vector_repository()
             keyword_repo = self.get_keyword_repository()
             rerank_service = self.get_reranking_service()
             fusion_service = self.get_fusion_service()
             
-            self._search_service = SearchService(
-                vector_repository=vector_repo,
-                keyword_repository=keyword_repo,
-                reranking_service=rerank_service,
-                fusion_service=fusion_service,
-                highlighting_service=None  # Not implemented yet
-            )
-            
-            logger.info("Created core search service with injected dependencies")
+            if USE_LLAMAINDEX:
+                # Use LlamaIndex-based search service
+                try:
+                    from core.domain.llamaindex_search_service import LlamaIndexSearchService
+                    self._search_service = LlamaIndexSearchService(
+                        vector_repository=vector_repo,
+                        keyword_repository=keyword_repo,
+                        reranking_service=rerank_service,
+                        # Note: LlamaIndex service doesn't need fusion_service
+                        # as it handles fusion internally with RecursiveRankFusion
+                    )
+                    logger.info("Created LlamaIndex search service (USE_LLAMAINDEX=true)")
+                except ImportError as e:
+                    logger.warning(f"Failed to import LlamaIndexSearchService, falling back to legacy: {e}")
+                    self._search_service = SearchService(
+                        vector_repository=vector_repo,
+                        keyword_repository=keyword_repo,
+                        reranking_service=rerank_service,
+                        fusion_service=fusion_service,
+                        highlighting_service=None
+                    )
+                    logger.info("Created legacy search service (LlamaIndex import failed)")
+            else:
+                # Use legacy SearchService
+                self._search_service = SearchService(
+                    vector_repository=vector_repo,
+                    keyword_repository=keyword_repo,
+                    reranking_service=rerank_service,
+                    fusion_service=fusion_service,
+                    highlighting_service=None  # Not implemented yet
+                )
+                logger.info("Created legacy search service (USE_LLAMAINDEX=false)")
         
         return self._search_service
     
@@ -195,11 +232,21 @@ def get_container() -> DIContainer:
 
 
 # Convenience functions for direct access
-def get_search_service() -> SearchService:
-    """Get the configured search service."""
+def get_search_service() -> Union[SearchService, LlamaIndexSearchService]:
+    """
+    Get the configured search service.
+    
+    Returns LlamaIndexSearchService if USE_LLAMAINDEX=true in environment,
+    otherwise returns the legacy SearchService.
+    """
     return _container.get_search_service()
 
 
 def reset_container():
     """Reset the global container (mainly for testing)."""
     _container.reset()
+
+
+def is_using_llamaindex() -> bool:
+    """Check if the system is configured to use LlamaIndex."""
+    return USE_LLAMAINDEX

@@ -4,8 +4,16 @@ Domain service for result fusion logic.
 This module contains pure business logic for fusing search results from
 different sources (vector search, keyword search). This is domain logic
 and should not have any infrastructure dependencies.
+
+DEPRECATION NOTICE:
+This module is deprecated and will be removed in a future version.
+Please use LlamaIndexSearchService from core.domain.llamaindex_search_service instead,
+which includes RecursiveRankFusion for result fusion.
+Set USE_LLAMAINDEX=true in your environment to use the new implementation.
+See docs/LLAMAINDEX_INTEGRATION.md for migration details.
 """
 
+import warnings
 from typing import List, Dict, Set
 from .models import SearchResult
 
@@ -16,7 +24,20 @@ class FusionAlgorithms:
     
     This class contains algorithms for combining search results from
     different sources without any infrastructure dependencies.
+    
+    .. deprecated::
+        This class is deprecated. Use :class:`RecursiveRankFusion` from 
+        :mod:`core.domain.llamaindex_retriever` instead.
     """
+    
+    def __init__(self):
+        warnings.warn(
+            "FusionAlgorithms is deprecated and will be removed in a future version. "
+            "Use RecursiveRankFusion from core.domain.llamaindex_retriever instead. "
+            "Set USE_LLAMAINDEX=true to use the new implementation.",
+            DeprecationWarning,
+            stacklevel=2
+        )
     
     @staticmethod
     def reciprocal_rank_fusion(
@@ -42,6 +63,9 @@ class FusionAlgorithms:
             
         Returns:
             List of fused search results, sorted by relevance
+            
+        .. deprecated::
+            Use :meth:`RecursiveRankFusion.fuse` instead.
         """
         # Helper function to create unique key for a result
         def create_key(result: SearchResult) -> str:
