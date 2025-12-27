@@ -1,210 +1,339 @@
-# Chatbot-UIT
+# 🤖 Chatbot-UIT
 
-Hệ thống chatbot thông minh cho UIT sử dụng RAG (Retrieval-Augmented Generation) và Multi-Agent Architecture.
+<div align="center">
 
-## 🚀 Quick Start - Backend
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-green.svg)
+![Node](https://img.shields.io/badge/node-18+-green.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-### 1. Setup
+**Hệ thống Chatbot thông minh hỗ trợ sinh viên Trường Đại học Công nghệ Thông tin (UIT)**
+
+*Sử dụng Retrieval-Augmented Generation (RAG) và Multi-Agent Architecture*
+
+[Tính năng](#-tính-năng) •
+[Kiến trúc](#-kiến-trúc) •
+[Cài đặt](#-cài-đặt) •
+[Sử dụng](#-sử-dụng) •
+[API](#-api-documentation)
+
+</div>
+
+---
+
+## 📋 Giới thiệu
+
+Chatbot-UIT là hệ thống chatbot thông minh được xây dựng để hỗ trợ sinh viên UIT tra cứu thông tin về:
+- 📚 Quy chế đào tạo, học vụ
+- 📝 Thủ tục hành chính
+- 🎓 Thông tin tuyển sinh
+- 📅 Lịch học, lịch thi
+- ❓ Các câu hỏi thường gặp
+
+### Đặc điểm nổi bật
+
+- **🔍 Hybrid RAG**: Kết hợp BM25 (keyword search) + Vector Search + Cross-Encoder Reranking
+- **🤖 Multi-Agent System**: Sử dụng nhiều agent chuyên biệt để xử lý các loại câu hỏi khác nhau
+- **📊 Knowledge Graph**: Tích hợp Neo4j để lưu trữ và truy vấn quan hệ giữa các thực thể
+- **🇻🇳 Vietnamese NLP**: Hỗ trợ tối ưu cho tiếng Việt với custom tokenizer và stopwords
+- **⚡ Real-time Streaming**: Phản hồi theo thời gian thực với SSE
+
+---
+
+## 🏗 Kiến trúc
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              FRONTEND                                    │
+│                    (React + Vite + Tailwind CSS)                        │
+│                         http://localhost:5173                            │
+└─────────────────────────────────┬───────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        ORCHESTRATOR SERVICE                              │
+│                    (FastAPI - Port 8001)                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │  Router     │  │  ReAct      │  │  IRCoT      │  │  Graph      │    │
+│  │  Agent      │  │  Agent      │  │  Agent      │  │  Reasoning  │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└─────────────────────────────────┬───────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          RAG SERVICE                                     │
+│                    (FastAPI - Port 8000)                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │  BM25       │  │  Vector     │  │  Hybrid     │  │  Reranker   │    │
+│  │  Search     │  │  Search     │  │  Fusion     │  │             │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└────────┬────────────────┬────────────────┬──────────────────────────────┘
+         │                │                │
+         ▼                ▼                ▼
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ OpenSearch  │  │  Weaviate   │  │   Neo4j     │
+│ (BM25)      │  │  (Vector)   │  │   (Graph)   │
+│ Port 9200   │  │  Port 8090  │  │  Port 7687  │
+└─────────────┘  └─────────────┘  └─────────────┘
+```
+
+### Cấu trúc thư mục
+
+```
+Chatbot-UIT/
+├── frontend/                 # React Frontend
+│   ├── src/
+│   │   ├── components/      # UI Components
+│   │   ├── hooks/           # Custom React Hooks
+│   │   ├── services/        # API Services
+│   │   └── utils/           # Utilities
+│   └── package.json
+│
+├── services/
+│   ├── orchestrator/        # Orchestrator Service
+│   │   ├── app/
+│   │   │   ├── agents/      # AI Agents (ReAct, IRCoT, Graph)
+│   │   │   ├── adapters/    # External Service Adapters
+│   │   │   ├── api/         # API Routes
+│   │   │   └── core/        # Business Logic
+│   │   └── requirements.txt
+│   │
+│   └── rag_services/        # RAG Service
+│       ├── app/
+│       │   ├── api/         # API Routes
+│       │   └── core/        # Search Logic
+│       ├── adapters/        # Database Adapters
+│       └── requirements.txt
+│
+├── infrastructure/          # Docker Compose Files
+│   ├── docker-compose.yml
+│   ├── docker-compose.opensearch.yml
+│   ├── docker-compose.weaviate.yml
+│   └── docker-compose.neo4j.yml
+│
+├── scripts/                 # Utility Scripts
+│   ├── start_backend.py     # Start all backend services
+│   └── stop_backend.py      # Stop all services
+│
+└── docs/                    # Documentation
+```
+
+---
+
+## 🛠 Cài đặt
+
+### Yêu cầu hệ thống
+
+- **Python** >= 3.11
+- **Node.js** >= 18.x
+- **Docker** & Docker Compose
+- **Conda** (khuyến nghị)
+
+### 1. Clone Repository
+
 ```bash
-# Tạo conda environment
+git clone https://github.com/LiamNNT/Chatbot-UIT.git
+cd Chatbot-UIT
+```
+
+### 2. Tạo Conda Environment
+
+```bash
+# Tạo environment
 conda create -n chatbot-UIT python=3.11 -y
+
+# Activate environment
 conda activate chatbot-UIT
-
-# Cài đặt dependencies
-cd services/rag_services && pip install -r requirements.txt
-cd ../orchestrator && pip install -r requirements.txt
 ```
 
-### 2. Khởi động Backend (1 lệnh duy nhất)
+### 3. Cài đặt Dependencies
+
 ```bash
-conda activate chatbot-UIT
-python start_backend.py
-```
+# Backend - RAG Services
+cd services/rag_services
+pip install -r requirements.txt
 
-**💡 Debug mode được BẬT MẶC ĐỊNH** để hiển thị chi tiết input/output của agents.
+# Backend - Orchestrator
+cd ../orchestrator
+pip install -r requirements.txt
 
-Tắt debug mode (production):
-```bash
-python start_backend.py --no-debug
-```
-
-Xem chi tiết trong [BACKEND_SETUP.md](BACKEND_SETUP.md) và [DEBUG_LOGGING_GUIDE.md](DEBUG_LOGGING_GUIDE.md)
-
-### 3. Dừng Backend
-```bash
-python stop_backend.py
-```
-hoặc nhấn `Ctrl+C` trong terminal đang chạy.
-
-## 📦 Services
-
-Khi backend chạy, các services sau sẽ khởi động:
-
-- **Orchestrator API**: http://localhost:8001
-  - Docs: http://localhost:8001/docs
-  - Health: http://localhost:8001/api/v1/health
-
-- **RAG Service**: http://localhost:8000
-  - Docs: http://localhost:8000/docs
-  - Health: http://localhost:8000/v1/health
-
-- **OpenSearch**: http://localhost:9200
-  - Dashboard: http://localhost:5601
-
-- **Weaviate**: http://localhost:8090
-
-## 🏗️ Architecture
-
-```
-Frontend (Port 5173) - React + Tailwind CSS
-       ↓
-Orchestrator (8001) - Điều phối agents
-       ↓
-RAG Service (8000) - Tìm kiếm tài liệu
-       ↓
-   ┌────────┬────────┐
-Weaviate  OpenSearch
-(Vector)  (Keyword)
-```
-
-## 🎨 Quick Start - Frontend
-
-### Prerequisites
-- Node.js >= 18.x
-- Backend services running
-
-### Start Frontend
-```bash
-cd frontend
+# Frontend
+cd ../../frontend
 npm install
-npm run dev
-# Hoặc sử dụng script:
-./start_frontend.sh
 ```
 
-Frontend sẽ chạy tại: **http://localhost:5173**
+### 4. Cấu hình Environment Variables
 
-### Features
-- ✅ Real-time chat interface
-- ✅ RAG context display
-- ✅ Session management
-- ✅ Customizable settings
-- ✅ System monitoring
-- ✅ Responsive design
-- ✅ Markdown support
-
-Xem thêm trong [Frontend README](frontend/README.md)
-
-## 🎯 Phát triển Full Stack
-
-### 1. Start Backend
 ```bash
+# RAG Services
+cp services/rag_services/.env.example services/rag_services/.env
+
+# Orchestrator (cần OPENROUTER_API_KEY)
+cp services/orchestrator/.env.example services/orchestrator/.env
+# Chỉnh sửa file .env và thêm API key
+```
+
+---
+
+## 🚀 Sử dụng
+
+### Khởi động Backend (Cách nhanh)
+
+```bash
+# Activate conda environment
 conda activate chatbot-UIT
+
+# Chạy script khởi động
+cd scripts
 python start_backend.py
 ```
 
-### 2. Start Frontend (terminal mới)
+Script sẽ tự động:
+1. ✅ Stop các services đang chạy (nếu có)
+2. ✅ Khởi động Docker services (OpenSearch, Weaviate, Neo4j)
+3. ✅ Khởi động RAG Service (port 8000)
+4. ✅ Khởi động Orchestrator Service (port 8001)
+
+**Options:**
+```bash
+python start_backend.py --skip-docker  # Bỏ qua Docker services
+python start_backend.py --stop         # Chỉ stop services
+```
+
+**Dừng Backend:** Nhấn `Ctrl+C` trong terminal
+
+### Khởi động Frontend
+
 ```bash
 cd frontend
 npm run dev
 ```
 
-### 3. Truy cập
-- **Frontend**: http://localhost:5173
-- **Backend API Docs**: http://localhost:8001/docs
-- **RAG API Docs**: http://localhost:8000/docs
+Frontend sẽ chạy tại: http://localhost:5173
 
-## 📚 Documentation
+### Khởi động thủ công (từng service)
 
-- [Backend Setup Guide](BACKEND_SETUP.md) - Chi tiết về cài đặt và troubleshooting
-- [Orchestrator README](services/orchestrator/README.md) - Agent configuration
-- [RAG Service README](services/rag_services/README.md) - Vector & keyword search
+```bash
+# 1. Docker Services
+cd infrastructure
+docker compose -f docker-compose.opensearch.yml up -d
+docker compose -f docker-compose.weaviate.yml up -d
+docker compose -f docker-compose.neo4j.yml up -d
+
+# 2. RAG Service
+cd services/rag_services
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 3. Orchestrator Service
+cd services/orchestrator
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+---
+
+## 📚 API Documentation
+
+Sau khi khởi động services, truy cập API documentation tại:
+
+| Service | Swagger UI | ReDoc |
+|---------|------------|-------|
+| RAG Service | http://localhost:8000/docs | http://localhost:8000/redoc |
+| Orchestrator | http://localhost:8001/docs | http://localhost:8001/redoc |
+
+### Các Endpoint chính
+
+#### Chat API
+```http
+POST /api/v1/chat
+Content-Type: application/json
+
+{
+  "query": "Hướng dẫn đăng ký học phần tại UIT?",
+  "session_id": "user_123",
+  "use_rag": true
+}
+```
+
+#### RAG Search
+```http
+POST /v1/search
+Content-Type: application/json
+
+{
+  "query": "quy chế đào tạo",
+  "search_type": "hybrid_rerank",
+  "top_k": 5
+}
+```
+
+#### Health Check
+```http
+GET /api/v1/health
+GET /v1/health
+```
+
+---
+
+## 🗄 Database Credentials
+
+| Database | URL | Username | Password |
+|----------|-----|----------|----------|
+| Neo4j Browser | http://localhost:7474 | neo4j | uitchatbot |
+| Neo4j Bolt | bolt://localhost:7687 | neo4j | uitchatbot |
+| OpenSearch | http://localhost:9200 | - | - |
+| Weaviate | http://localhost:8090 | - | - |
+
+---
 
 ## 🧪 Testing
 
 ```bash
-# Test toàn bộ hệ thống
-python services/orchestrator/tests/demo_agent_rag.py
+# RAG Services tests
+cd services/rag_services
+pytest tests/
 
-# Test riêng các services
-curl http://localhost:8000/v1/health
-curl http://localhost:8001/api/v1/health
+# Orchestrator tests
+cd services/orchestrator
+pytest tests/
 ```
 
-## 🛠️ Tech Stack
+---
 
-### Backend
-- **FastAPI** - Web framework
-- **Weaviate** - Vector database
-- **OpenSearch** - Keyword search engine
-- **LangChain** - LLM orchestration
-- **Sentence Transformers** - Embeddings
+## 📁 Tài liệu bổ sung
 
-### Frontend
-- **React 19** - UI Library
-- **Vite 6** - Build tool
-- **Tailwind CSS 3.4** - Styling framework
-- **Axios** - HTTP client
-- **React Markdown** - Markdown rendering
-- **Lucide React** - Icons
+- [RAG Services Documentation](services/rag_services/README.md)
+- [Orchestrator Documentation](services/orchestrator/README.md)
+- [Frontend Documentation](frontend/README.md)
+- [Streaming Implementation](docs/STREAMING_CHANGES_SUMMARY.md)
+- [Quick Start Guide](docs/QUICK_START_GUIDE.md)
 
-## 📁 Project Structure
+---
 
-```
-Chatbot-UIT/
-├── start_backend.py          # 🚀 Script khởi động backend (MAIN)
-├── stop_backend.py            # 🛑 Script dừng backend
-├── BACKEND_SETUP.md           # 📖 Hướng dẫn chi tiết
-├── services/
-│   ├── orchestrator/          # Agent orchestration service
-│   │   ├── app/
-│   │   ├── config/
-│   │   └── tests/
-│   └── rag_services/          # RAG search service
-│       ├── adapters/
-│       ├── core/
-│       ├── docker/            # Docker compose files
-│       └── retrieval/
-└── frontend/                  # 🎨 React + Tailwind CSS UI
-    ├── src/
-    │   ├── components/        # UI components
-    │   ├── services/          # API integration
-    │   ├── hooks/             # Custom hooks
-    │   └── utils/             # Helper functions
-    ├── start_frontend.sh      # Frontend startup script
-    └── README.md              # Frontend documentation
-```
+## 👥 Đóng góp
 
-## 🆘 Troubleshooting
+Mọi đóng góp đều được chào đón! Vui lòng:
 
-### Backend không khởi động?
-```bash
-# Check Docker
-docker ps
+1. Fork repository
+2. Tạo branch mới (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Tạo Pull Request
 
-# Check ports
-lsof -i :8000,8001
+---
 
-# Check conda env
-conda activate chatbot-UIT
-python --version  # Should be 3.11.x
-```
+## 📄 License
 
-### Port bị chiếm?
-```bash
-# Kill process
-lsof -ti:8000 | xargs kill -9
-lsof -ti:8001 | xargs kill -9
-```
+Distributed under the MIT License. See `LICENSE` for more information.
 
-Xem thêm trong [BACKEND_SETUP.md](BACKEND_SETUP.md)
+---
 
-## 📝 License
+## 📞 Liên hệ
 
-MIT License
+- **Repository**: [https://github.com/LiamNNT/Chatbot-UIT](https://github.com/LiamNNT/Chatbot-UIT)
+- **Issues**: [https://github.com/LiamNNT/Chatbot-UIT/issues](https://github.com/LiamNNT/Chatbot-UIT/issues)
 
-## 👥 Contributors
+---
 
-- Backend: Multi-Agent RAG System
-- Frontend: [Bạn sẽ phát triển]
-
+<div align="center">
+Made with ❤️ for UIT Students
+</div>

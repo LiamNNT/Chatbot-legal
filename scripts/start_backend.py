@@ -2,15 +2,17 @@
 """
 Backend Startup Script for Chatbot-UIT
 ======================================
-Khởi động toàn bộ backend services:
-- Docker services (OpenSearch, Weaviate)
+Khoi dong toan bo backend services:
+- Docker services (OpenSearch, Weaviate, Neo4j)
 - RAG Service (port 8000)
 - Orchestrator Service (port 8001)
 
+Neu cac dich vu dang chay, script se tu dong stop truoc khi khoi dong lai.
+
 Usage:
-    python start_backend.py
-    python start_backend.py --skip-docker  # Skip Docker services
-    python start_backend.py --stop         # Stop all services
+    python start_backend.py                # Khoi dong tat ca services
+    python start_backend.py --skip-docker  # Bo qua Docker services
+    python start_backend.py --stop         # Chi stop tat ca services
 """
 
 import subprocess
@@ -21,535 +23,457 @@ import os
 import argparse
 from pathlib import Path
 from typing import List, Optional
-import json
 
-# Colors for terminal output
+
 class Colors:
-    BLUE = '\033[0;34m'
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    RED = '\033[0;31m'
-    NC = '\033[0m'  # No Color
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    NC = '\033[0m'
     BOLD = '\033[1m'
 
-# Global variables for process management
+
 processes: List[subprocess.Popen] = []
-docker_services_started = False
+
 
 def print_header(text: str):
-    """Print a formatted header"""
     print(f"\n{Colors.BLUE}{'='*70}{Colors.NC}")
-    print(f"{Colors.BLUE}{text.center(70)}{Colors.NC}")
+    print(f"{Colors.BOLD}{text.center(70)}{Colors.NC}")
     print(f"{Colors.BLUE}{'='*70}{Colors.NC}\n")
 
+
 def print_success(text: str):
-    """Print success message"""
     print(f"{Colors.GREEN}✓ {text}{Colors.NC}")
 
+
 def print_error(text: str):
-    """Print error message"""
     print(f"{Colors.RED}✗ {text}{Colors.NC}")
 
+
 def print_info(text: str):
-    """Print info message"""
     print(f"{Colors.YELLOW}ℹ {text}{Colors.NC}")
 
-def print_step(step: str, total: str, text: str):
-    """Print step message"""
+
+def print_step(step: int, total: int, text: str):
     print(f"\n{Colors.BOLD}[{step}/{total}] {text}{Colors.NC}")
 
+
 def run_command(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
-    """Run a command and return the result"""
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=check
-        )
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check)
         return result
     except subprocess.CalledProcessError as e:
-        if check:
-            print_error(f"Command failed: {' '.join(cmd)}")
-            print_error(f"Error: {e.stderr}")
-            raise
         return e
 
+
 def check_port(port: int) -> bool:
-    """Check if a port is in use"""
-    result = run_command(
-        ["lsof", "-Pi", f":{port}", "-sTCP:LISTEN", "-t"],
-        check=False
-    )
+    result = run_command(["lsof", "-Pi", f":{port}", "-sTCP:LISTEN", "-t"], check=False)
     return result.returncode == 0
 
+
 def kill_port(port: int):
-    """Kill process on a specific port"""
-    print_info(f"Killing process on port {port}...")
-    run_command(
-        ["bash", "-c", f"lsof -ti:{port} | xargs kill -9 2>/dev/null || true"],
-        check=False
-    )
-    time.sleep(1)
+    if check_port(port):
+        print_info(f"Stopping process on port {port}...")
+        run_command(["bash", "-c", f"lsof -ti:{port} | xargs kill -9 2>/dev/null || true"], check=False)
+        time.sleep(1)
+
 
 def check_docker() -> bool:
-    """Check if Docker is running"""
     result = run_command(["docker", "ps"], check=False)
     return result.returncode == 0
 
-def check_conda_env() -> bool:
-    """Check if conda environment 'chatbot-UIT' exists and is activated"""
-    conda_env = os.environ.get('CONDA_DEFAULT_ENV', '')
-    if conda_env == 'chatbot-UIT':
-        return True
+
+def detect_docker_compose_command() -> Optional[List[str]]:
+    """Detect which docker compose command is available (v2 plugin or v1 standalone)"""
+    # Try docker compose (v2 plugin) first
+    result = run_command(["docker", "compose", "version"], check=False)
+    if result.returncode == 0:
+        print_info("Using 'docker compose' (v2 plugin)")
+        return ["docker", "compose"]
     
-    # Check if environment exists
-    result = run_command(
-        ["conda", "env", "list"],
-        check=False
-    )
-    if result.returncode == 0 and 'chatbot-UIT' in result.stdout:
-        print_info("Conda environment 'chatbot-UIT' exists but not activated")
-        return True
-    return False
+    # Try docker-compose (v1 standalone)
+    result = run_command(["docker-compose", "version"], check=False)
+    if result.returncode == 0:
+        print_info("Using 'docker-compose' (v1 standalone)")
+        return ["docker-compose"]
+    
+    return None
+
+
+def get_project_root() -> Path:
+    return Path(__file__).parent.parent.absolute()
+
+
+def stop_all_services(project_root: Path, skip_docker: bool = False):
+    print_header("🛑 STOPPING ALL SERVICES")
+    
+    print_info("Stopping Python services...")
+    kill_port(8000)
+    kill_port(8001)
+    
+    if not skip_docker:
+        print_info("Stopping Docker services...")
+        infra_dir = project_root / "infrastructure"
+        
+        docker_compose_cmd = detect_docker_compose_command()
+        
+        if infra_dir.exists() and docker_compose_cmd:
+            for compose_file in ["docker-compose.neo4j.yml", "docker-compose.opensearch.yml", "docker-compose.weaviate.yml"]:
+                compose_path = infra_dir / compose_file
+                if compose_path.exists():
+                    cmd = docker_compose_cmd + ["-f", compose_file, "down"]
+                    run_command(cmd, cwd=infra_dir, check=False)
+            
+            main_compose = infra_dir / "docker-compose.yml"
+            if main_compose.exists():
+                cmd = docker_compose_cmd + ["down"]
+                run_command(cmd, cwd=infra_dir, check=False)
+        
+        time.sleep(2)
+    
+    print_success("All services stopped!")
+
 
 def start_docker_services(project_root: Path):
-    """Start Docker services (OpenSearch, Weaviate, and Neo4j)"""
-    global docker_services_started
-    
-    print_step("1", "4", "Starting Docker Services")
+    print_step(1, 3, "Starting Docker Services")
     
     if not check_docker():
         print_error("Docker is not running!")
         print_info("Please start Docker Desktop or Docker daemon first")
         sys.exit(1)
     
-    docker_dir = project_root / "services" / "rag_services" / "docker"
+    infra_dir = project_root / "infrastructure"
     
-    # Check if services are already running
-    if check_port(9200) and check_port(8090) and check_port(7687):
-        print_success("Docker services already running")
-        print_info("  - OpenSearch: http://localhost:9200")
-        print_info("  - Weaviate: http://localhost:8090")
-        print_info("  - Neo4j: bolt://localhost:7687")
-        docker_services_started = True
-        return
-    
-    # Stop existing services to recreate network
-    print_info("Stopping existing Docker services...")
-    run_command(
-        ["docker-compose", "-f", "docker-compose.weaviate.yml", "down"],
-        cwd=docker_dir,
-        check=False
-    )
-    run_command(
-        ["docker-compose", "-f", "docker-compose.opensearch.yml", "down"],
-        cwd=docker_dir,
-        check=False
-    )
-    run_command(
-        ["docker-compose", "-f", "docker-compose.neo4j.yml", "down"],
-        cwd=docker_dir,
-        check=False
-    )
-    time.sleep(2)
-    
-    # Start all services together to share network
-    print_info("Starting OpenSearch, Weaviate, and Neo4j...")
-    result = run_command(
-        [
-            "docker-compose",
-            "-f", "docker-compose.opensearch.yml",
-            "-f", "docker-compose.weaviate.yml",
-            "-f", "docker-compose.neo4j.yml",
-            "up", "-d"
-        ],
-        cwd=docker_dir
-    )
-    
-    if result.returncode == 0:
-        print_success("Docker services started successfully")
-        docker_services_started = True
-        
-        # Wait for services to be healthy
-        print_info("Waiting for services to be ready...")
-        max_retries = 30
-        for i in range(max_retries):
-            opensearch_healthy = run_command(
-                ["curl", "-sf", "http://localhost:9200/_cluster/health"],
-                check=False
-            ).returncode == 0
-            
-            weaviate_healthy = run_command(
-                ["curl", "-sf", "http://localhost:8090/v1/.well-known/ready"],
-                check=False
-            ).returncode == 0
-            
-            neo4j_healthy = run_command(
-                ["curl", "-sf", "http://localhost:7474"],
-                check=False
-            ).returncode == 0
-            
-            if opensearch_healthy and weaviate_healthy and neo4j_healthy:
-                print_success("All Docker services are healthy!")
-                break
-            
-            time.sleep(2)
-            print(".", end="", flush=True)
-        else:
-            print_error("\nServices did not become healthy in time")
-            print_info("They may still be starting up. Check with: docker ps")
-        
-        print()
-        print_info("Docker services:")
-        print_info("  - OpenSearch: http://localhost:9200")
-        print_info("  - OpenSearch Dashboards: http://localhost:5601")
-        print_info("  - Weaviate: http://localhost:8090")
-        print_info("  - Neo4j Browser: http://localhost:7474 (neo4j/uitchatbot)")
-        print_info("  - Neo4j Bolt: bolt://localhost:7687")
-    else:
-        print_error("Failed to start Docker services")
+    if not infra_dir.exists():
+        print_error(f"Infrastructure directory not found: {infra_dir}")
         sys.exit(1)
-
-def start_rag_service(project_root: Path, debug_mode: bool = False):
-    """Start RAG Service"""
-    global processes
     
-    print_step("2", "4", "Starting RAG Service")
+    # Detect docker compose command (v2 uses "docker compose", v1 uses "docker-compose")
+    docker_compose_cmd = detect_docker_compose_command()
+    if not docker_compose_cmd:
+        print_error("Neither 'docker compose' nor 'docker-compose' is available!")
+        sys.exit(1)
     
-    # Check if already running
-    if check_port(8000):
-        print_info("Port 8000 is already in use")
-        response = input("Kill existing process and restart? (y/n): ")
-        if response.lower() == 'y':
-            kill_port(8000)
+    compose_files = [
+        "docker-compose.opensearch.yml",
+        "docker-compose.weaviate.yml", 
+        "docker-compose.neo4j.yml"
+    ]
+    
+    print_info("Starting OpenSearch, Weaviate, and Neo4j...")
+    
+    for compose_file in compose_files:
+        compose_path = infra_dir / compose_file
+        if compose_path.exists():
+            cmd = docker_compose_cmd + ["-f", compose_file, "up", "-d"]
+            result = run_command(cmd, cwd=infra_dir, check=False)
+            if result.returncode != 0:
+                print_error(f"Failed to start {compose_file}")
+                if hasattr(result, 'stderr') and result.stderr:
+                    print_error(f"  Error: {result.stderr.strip()}")
+                if hasattr(result, 'stdout') and result.stdout:
+                    print_info(f"  Output: {result.stdout.strip()}")
         else:
-            print_info("Skipping RAG service start")
+            print_error(f"Compose file not found: {compose_path}")
+    
+    print_info("Waiting for services to be ready...")
+    max_retries = 30
+    
+    for i in range(max_retries):
+        opensearch_ok = run_command(
+            ["curl", "-sf", "http://localhost:9200/_cluster/health"],
+            check=False
+        ).returncode == 0
+        
+        weaviate_ok = run_command(
+            ["curl", "-sf", "http://localhost:8090/v1/.well-known/ready"],
+            check=False
+        ).returncode == 0
+        
+        neo4j_ok = run_command(
+            ["curl", "-sf", "http://localhost:7474"],
+            check=False
+        ).returncode == 0
+        
+        if opensearch_ok and weaviate_ok and neo4j_ok:
+            print()
+            print_success("All Docker services are healthy!")
+            print_info("  - OpenSearch: http://localhost:9200")
+            print_info("  - Weaviate: http://localhost:8090")
+            print_info("  - Neo4j: http://localhost:7474 (bolt://localhost:7687)")
             return
+        
+        print(".", end="", flush=True)
+        time.sleep(2)
+    
+    print()
+    print_error("Some Docker services may not be healthy yet")
+    print_info("Continuing anyway... Services might still be starting")
+
+
+def start_rag_service(project_root: Path):
+    print_step(2, 3, "Starting RAG Service (port 8000)")
     
     rag_dir = project_root / "services" / "rag_services"
     
-    # Check if conda environment is activated
-    python_exe = sys.executable
-    if 'chatbot-UIT' not in python_exe:
-        print_error("Conda environment 'chatbot-UIT' is not activated!")
-        print_info("Please run: conda activate chatbot-UIT")
-        print_info("Then run this script again")
-        sys.exit(1)
+    if not rag_dir.exists():
+        print_error(f"RAG services directory not found: {rag_dir}")
+        return None
     
-    print_info(f"Using Python: {python_exe}")
-    print_info("Starting RAG Service on port 8000...")
-    if debug_mode:
-        print_info("🐛 DEBUG MODE ENABLED - Detailed logging")
-    print_info("Logs will appear below (Ctrl+C to stop all services)...")
-    print()
+    env_file = rag_dir / ".env"
+    if not env_file.exists():
+        env_example = rag_dir / ".env.example"
+        if env_example.exists():
+            print_info("Creating .env from .env.example for RAG service...")
+            import shutil
+            shutil.copy(env_example, env_file)
     
-    # Set environment variable for debug mode
-    env = os.environ.copy()
-    if debug_mode:
-        env['LOG_LEVEL'] = 'DEBUG'
+    print_info(f"Starting RAG service from: {rag_dir}")
     
-    # Start RAG service - no output capture, show logs in terminal
-    proc = subprocess.Popen(
-        [python_exe, "start_server.py"],
+    process = subprocess.Popen(
+        [
+            sys.executable, "-m", "uvicorn",
+            "app.main:app",
+            "--host", "0.0.0.0",
+            "--port", "8000",
+            "--reload"
+        ],
         cwd=rag_dir,
-        env=env
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
     )
-    processes.append(proc)
     
-    # Wait for service to be ready
-    print_info("Waiting for RAG service to be ready...")
-    max_retries = 30
-    for i in range(max_retries):
+    processes.append(process)
+    
+    print_info("Waiting for RAG service to start...")
+    output_lines = []
+    for i in range(30):
+        # Try to read any available output (non-blocking)
         try:
-            result = run_command(
-                ["curl", "-sf", "http://localhost:8000/v1/health"],
-                check=False
-            )
-            if result.returncode == 0:
-                print_success("RAG Service is ready!")
-                print_info("  - API: http://localhost:8000")
-                print_info("  - Docs: http://localhost:8000/docs")
-                print_info("  - Health: http://localhost:8000/v1/health")
-                return
+            import select
+            if process.stdout and select.select([process.stdout], [], [], 0)[0]:
+                line = process.stdout.readline()
+                if line:
+                    output_lines.append(line)
         except:
             pass
         
+        # Check if process has crashed
+        if process.poll() is not None:
+            print()
+            print_error("RAG Service process crashed!")
+            # Read remaining output
+            if process.stdout:
+                remaining = process.stdout.read()
+                if remaining:
+                    output_lines.append(remaining)
+            if output_lines:
+                print_error("Error output:")
+                print(''.join(output_lines)[-2000:])
+            return None
+        
+        if check_port(8000):
+            print()
+            print_success("RAG Service started successfully!")
+            print_info("  - API: http://localhost:8000")
+            print_info("  - Docs: http://localhost:8000/docs")
+            return process
         time.sleep(1)
         print(".", end="", flush=True)
     
-    print_error("\nRAG Service did not start properly")
-    print_info("Check logs manually or try running:")
-    print_info(f"  cd {rag_dir}")
-    print_info("  python start_server.py")
-    sys.exit(1)
+    print()
+    print_error("RAG Service failed to start (timeout)")
+    # Show collected output
+    if output_lines:
+        print_error("Service output:")
+        print(''.join(output_lines)[-2000:])
+    return None
 
-def start_orchestrator_service(project_root: Path, debug_mode: bool = False):
-    """Start Orchestrator Service"""
-    global processes
-    
-    print_step("3", "4", "Starting Orchestrator Service")
-    
-    # Check if already running
-    if check_port(8001):
-        print_info("Port 8001 is already in use")
-        response = input("Kill existing process and restart? (y/n): ")
-        if response.lower() == 'y':
-            kill_port(8001)
-        else:
-            print_info("Skipping Orchestrator service start")
-            return
+
+def start_orchestrator_service(project_root: Path):
+    print_step(3, 3, "Starting Orchestrator Service (port 8001)")
     
     orchestrator_dir = project_root / "services" / "orchestrator"
     
-    # Check if conda environment is activated
-    python_exe = sys.executable
-    if 'chatbot-UIT' not in python_exe:
-        print_error("Conda environment 'chatbot-UIT' is not activated!")
-        sys.exit(1)
+    if not orchestrator_dir.exists():
+        print_error(f"Orchestrator directory not found: {orchestrator_dir}")
+        return None
     
-    print_info(f"Using Python: {python_exe}")
-    print_info("Starting Orchestrator Service on port 8001...")
-    if debug_mode:
-        print_info("🐛 DEBUG MODE ENABLED - Detailed agent I/O logging")
-    print()
-    
-    # Load environment variables
-    env = os.environ.copy()
     env_file = orchestrator_dir / ".env"
+    if not env_file.exists():
+        env_example = orchestrator_dir / ".env.example"
+        if env_example.exists():
+            print_info("Creating .env from .env.example for Orchestrator...")
+            import shutil
+            shutil.copy(env_example, env_file)
+        else:
+            print_error("No .env file found for Orchestrator!")
+            print_info("Please create .env file with OPENROUTER_API_KEY")
+            return None
+    
+    env = os.environ.copy()
     if env_file.exists():
         with open(env_file) as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#'):
-                    if '=' in line:
-                        key, value = line.split('=', 1)
-                        env[key.strip()] = value.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    env[key.strip()] = value.strip()
     
-    # Set debug log level if requested
-    if debug_mode:
-        env['LOG_LEVEL'] = 'DEBUG'
-    
-    # Disable timeout for Answer Agent (deepseek model can be slow)
-    env['OPENROUTER_TIMEOUT'] = 'none'
-    
-    # Add rag_services to PYTHONPATH for Graph Reasoning (Neo4j adapter)
-    rag_services_path = str(orchestrator_dir.parent / "rag_services")
+    rag_services_path = str(project_root / "services" / "rag_services")
     existing_pythonpath = env.get('PYTHONPATH', '')
     if existing_pythonpath:
         env['PYTHONPATH'] = f"{orchestrator_dir}:{rag_services_path}:{existing_pythonpath}"
     else:
         env['PYTHONPATH'] = f"{orchestrator_dir}:{rag_services_path}"
     
-    print_info(f"PYTHONPATH set for Graph Reasoning: {env['PYTHONPATH'][:100]}...")
+    print_info(f"Starting Orchestrator service from: {orchestrator_dir}")
     
-    # Start Orchestrator service - no output capture, show logs in terminal
-    proc = subprocess.Popen(
+    process = subprocess.Popen(
         [
-            python_exe, "-m", "uvicorn",
+            sys.executable, "-m", "uvicorn",
             "app.main:app",
             "--host", "0.0.0.0",
             "--port", "8001",
-            "--log-level", "info"
+            "--reload"
         ],
         cwd=orchestrator_dir,
-        env=env
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
     )
-    processes.append(proc)
     
-    # Wait for service to be ready
-    print_info("Waiting for Orchestrator to be ready...")
-    max_retries = 30
-    for i in range(max_retries):
-        try:
-            result = run_command(
-                ["curl", "-sf", "http://localhost:8001/api/v1/health"],
-                check=False
-            )
-            if result.returncode == 0:
-                print_success("Orchestrator Service is ready!")
-                print_info("  - API: http://localhost:8001")
-                print_info("  - Docs: http://localhost:8001/docs")
-                print_info("  - Health: http://localhost:8001/api/v1/health")
-                return
-        except:
-            pass
+    processes.append(process)
+    
+    print_info("Waiting for Orchestrator service to start...")
+    for i in range(30):
+        # Check if process has crashed
+        if process.poll() is not None:
+            print()
+            print_error("Orchestrator Service process crashed!")
+            if process.stdout:
+                output = process.stdout.read()
+                if output:
+                    print_error("Error output:")
+                    print(output[-1500:])
+            return None
         
+        if check_port(8001):
+            print()
+            print_success("Orchestrator Service started successfully!")
+            print_info("  - API: http://localhost:8001")
+            print_info("  - Docs: http://localhost:8001/docs")
+            return process
         time.sleep(1)
         print(".", end="", flush=True)
     
-    print_error("\nOrchestrator Service did not start properly")
-    sys.exit(1)
+    print()
+    print_error("Orchestrator Service failed to start (timeout)")
+    if process.stdout:
+        output = process.stdout.read()
+        if output:
+            print_error("Service output:")
+            print(output[-1500:])
+    return None
 
-def print_summary():
-    """Print summary of running services"""
-    print_step("4", "4", "Backend Services Summary")
-    
-    print(f"\n{Colors.GREEN}{'='*70}{Colors.NC}")
-    print(f"{Colors.GREEN}{'🎉 All Backend Services Started Successfully!'.center(70)}{Colors.NC}")
-    print(f"{Colors.GREEN}{'='*70}{Colors.NC}\n")
-    
-    print(f"{Colors.BOLD}Service URLs:{Colors.NC}")
-    print(f"  {Colors.GREEN}✓{Colors.NC} RAG Service:          http://localhost:8000")
-    print(f"  {Colors.GREEN}✓{Colors.NC} Orchestrator:         http://localhost:8001")
-    print(f"  {Colors.GREEN}✓{Colors.NC} OpenSearch:           http://localhost:9200")
-    print(f"  {Colors.GREEN}✓{Colors.NC} OpenSearch Dashboards: http://localhost:5601")
-    print(f"  {Colors.GREEN}✓{Colors.NC} Weaviate:             http://localhost:8090")
-    print(f"  {Colors.GREEN}✓{Colors.NC} Neo4j Browser:        http://localhost:7474")
-    print(f"  {Colors.GREEN}✓{Colors.NC} Neo4j Bolt:           bolt://localhost:7687")
-    
-    print(f"\n{Colors.BOLD}API Documentation:{Colors.NC}")
-    print(f"  - RAG API Docs:         http://localhost:8000/docs")
-    print(f"  - Orchestrator Docs:    http://localhost:8001/docs")
-    
-    print(f"\n{Colors.BOLD}Database Credentials:{Colors.NC}")
-    print(f"  - Neo4j: neo4j / uitchatbot")
-    print(f"  - OpenSearch: admin / admin")
-    
-    print(f"\n{Colors.BOLD}Health Checks:{Colors.NC}")
-    print(f"  curl http://localhost:8000/v1/health")
-    print(f"  curl http://localhost:8001/api/v1/health")
-    
-    print(f"\n{Colors.BOLD}Testing:{Colors.NC}")
-    print(f"  python services/orchestrator/tests/demo_agent_rag.py")
-    
-    print(f"\n{Colors.BOLD}{Colors.YELLOW}{'─'*70}{Colors.NC}")
-    print(f"{Colors.YELLOW}  Logs đang hiển thị real-time bên dưới...{Colors.NC}")
-    print(f"{Colors.YELLOW}  Nhấn Ctrl+C để dừng tất cả services{Colors.NC}")
-    print(f"{Colors.BOLD}{Colors.YELLOW}{'─'*70}{Colors.NC}\n")
 
-def stop_all_services(project_root: Path):
-    """Stop all running services"""
-    print_header("Stopping All Backend Services")
+def signal_handler(sig, frame):
+    print("\n")
+    print_header("🛑 STOPPING BACKEND SERVICES")
     
-    # Stop Python processes
-    for proc in processes:
+    # Terminate Python service processes
+    print_info("Stopping Python services...")
+    for process in processes:
         try:
-            proc.terminate()
-            proc.wait(timeout=5)
-        except:
-            proc.kill()
+            process.terminate()
+            process.wait(timeout=5)
+            print_success(f"Process {process.pid} terminated")
+        except subprocess.TimeoutExpired:
+            print_info(f"Force killing process {process.pid}...")
+            process.kill()
+            process.wait()
+        except Exception as e:
+            print_error(f"Error stopping process: {e}")
     
-    # Kill processes on ports
-    print_info("Stopping services on ports...")
+    # Also kill any remaining processes on the ports
     kill_port(8000)
     kill_port(8001)
     
-    # Stop Docker services
-    if docker_services_started:
-        print_info("Stopping Docker services...")
-        docker_dir = project_root / "services" / "rag_services" / "docker"
-        
-        run_command(
-            ["docker-compose", "-f", "docker-compose.weaviate.yml", "down"],
-            cwd=docker_dir,
-            check=False
-        )
-        run_command(
-            ["docker-compose", "-f", "docker-compose.opensearch.yml", "down"],
-            cwd=docker_dir,
-            check=False
-        )
-        run_command(
-            ["docker-compose", "-f", "docker-compose.neo4j.yml", "down"],
-            cwd=docker_dir,
-            check=False
-        )
-    
-    print_success("All services stopped")
-
-def signal_handler(sig, frame):
-    """Handle Ctrl+C"""
-    print(f"\n\n{Colors.YELLOW}Received interrupt signal. Stopping services...{Colors.NC}")
-    project_root = Path(__file__).parent.absolute()
-    stop_all_services(project_root)
+    print_success("All backend services stopped!")
     sys.exit(0)
 
+
+def print_summary():
+    print_header("🎉 BACKEND SERVICES STARTED")
+    print(f"{Colors.GREEN}Services running:{Colors.NC}")
+    print(f"  • OpenSearch:   http://localhost:9200")
+    print(f"  • Weaviate:     http://localhost:8090")
+    print(f"  • Neo4j:        http://localhost:7474 (bolt: 7687)")
+    print(f"  • RAG Service:  http://localhost:8000/docs")
+    print(f"  • Orchestrator: http://localhost:8001/docs")
+    print()
+    print(f"{Colors.BOLD}Database Credentials:{Colors.NC}")
+    print(f"  • Neo4j: neo4j / uitchatbot")
+    print()
+    print(f"{Colors.YELLOW}Press Ctrl+C to stop all services{Colors.NC}")
+
+
 def main():
-    """Main function"""
-    # Parse arguments
-    parser = argparse.ArgumentParser(description='Start Chatbot-UIT Backend Services')
-    parser.add_argument('--skip-docker', action='store_true', help='Skip Docker services startup')
-    parser.add_argument('--stop', action='store_true', help='Stop all services')
-    parser.add_argument('--no-debug', action='store_true', help='Disable debug logging (debug is enabled by default)')
+    parser = argparse.ArgumentParser(description="Start/Stop Chatbot-UIT Backend Services")
+    parser.add_argument("--skip-docker", action="store_true", help="Skip Docker services")
+    parser.add_argument("--stop", action="store_true", help="Only stop services")
     args = parser.parse_args()
     
-    # Debug mode is ON by default, use --no-debug to turn it off
-    debug_mode = not args.no_debug
+    project_root = get_project_root()
     
-    # Get project root
-    project_root = Path(__file__).parent.absolute()
-    
-    # Setup signal handler
     signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
-    # Stop services if requested
+    stop_all_services(project_root, skip_docker=args.skip_docker)
+    
     if args.stop:
-        stop_all_services(project_root)
         return
     
-    # Print header
-    print_header("🚀 Starting Chatbot-UIT Backend Services")
+    print_header("🚀 STARTING CHATBOT-UIT BACKEND")
     
     print_info(f"Project root: {project_root}")
     print_info(f"Python: {sys.executable}")
     
-    # Show debug mode status
-    if debug_mode:
-        print_success("🐛 Debug mode: ENABLED (use --no-debug to disable)")
+    if not args.skip_docker:
+        start_docker_services(project_root)
     else:
-        print_info("Debug mode: DISABLED (default is enabled)")
+        print_step(1, 3, "Skipping Docker Services (--skip-docker)")
+        print_info("Docker services skipped")
     
-    # Check conda environment
-    if not check_conda_env():
-        print_error("Conda environment 'chatbot-UIT' not found!")
-        print_info("Please create and activate it first:")
-        print_info("  conda create -n chatbot-UIT python=3.11")
-        print_info("  conda activate chatbot-UIT")
+    rag_process = start_rag_service(project_root)
+    if not rag_process:
+        print_error("Failed to start RAG service!")
         sys.exit(1)
     
-    if os.environ.get('CONDA_DEFAULT_ENV') != 'chatbot-UIT':
-        print_error("Conda environment 'chatbot-UIT' is not activated!")
-        print_info("Please run: conda activate chatbot-UIT")
-        print_info("Then run this script again")
+    orchestrator_process = start_orchestrator_service(project_root)
+    if not orchestrator_process:
+        print_error("Failed to start Orchestrator service!")
         sys.exit(1)
+    
+    print_summary()
     
     try:
-        # Start Docker services
-        if not args.skip_docker:
-            start_docker_services(project_root)
-        else:
-            print_info("Skipping Docker services (--skip-docker)")
-        
-        # Start RAG service
-        start_rag_service(project_root, debug_mode=debug_mode)
-        
-        # Start Orchestrator service
-        start_orchestrator_service(project_root, debug_mode=debug_mode)
-        
-        # Print summary
-        print_summary()
-        
-        # Keep script running - wait for any process to finish or Ctrl+C
-        print_info("Services running. Monitoring processes...")
-        try:
-            # Wait for all processes to finish (they won't unless error)
-            for proc in processes:
-                proc.wait()
-        except KeyboardInterrupt:
-            # This will be caught by outer handler
-            raise
-    
+        while True:
+            for process in processes:
+                if process.poll() is not None:
+                    print_error("A service has stopped unexpectedly!")
+                    if process.stdout:
+                        output = process.stdout.read()
+                        if output:
+                            print(f"Output: {output[-2000:]}")
+                    sys.exit(1)
+            time.sleep(5)
     except KeyboardInterrupt:
-        print(f"\n{Colors.YELLOW}Interrupted by user{Colors.NC}")
-        stop_all_services(project_root)
-    except Exception as e:
-        print_error(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-        stop_all_services(project_root)
-        sys.exit(1)
+        signal_handler(None, None)
+
 
 if __name__ == "__main__":
     main()
