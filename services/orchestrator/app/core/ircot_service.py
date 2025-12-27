@@ -1,8 +1,21 @@
 """
 IRCoT (Interleaving Retrieval with Chain-of-Thought) Reasoning Service.
 
-This service implements the IRCoT algorithm for complex multi-hop questions,
-enabling dynamic retrieval based on chain-of-thought reasoning steps.
+⚠️ DEPRECATED: This module has been replaced by LangGraph-based orchestration.
+
+Use langgraph_workflow.py instead, which provides:
+- Automatic state management
+- Visual debugging with LangGraph Studio
+- Built-in checkpointing for recovery
+- Human-in-the-loop support
+- Easy extension to more agents
+
+Migration Guide:
+- Replace IRCoTReasoningService with LangGraphOrchestrator
+- Use container.get_langgraph_orchestrator() to get the new orchestrator
+- Set USE_LANGGRAPH=true to enable LangGraph mode
+
+This file is kept for backward compatibility but will be removed in a future version.
 
 Reference: "Interleaving Retrieval with Chain-of-Thought Reasoning for 
             Knowledge-Intensive Multi-Step Questions" (Trivedi et al., 2022)
@@ -15,6 +28,7 @@ Key Innovation:
   IRCoT: Retrieve → Reason → Retrieve → Reason → ... → Answer
 """
 
+import warnings
 import json
 import time
 import logging
@@ -32,10 +46,20 @@ from ..core.domain import AgentRequest, ConversationContext
 
 logger = logging.getLogger(__name__)
 
+# Deprecation warning
+warnings.warn(
+    "IRCoTReasoningService is deprecated. Use LangGraphOrchestrator instead. "
+    "Set USE_LANGGRAPH=true to enable the new implementation.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
 
 class IRCoTReasoningService:
     """
     Service implementing IRCoT (Interleaving Retrieval with Chain-of-Thought).
+    
+    ⚠️ DEPRECATED: Use LangGraphOrchestrator from langgraph_workflow.py instead.
     
     This service enables iterative reasoning with dynamic retrieval for
     complex, multi-hop questions that cannot be answered with single retrieval.

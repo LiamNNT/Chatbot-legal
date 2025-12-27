@@ -4,15 +4,19 @@ Core orchestrator service.
 This service coordinates between RAG retrieval and agent generation,
 implementing the main business logic of the orchestration pipeline.
 
-Enhanced with IRCoT (Interleaving Retrieval with Chain-of-Thought) support
-for complex multi-hop questions.
+Enhanced with LangGraph-based IRCoT (Interleaving Retrieval with Chain-of-Thought) 
+support for complex multi-hop questions using stateful graph workflows.
+
+Migration Note:
+- IRCoTReasoningService (manual loop) has been replaced by LangGraphOrchestrator
+- LangGraph provides automatic state management, visual debugging, and checkpointing
 """
 
 import uuid
 import time
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 from ..core.domain import (
     OrchestrationRequest,
     OrchestrationResponse,
@@ -26,7 +30,10 @@ from ..ports.agent_ports import AgentPort, RAGServicePort, ConversationManagerPo
 from ..core.context_domain_service import ContextDomainService
 from ..core.exceptions import AgentProcessingFailedException, RAGRetrievalFailedException
 from ..core.ircot_config import IRCoTConfig, IRCoTMode
-from ..core.ircot_service import IRCoTReasoningService
+
+# Type checking only import to avoid circular imports
+if TYPE_CHECKING:
+    from ..core.langgraph_workflow import LangGraphOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +45,15 @@ class OrchestrationService:
     This service implements the core business logic for the orchestration
     pipeline, coordinating between document retrieval and response generation.
     
-    Enhanced with IRCoT (Interleaving Retrieval with Chain-of-Thought) support
-    for complex multi-hop questions that require iterative reasoning.
+    Enhanced with LangGraph-based IRCoT (Interleaving Retrieval with Chain-of-Thought) 
+    support for complex multi-hop questions that require iterative reasoning.
+    
+    LangGraph Benefits:
+    - Automatic state management across iterations
+    - Visual debugging with LangGraph Studio
+    - Built-in checkpointing for recovery
+    - Human-in-the-loop support
+    - Easy extension to more agents
     """
     
     def __init__(
@@ -48,7 +62,8 @@ class OrchestrationService:
         rag_port: RAGServicePort,
         conversation_manager: ConversationManagerPort,
         default_system_prompt: Optional[str] = None,
-        ircot_config: Optional[IRCoTConfig] = None
+        ircot_config: Optional[IRCoTConfig] = None,
+        langgraph_orchestrator: Optional["LangGraphOrchestrator"] = None
     ):
         """
         Initialize the orchestration service.
@@ -59,19 +74,36 @@ class OrchestrationService:
             conversation_manager: Port for conversation management
             default_system_prompt: Default system prompt to use
             ircot_config: Optional IRCoT configuration for complex queries
+            langgraph_orchestrator: Optional LangGraph orchestrator for IRCoT processing
         """
         self.agent_port = agent_port
         self.rag_port = rag_port
         self.conversation_manager = conversation_manager
         self.default_system_prompt = default_system_prompt or self._get_default_system_prompt()
         
-        # Initialize IRCoT service
+        # IRCoT configuration
         self.ircot_config = ircot_config or IRCoTConfig()
-        self.ircot_service = IRCoTReasoningService(
-            agent_port=agent_port,
-            rag_port=rag_port,
-            config=self.ircot_config
-        )
+        
+        # LangGraph orchestrator for IRCoT (replaces manual IRCoTReasoningService)
+        self._langgraph_orchestrator = langgraph_orchestrator
+        
+        # Log initialization status
+        if self._langgraph_orchestrator:
+            logger.info("✓ OrchestrationService initialized with LangGraph IRCoT support")
+        else:
+            logger.info("⚠ OrchestrationService initialized without LangGraph (IRCoT disabled)")
+    
+    @property
+    def langgraph_orchestrator(self) -> Optional["LangGraphOrchestrator"]:
+        """Get the LangGraph orchestrator (lazy initialization supported)."""
+        return self._langgraph_orchestrator
+    
+    @langgraph_orchestrator.setter
+    def langgraph_orchestrator(self, value: Optional["LangGraphOrchestrator"]) -> None:
+        """Set the LangGraph orchestrator."""
+        self._langgraph_orchestrator = value
+        if value:
+            logger.info("✓ LangGraph orchestrator attached to OrchestrationService")
     
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
@@ -342,18 +374,17 @@ Hãy trả lời một cách thân thiện và chuyên nghiệp."""
         complexity_score: float = 7.0
     ) -> OrchestrationResponse:
         """
-        Process request using IRCoT (Interleaving Retrieval with Chain-of-Thought).
+        Process request using LangGraph-based IRCoT workflow.
         
-        This method should be called when SmartPlannerAgent determines that
-        the query is complex and requires multi-hop reasoning.
+        This method delegates to LangGraphOrchestrator for stateful
+        multi-agent orchestration with automatic state management.
         
-        IRCoT Algorithm:
-        1. Initial retrieval based on original query
-        2. Generate CoT reasoning step
-        3. If more info needed, generate new search query from reasoning
-        4. Retrieve additional context with new query
-        5. Repeat until confident or max iterations reached
-        6. Use accumulated context for final answer generation
+        LangGraph IRCoT Workflow:
+        1. PLAN: Analyze query, extract filters, determine complexity
+        2. RETRIEVE: RAG + Knowledge Graph retrieval (parallel)
+        3. REASON: Generate Chain-of-Thought reasoning step
+        4. LOOP: Conditional edge decides to continue or answer
+        5. ANSWER: Generate final answer with citations
         
         Args:
             request: The orchestration request
@@ -361,26 +392,75 @@ Hãy trả lời một cách thân thiện và chuyên nghiệp."""
             complexity_score: Numeric complexity score (0-10)
             
         Returns:
-            OrchestrationResponse with IRCoT-enhanced context
+            OrchestrationResponse with LangGraph-enhanced context
         """
         start_time = time.time()
         session_id = request.session_id or str(uuid.uuid4())
-        processing_stats = {
-            "ircot_mode": True,
-            "complexity": complexity,
-            "complexity_score": complexity_score
-        }
         
-        # Check if IRCoT should be used
+        # Check if IRCoT should be used based on config
         use_ircot = self.ircot_config.should_use_ircot(complexity, complexity_score)
         
         if not use_ircot:
             # Fall back to standard processing
             logger.info(f"IRCoT not triggered for query (complexity={complexity})")
-            processing_stats["ircot_mode"] = False
             return await self.process_request(request)
         
-        logger.info(f"🔄 Processing with IRCoT: {request.user_query[:50]}...")
+        # Check if LangGraph orchestrator is available
+        if self._langgraph_orchestrator is None:
+            logger.warning("⚠ LangGraph orchestrator not available, falling back to standard RAG")
+            return await self._fallback_ircot_processing(request, complexity, complexity_score)
+        
+        logger.info(f"🔄 Processing with LangGraph IRCoT: {request.user_query[:50]}...")
+        
+        try:
+            # Delegate to LangGraph orchestrator
+            response = await self._langgraph_orchestrator.process_request(request)
+            
+            # Add timing info
+            total_time = time.time() - start_time
+            if response.processing_stats:
+                response.processing_stats["total_time_with_delegation"] = total_time
+                response.processing_stats["complexity"] = complexity
+                response.processing_stats["complexity_score"] = complexity_score
+            
+            logger.info(f"✅ LangGraph IRCoT completed in {total_time:.2f}s")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"LangGraph processing error: {e}", exc_info=True)
+            
+            # Fallback to standard processing on error
+            logger.warning("⚠ Falling back to standard RAG due to LangGraph error")
+            return await self._fallback_ircot_processing(request, complexity, complexity_score)
+    
+    async def _fallback_ircot_processing(
+        self,
+        request: OrchestrationRequest,
+        complexity: str,
+        complexity_score: float
+    ) -> OrchestrationResponse:
+        """
+        Fallback IRCoT processing when LangGraph is not available.
+        
+        This uses standard RAG retrieval without iterative reasoning.
+        
+        Args:
+            request: The orchestration request
+            complexity: Complexity level
+            complexity_score: Numeric complexity score
+            
+        Returns:
+            OrchestrationResponse with standard RAG context
+        """
+        start_time = time.time()
+        session_id = request.session_id or str(uuid.uuid4())
+        processing_stats = {
+            "ircot_mode": False,
+            "fallback_reason": "langgraph_unavailable",
+            "complexity": complexity,
+            "complexity_score": complexity_score
+        }
         
         # Get or create conversation context
         context = await self._get_or_create_context(session_id, request.conversation_context)
@@ -396,69 +476,39 @@ Hãy trả lời một cách thân thiện và chuyên nghiệp."""
         
         rag_context = None
         
-        try:
-            # Step 1: Execute IRCoT reasoning with dynamic retrieval
-            ircot_start = time.time()
-            ircot_result = await self.ircot_service.reason_with_retrieval(
-                query=request.user_query,
-                initial_context=None,  # Let IRCoT handle initial retrieval
-                extracted_filters=None
-            )
-            ircot_end = time.time()
-            
-            processing_stats["ircot_time"] = ircot_end - ircot_start
-            processing_stats["ircot_iterations"] = ircot_result.total_iterations
-            processing_stats["ircot_early_stopped"] = ircot_result.early_stopped
-            processing_stats["ircot_confidence"] = ircot_result.final_confidence
-            processing_stats["ircot_documents_accumulated"] = len(ircot_result.accumulated_context)
-            
-            # Build RAG context from IRCoT accumulated context
-            rag_context = RAGContext(
-                query=request.user_query,
-                retrieved_documents=ircot_result.accumulated_context,
-                search_metadata={
-                    "ircot_iterations": ircot_result.total_iterations,
-                    "ircot_queries": ircot_result.get_all_search_queries(),
-                    "ircot_reasoning": ircot_result.final_reasoning
-                },
-                relevance_scores=[
-                    doc.get("score", 0.0) 
-                    for doc in ircot_result.accumulated_context
-                ]
-            )
-            
-            processing_stats["documents_retrieved"] = len(rag_context.retrieved_documents)
-            
-        except Exception as e:
-            logger.error(f"IRCoT processing error: {e}")
-            processing_stats["ircot_error"] = str(e)
-            
-            # Fallback to standard RAG
+        # Standard RAG retrieval
+        if request.use_rag:
             try:
+                rag_start = time.time()
                 rag_data = await self.rag_port.retrieve_context(
                     query=request.user_query,
                     top_k=request.rag_top_k
                 )
+                rag_end = time.time()
+                
                 rag_context = RAGContext(
                     query=request.user_query,
                     retrieved_documents=rag_data.get("retrieved_documents", []),
                     search_metadata=rag_data.get("search_metadata"),
                     relevance_scores=rag_data.get("relevance_scores", [])
                 )
-            except Exception as fallback_error:
-                processing_stats["rag_fallback_error"] = str(fallback_error)
+                
+                processing_stats["rag_time"] = rag_end - rag_start
+                processing_stats["documents_retrieved"] = len(rag_context.retrieved_documents)
+                
+            except Exception as e:
+                processing_stats["rag_error"] = str(e)
         
-        # Prepare agent request with IRCoT-enhanced context
-        agent_request = self._prepare_agent_request_with_ircot(
+        # Prepare agent request
+        agent_request = self._prepare_agent_request(
             user_query=request.user_query,
             rag_context=rag_context,
-            ircot_reasoning=ircot_result.final_reasoning if 'ircot_result' in locals() else None,
             context=context,
             model=request.agent_model,
             metadata=request.metadata
         )
         
-        # Generate final response
+        # Generate response
         try:
             agent_start = time.time()
             agent_response = await self.agent_port.generate_response(agent_request)
@@ -470,17 +520,13 @@ Hãy trả lời một cách thân thiện và chuyên nghiệp."""
             agent_response_content = agent_response.content
             agent_metadata = agent_response.metadata or {}
             
-            # Add IRCoT info to metadata
-            if 'ircot_result' in locals():
-                agent_metadata["ircot"] = ircot_result.to_dict()
-            
         except Exception as e:
             raise AgentProcessingFailedException(
                 agent_error=str(e),
                 details={
                     "session_id": session_id,
                     "user_query": request.user_query,
-                    "ircot_mode": True,
+                    "fallback_mode": True,
                     "processing_stats": processing_stats
                 },
                 cause=e
@@ -509,62 +555,4 @@ Hãy trả lời một cách thân thiện và chuyên nghiệp."""
             agent_metadata=agent_metadata,
             processing_stats=processing_stats,
             timestamp=datetime.now()
-        )
-    
-    def _prepare_agent_request_with_ircot(
-        self,
-        user_query: str,
-        rag_context: Optional[RAGContext],
-        ircot_reasoning: Optional[str],
-        context: Any,
-        model: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> AgentRequest:
-        """
-        Prepare agent request with IRCoT reasoning context.
-        
-        This enhances the standard request preparation by including
-        the chain-of-thought reasoning from IRCoT iterations.
-        
-        Args:
-            user_query: The user's query
-            rag_context: Retrieved context from IRCoT
-            ircot_reasoning: Compiled reasoning from IRCoT iterations
-            context: Conversation context
-            model: Optional model specification
-            metadata: Optional request metadata
-            
-        Returns:
-            AgentRequest ready for agent processing
-        """
-        # Build enhanced prompt with IRCoT reasoning
-        enhanced_prompt = user_query
-        context_data = None
-        
-        if rag_context and rag_context.retrieved_documents:
-            # Extract context data
-            context_data = self._extract_context_data(rag_context)
-            
-            # Add IRCoT reasoning to context
-            if ircot_reasoning:
-                context_data["ircot_reasoning"] = ircot_reasoning
-            
-            # Store in conversation context
-            if context:
-                context.metadata = context.metadata or {}
-                context.metadata["rag_context"] = context_data
-                context.metadata["ircot_mode"] = True
-        
-        return AgentRequest(
-            prompt=enhanced_prompt,
-            context=context,
-            model=model,
-            max_tokens=metadata.get("max_tokens") if metadata else None,
-            temperature=metadata.get("temperature") if metadata else None,
-            stream=False,
-            metadata={
-                **(metadata or {}),
-                "ircot_mode": True,
-                "has_ircot_reasoning": ircot_reasoning is not None
-            }
         )

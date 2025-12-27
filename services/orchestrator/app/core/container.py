@@ -14,6 +14,10 @@ Enhanced with IRCoT (Interleaving Retrieval with Chain-of-Thought):
 
 Enhanced with Graph Reasoning (Neo4j):
 - Local/Global/Multi-hop graph queries for relationship-based questions
+
+NEW: LangGraph Integration:
+- Stateful multi-agent orchestration with automatic state management
+- Visual debugging and checkpointing support
 """
 
 import os
@@ -48,6 +52,7 @@ class ServiceContainer:
     and their dependencies, ensuring proper separation of concerns.
     
     Uses optimized 3-agent pipeline for cost efficiency.
+    Supports LangGraph-based orchestration for stateful workflows.
     """
     
     def __init__(self, config_path: Optional[str] = None):
@@ -63,6 +68,7 @@ class ServiceContainer:
         self._conversation_manager: Optional[ConversationManagerPort] = None
         self._orchestration_service: Optional[OrchestrationService] = None
         self._multi_agent_orchestrator: Optional[OptimizedMultiAgentOrchestrator] = None
+        self._langgraph_orchestrator = None  # LangGraph-based orchestrator
         self._config_manager: Optional[ConfigurationManager] = None
         self._agent_factory: Optional[AgentFactory] = None
         
@@ -190,6 +196,8 @@ class ServiceContainer:
         """
         Get or create the orchestration service instance.
         
+        Enhanced with LangGraph orchestrator for IRCoT processing.
+        
         Returns:
             OrchestrationService instance with all dependencies injected
         """
@@ -197,12 +205,25 @@ class ServiceContainer:
             # Get default system prompt from environment
             default_system_prompt = os.getenv("DEFAULT_SYSTEM_PROMPT")
             
+            # Get IRCoT config
+            ircot_config = self._create_ircot_config()
+            
+            # Get LangGraph orchestrator if enabled
+            langgraph_orchestrator = self.get_langgraph_orchestrator()
+            
             self._orchestration_service = OrchestrationService(
                 agent_port=self.get_agent_port(),
                 rag_port=self.get_rag_port(),
                 conversation_manager=self.get_conversation_manager(),
-                default_system_prompt=default_system_prompt
+                default_system_prompt=default_system_prompt,
+                ircot_config=ircot_config,
+                langgraph_orchestrator=langgraph_orchestrator
             )
+            
+            if langgraph_orchestrator:
+                logger.info("✓ OrchestrationService created with LangGraph IRCoT support")
+            else:
+                logger.info("⚠ OrchestrationService created without LangGraph (standard mode)")
         
         return self._orchestration_service
     
@@ -352,6 +373,70 @@ class ServiceContainer:
         
         return config
     
+    def get_langgraph_orchestrator(self):
+        """
+        Get or create the LangGraph-based orchestrator.
+        
+        This orchestrator uses LangGraph for stateful multi-agent orchestration,
+        providing automatic state management, visual debugging, and checkpointing.
+        
+        Returns:
+            LangGraphOrchestrator instance or None if LangGraph is not available
+        """
+        if self._langgraph_orchestrator is None:
+            # Check if LangGraph mode is enabled
+            use_langgraph = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
+            
+            if not use_langgraph:
+                logger.info("LangGraph mode is DISABLED. Set USE_LANGGRAPH=true to enable.")
+                return None
+            
+            try:
+                from ..core.langgraph_workflow import create_langgraph_orchestrator
+                from ..core.context_domain_service import ContextDomainService
+                
+                # Get IRCoT config
+                ircot_config = self._create_ircot_config()
+                
+                # Get Graph Adapter
+                graph_adapter = self.get_graph_adapter()
+                
+                # Create context service for query rewriting
+                context_service = ContextDomainService(llm_client=self.get_agent_port())
+                
+                # Check if checkpointing is enabled
+                enable_checkpointing = os.getenv("LANGGRAPH_CHECKPOINTING", "false").lower() == "true"
+                
+                logger.info("=" * 60)
+                logger.info("🚀 Initializing LangGraph Orchestrator")
+                logger.info(f"   Checkpointing: {'enabled' if enable_checkpointing else 'disabled'}")
+                if graph_adapter:
+                    logger.info("   Graph Reasoning: enabled")
+                logger.info("=" * 60)
+                
+                self._langgraph_orchestrator = create_langgraph_orchestrator(
+                    agent_port=self.get_agent_port(),
+                    rag_port=self.get_rag_port(),
+                    agent_factory=self.get_agent_factory(),
+                    graph_adapter=graph_adapter,
+                    conversation_manager=self.get_conversation_manager(),
+                    context_service=context_service,
+                    ircot_config=ircot_config,
+                    enable_checkpointing=enable_checkpointing
+                )
+                
+                logger.info("✓ LangGraph Orchestrator initialized successfully")
+                
+            except ImportError as e:
+                logger.warning(f"⚠ Could not import LangGraph: {e}")
+                logger.warning("Install with: pip install langgraph langchain-core")
+                return None
+            except Exception as e:
+                logger.warning(f"⚠ Could not initialize LangGraph orchestrator: {e}")
+                return None
+        
+        return self._langgraph_orchestrator
+    
     async def cleanup(self) -> None:
         """
         Cleanup resources used by the container.
@@ -373,6 +458,7 @@ class ServiceContainer:
         self._conversation_manager = None
         self._orchestration_service = None
         self._multi_agent_orchestrator = None
+        self._langgraph_orchestrator = None
         self._config_manager = None
         self._agent_factory = None
 
@@ -417,6 +503,17 @@ def get_multi_agent_orchestrator() -> OptimizedMultiAgentOrchestrator:
     """
     container = get_container()
     return container.get_multi_agent_orchestrator()
+
+
+def get_langgraph_orchestrator():
+    """
+    Get the LangGraph orchestrator from the global container.
+    
+    Returns:
+        LangGraphOrchestrator instance or None if not available
+    """
+    container = get_container()
+    return container.get_langgraph_orchestrator()
 
 
 async def cleanup_container() -> None:
