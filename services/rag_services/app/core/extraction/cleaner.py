@@ -50,8 +50,8 @@ def is_amendment_document(data: Dict) -> bool:
         True if this is an amendment document, False if original
     """
     # Check document title/content for amendment indicators
-    structure = data.get("structure", {})
-    doc = structure.get("document", {})
+    structure = data.get("structure", {}) or {}
+    doc = structure.get("document", {}) or {}
     
     title = doc.get("title", "") or ""
     full_text = doc.get("full_text", "") or ""

@@ -1,0 +1,28 @@
+{
+  "extraction_id": "2a8a7e08-a64a-4372-837b-ca4b869bf076",
+  "stage": "stage1",
+  "source_file": "20251228_103956_790-qd-dhcntt_28-9-22_quy_che_dao_tao.pdf",
+  "extracted_at": "2025-12-28T10:41:48.478345",
+  "category": "Quy chế Đào tạo",
+  "page_count": 27,
+  "structure": {
+    "document": null,
+    "chapters": [],
+    "articles": [],
+    "clauses": [],
+    "tables": [],
+    "relations": [],
+    "page_count": 27,
+    "errors": []
+  },
+  "cleaning_applied": true,
+  "document_type": "original",
+  "cleaning_stats": {
+    "duplicates_removed": 0,
+    "orphan_relations_removed": 0,
+    "invalid_modifications_removed": 0,
+    "is_original_document": true,
+    "issues_detected": 0,
+    "issues": []
+  }
+}

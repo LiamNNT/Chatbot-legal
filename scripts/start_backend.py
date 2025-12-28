@@ -21,8 +21,10 @@ import time
 import signal
 import os
 import argparse
+import threading
+import queue
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 class Colors:
@@ -30,11 +32,16 @@ class Colors:
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
     RED = '\033[91m'
+    CYAN = '\033[96m'
+    MAGENTA = '\033[95m'
     NC = '\033[0m'
     BOLD = '\033[1m'
+    DIM = '\033[2m'
 
 
 processes: List[subprocess.Popen] = []
+log_threads: List[threading.Thread] = []
+stop_logging = threading.Event()
 
 
 def print_header(text: str):
@@ -57,6 +64,41 @@ def print_info(text: str):
 
 def print_step(step: int, total: int, text: str):
     print(f"\n{Colors.BOLD}[{step}/{total}] {text}{Colors.NC}")
+
+
+def print_log(service: str, message: str, color: str = Colors.DIM):
+    """Print log message with service prefix."""
+    timestamp = time.strftime("%H:%M:%S")
+    print(f"{Colors.DIM}[{timestamp}]{Colors.NC} {color}[{service}]{Colors.NC} {message.rstrip()}")
+
+
+def log_output_reader(process: subprocess.Popen, service_name: str, color: str):
+    """Thread function to read and print process output in realtime."""
+    try:
+        while not stop_logging.is_set() and process.poll() is None:
+            if process.stdout:
+                line = process.stdout.readline()
+                if line:
+                    print_log(service_name, line, color)
+        # Read any remaining output
+        if process.stdout:
+            for line in process.stdout:
+                if line:
+                    print_log(service_name, line, color)
+    except Exception as e:
+        print_error(f"Log reader error for {service_name}: {e}")
+
+
+def start_log_reader(process: subprocess.Popen, service_name: str, color: str):
+    """Start a background thread to read process output."""
+    thread = threading.Thread(
+        target=log_output_reader,
+        args=(process, service_name, color),
+        daemon=True
+    )
+    thread.start()
+    log_threads.append(thread)
+    return thread
 
 
 def run_command(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
@@ -200,6 +242,7 @@ def start_docker_services(project_root: Path):
             print()
             print_success("All Docker services are healthy!")
             print_info("  - OpenSearch: http://localhost:9200")
+            print_info("  - OpenSearch Dashboards: http://localhost:5601")
             print_info("  - Weaviate: http://localhost:8090")
             print_info("  - Neo4j: http://localhost:7474 (bolt://localhost:7687)")
             return
@@ -242,53 +285,51 @@ def start_rag_service(project_root: Path):
         cwd=rag_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True
+        text=True,
+        bufsize=1  # Line buffered
     )
     
     processes.append(process)
     
     print_info("Waiting for RAG service to start...")
-    output_lines = []
-    for i in range(30):
-        # Try to read any available output (non-blocking)
+    print_info("Showing startup logs:")
+    print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
+    
+    startup_timeout = 45  # seconds
+    start_time = time.time()
+    
+    while time.time() - start_time < startup_timeout:
+        # Read and print output in realtime during startup
         try:
             import select
-            if process.stdout and select.select([process.stdout], [], [], 0)[0]:
+            if process.stdout and select.select([process.stdout], [], [], 0.5)[0]:
                 line = process.stdout.readline()
                 if line:
-                    output_lines.append(line)
+                    print_log("RAG", line, Colors.CYAN)
         except:
-            pass
+            time.sleep(0.5)
         
         # Check if process has crashed
         if process.poll() is not None:
-            print()
+            print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
             print_error("RAG Service process crashed!")
             # Read remaining output
             if process.stdout:
-                remaining = process.stdout.read()
-                if remaining:
-                    output_lines.append(remaining)
-            if output_lines:
-                print_error("Error output:")
-                print(''.join(output_lines)[-2000:])
+                for line in process.stdout:
+                    print_log("RAG", line, Colors.RED)
             return None
         
         if check_port(8000):
-            print()
+            print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
             print_success("RAG Service started successfully!")
             print_info("  - API: http://localhost:8000")
             print_info("  - Docs: http://localhost:8000/docs")
+            # Start background log reader
+            start_log_reader(process, "RAG", Colors.CYAN)
             return process
-        time.sleep(1)
-        print(".", end="", flush=True)
     
-    print()
+    print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
     print_error("RAG Service failed to start (timeout)")
-    # Show collected output
-    if output_lines:
-        print_error("Service output:")
-        print(''.join(output_lines)[-2000:])
     return None
 
 
@@ -343,46 +384,60 @@ def start_orchestrator_service(project_root: Path):
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True
+        text=True,
+        bufsize=1  # Line buffered
     )
     
     processes.append(process)
     
     print_info("Waiting for Orchestrator service to start...")
-    for i in range(30):
+    print_info("Showing startup logs:")
+    print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
+    
+    startup_timeout = 45  # seconds
+    start_time = time.time()
+    
+    while time.time() - start_time < startup_timeout:
+        # Read and print output in realtime during startup
+        try:
+            import select
+            if process.stdout and select.select([process.stdout], [], [], 0.5)[0]:
+                line = process.stdout.readline()
+                if line:
+                    print_log("ORCH", line, Colors.MAGENTA)
+        except:
+            time.sleep(0.5)
+        
         # Check if process has crashed
         if process.poll() is not None:
-            print()
+            print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
             print_error("Orchestrator Service process crashed!")
+            # Read remaining output
             if process.stdout:
-                output = process.stdout.read()
-                if output:
-                    print_error("Error output:")
-                    print(output[-1500:])
+                for line in process.stdout:
+                    print_log("ORCH", line, Colors.RED)
             return None
         
         if check_port(8001):
-            print()
+            print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
             print_success("Orchestrator Service started successfully!")
             print_info("  - API: http://localhost:8001")
             print_info("  - Docs: http://localhost:8001/docs")
+            # Start background log reader
+            start_log_reader(process, "ORCH", Colors.MAGENTA)
             return process
-        time.sleep(1)
-        print(".", end="", flush=True)
     
-    print()
+    print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
     print_error("Orchestrator Service failed to start (timeout)")
-    if process.stdout:
-        output = process.stdout.read()
-        if output:
-            print_error("Service output:")
-            print(output[-1500:])
     return None
 
 
 def signal_handler(sig, frame):
     print("\n")
     print_header("🛑 STOPPING BACKEND SERVICES")
+    
+    # Signal log threads to stop
+    stop_logging.set()
     
     # Terminate Python service processes
     print_info("Stopping Python services...")
@@ -409,16 +464,24 @@ def signal_handler(sig, frame):
 def print_summary():
     print_header("🎉 BACKEND SERVICES STARTED")
     print(f"{Colors.GREEN}Services running:{Colors.NC}")
-    print(f"  • OpenSearch:   http://localhost:9200")
-    print(f"  • Weaviate:     http://localhost:8090")
-    print(f"  • Neo4j:        http://localhost:7474 (bolt: 7687)")
-    print(f"  • RAG Service:  http://localhost:8000/docs")
-    print(f"  • Orchestrator: http://localhost:8001/docs")
+    print(f"  • OpenSearch:           http://localhost:9200")
+    print(f"  • OpenSearch Dashboards: http://localhost:5601")
+    print(f"  • Weaviate:             http://localhost:8090")
+    print(f"  • Neo4j:                http://localhost:7474 (bolt: 7687)")
+    print(f"  • RAG Service:          http://localhost:8000/docs")
+    print(f"  • Orchestrator:         http://localhost:8001/docs")
     print()
     print(f"{Colors.BOLD}Database Credentials:{Colors.NC}")
     print(f"  • Neo4j: neo4j / uitchatbot")
     print()
+    print(f"{Colors.BOLD}Log Prefixes:{Colors.NC}")
+    print(f"  • {Colors.CYAN}[RAG]{Colors.NC}  - RAG Service logs")
+    print(f"  • {Colors.MAGENTA}[ORCH]{Colors.NC} - Orchestrator logs")
+    print()
     print(f"{Colors.YELLOW}Press Ctrl+C to stop all services{Colors.NC}")
+    print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
+    print(f"{Colors.BOLD}📋 LIVE LOGS:{Colors.NC}")
+    print(f"{Colors.DIM}{'─'*60}{Colors.NC}")
 
 
 def main():
@@ -461,16 +524,16 @@ def main():
     print_summary()
     
     try:
+        # Keep main thread alive while log threads run
         while True:
+            # Check if any service has crashed
             for process in processes:
                 if process.poll() is not None:
+                    print()
                     print_error("A service has stopped unexpectedly!")
-                    if process.stdout:
-                        output = process.stdout.read()
-                        if output:
-                            print(f"Output: {output[-2000:]}")
+                    stop_logging.set()
                     sys.exit(1)
-            time.sleep(5)
+            time.sleep(2)
     except KeyboardInterrupt:
         signal_handler(None, None)
 

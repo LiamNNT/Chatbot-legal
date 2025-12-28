@@ -47,6 +47,12 @@ google-generativeai>=0.3.0  # Google Gemini
 llama-index-core>=0.12.0
 llama-index-embeddings-huggingface>=0.5.0
 
+# LlamaParse for document parsing (PDF, tables, images)
+llama-parse>=0.5.0
+
+# PropertyGraphIndex for Knowledge Graph extraction
+llama-index-graph-stores-neo4j>=0.4.0
+
 # Optional LlamaIndex integrations (uncomment as needed)
 # llama-index-vector-stores-weaviate>=0.3.0
 # llama-index-postprocessor-cohere-rerank>=0.3.0

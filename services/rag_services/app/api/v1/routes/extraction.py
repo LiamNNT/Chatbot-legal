@@ -101,21 +101,27 @@ async def run_stage1_pipeline(
         # Import extraction modules
         from app.core.extraction.hybrid_extractor import StructureExtractor, VLMConfig
         from pdf2image import convert_from_path
+        from PIL import Image
         
-        # Convert PDF to images
+        # Convert PDF to images with optimized settings
         images_dir = pdf_path.parent / f"{pdf_path.stem}_images"
         images_dir.mkdir(exist_ok=True)
         
         loop = asyncio.get_event_loop()
+        # Reduced DPI from 200 to 150 to reduce token cost while maintaining readability
         pages = await loop.run_in_executor(
             None,
-            lambda: convert_from_path(str(pdf_path), dpi=200)
+            lambda: convert_from_path(str(pdf_path), dpi=150)
         )
         
         image_paths = []
         for i, page in enumerate(pages):
-            img_path = images_dir / f"page_{i+1}.png"
-            await loop.run_in_executor(None, lambda p=page, ip=img_path: p.save(str(ip), "PNG"))
+            img_path = images_dir / f"page_{i+1}.jpg"  # Use JPEG for smaller file size
+            # Save with JPEG compression (quality 85 is good balance)
+            await loop.run_in_executor(
+                None, 
+                lambda p=page, ip=img_path: p.save(str(ip), "JPEG", quality=85, optimize=True)
+            )
             image_paths.append(str(img_path))
         
         extraction_jobs[job_id]["progress"] = 20

@@ -9,14 +9,28 @@ Features:
 - Robust Table Merging: Appends Markdown tables to parent Articles before semantic extraction.
 - Parallel Processing: Uses asyncio for fast extraction.
 - DEBUG MODE: Includes print statements for troubleshooting.
+
+DEPRECATION NOTICE:
+    This module is deprecated and will be removed in a future version.
+    Please use LlamaIndexExtractionService from llamaindex_extractor.py instead.
+    Set USE_LLAMAINDEX_EXTRACTION=true in your environment to use the new implementation.
+    
+    Benefits of new implementation:
+    - LlamaParse handles complex tables and multi-page layouts better
+    - PropertyGraphIndex automates entity/relation extraction
+    - Direct Neo4j integration
+    
+    See docs/LLAMAINDEX_EXTRACTION.md for migration details.
 """
 
 import asyncio
 import base64
 import json
 import logging
+import os
 import sys
 import time
+import warnings
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 
@@ -45,13 +59,30 @@ from core.domain.graph_models import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# Check for LlamaIndex extraction mode
+USE_LLAMAINDEX_EXTRACTION = os.getenv("USE_LLAMAINDEX_EXTRACTION", "false").lower() in ("true", "1", "yes")
+
 
 # =============================================================================
 # Stage 1: Structure Extractor (VLM)
 # =============================================================================
 
 class StructureExtractor:
+    """
+    VLM-based structure extractor for document parsing.
+    
+    .. deprecated::
+        This class is deprecated. Use LlamaParseDocumentParser from
+        llamaindex_extractor.py instead by setting USE_LLAMAINDEX_EXTRACTION=true.
+    """
+    
     def __init__(self, config: VLMConfig):
+        warnings.warn(
+            "StructureExtractor is deprecated. Use LlamaParseDocumentParser instead. "
+            "Set USE_LLAMAINDEX_EXTRACTION=true to use LlamaParse for better table handling.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.config = config
         logger.info(f"StructureExtractor initialized with {config.provider.value}/{config.model}")
     
@@ -59,7 +90,11 @@ class StructureExtractor:
         with open(image_path, "rb") as f:
             image_base64 = base64.b64encode(f.read()).decode("utf-8")
         extension = image_path.suffix.lower()
-        media_type = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}.get(extension, "image/png")
+        media_type = {
+            ".png": "image/png", 
+            ".jpg": "image/jpeg", 
+            ".jpeg": "image/jpeg"
+        }.get(extension, "image/jpeg")  # Default to jpeg
         return image_base64, media_type
     
     def _call_vlm_api(self, image_base64: str, media_type: str, prev_context: PageContext, page_number: int) -> str:
@@ -68,28 +103,55 @@ class StructureExtractor:
         except ImportError:
             raise ImportError("openai package required.")
         
-        prompt = STRUCTURE_EXTRACTION_PROMPT.format(prev_context=prev_context.model_dump_json(indent=2))
+        # Ensure prev_context is a PageContext object
+        if not isinstance(prev_context, PageContext):
+            logger.warning(f"[VLM] Page {page_number} - prev_context is not PageContext: {type(prev_context)}, creating empty context")
+            prev_context = PageContext()
+        
+        try:
+            context_json = prev_context.model_dump_json(indent=2)
+        except Exception as e:
+            logger.warning(f"[VLM] Page {page_number} - Failed to serialize prev_context: {e}, using empty context")
+            context_json = PageContext().model_dump_json(indent=2)
+        
+        prompt = STRUCTURE_EXTRACTION_PROMPT.format(prev_context=context_json)
         
         user_content = [
             {"type": "text", "text": f"Page {page_number} context.\n\n{prompt}"},
             {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{image_base64}", "detail": "high"}}
         ]
         
+        logger.info(f"[VLM] Calling API for page {page_number} - Model: {self.config.model}, Base URL: {self.config.base_url}")
+        
         client = OpenAI(api_key=self.config.api_key, base_url=self.config.base_url)
-        response = client.chat.completions.create(
-            model=self.config.model, messages=[{"role": "user", "content": user_content}],
-            max_tokens=self.config.max_tokens, temperature=self.config.temperature
-        )
-        return response.choices[0].message.content
+        try:
+            response = client.chat.completions.create(
+                model=self.config.model, messages=[{"role": "user", "content": user_content}],
+                max_tokens=self.config.max_tokens, temperature=self.config.temperature
+            )
+            logger.info(f"[VLM] Page {page_number} - Response received, length: {len(response.choices[0].message.content) if response.choices else 0}")
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"[VLM] API call failed for page {page_number}: {e}")
+            raise
     
     def _parse_vlm_response(self, response_text: str, page_number: int) -> Dict[str, Any]:
-        if not response_text: return {}
+        if not response_text: 
+            logger.warning(f"[VLM] Page {page_number} - Empty response from VLM")
+            return {}
+        logger.info(f"[VLM] Page {page_number} - Parsing response...")
         data, errors = clean_and_parse_json(response_text, logger)
-        if errors: logger.warning(f"Page {page_number} JSON errors: {errors}")
+        if errors: 
+            logger.warning(f"[VLM] Page {page_number} JSON errors: {errors}")
+        if data:
+            nodes_count = len(data.get("nodes", []))
+            logger.info(f"[VLM] Page {page_number} - Parsed {nodes_count} nodes")
         return data if isinstance(data, dict) else {}
     
     def _process_single_page(self, image_path: Path, prev_context: PageContext, page_number: int):
+        logger.info(f"[VLM] Processing page {page_number} - Image: {image_path}")
         image_base64, media_type = self._encode_image(image_path)
+        logger.info(f"[VLM] Page {page_number} - Image encoded, size: {len(image_base64)} bytes")
         
         for attempt in range(1, self.config.max_retries + 1):
             try:
@@ -119,13 +181,25 @@ class StructureExtractor:
                         logger.warning(f"Skipping malformed node: {e}")
 
                 relations = [StructureRelation(**r) for r in data.get("relations", [])]
-                next_context = PageContext(**data.get("next_context", {}))
+                
+                # Handle next_context - may be string, dict, or missing
+                raw_next_context = data.get("next_context", {})
+                if isinstance(raw_next_context, dict):
+                    next_context = PageContext(**raw_next_context)
+                else:
+                    # VLM returned string or invalid format, use empty context
+                    logger.warning(f"[VLM] Page {page_number} - next_context is not a dict: {type(raw_next_context)}")
+                    next_context = PageContext()
+                
                 return nodes, relations, next_context
             except Exception as e:
                 logger.warning(f"Page {page_number} attempt {attempt} failed: {e}")
                 if attempt < self.config.max_retries:
                     time.sleep(self.config.retry_delay)
-        return [], [], prev_context
+        
+        # Return empty result with safe context when all attempts fail
+        safe_context = prev_context if isinstance(prev_context, PageContext) else PageContext()
+        return [], [], safe_context
 
     def extract_from_images(self, image_paths: List[Path], continue_on_error: bool = True) -> StructureExtractionResult:
         merged_nodes = {}
@@ -138,6 +212,11 @@ class StructureExtractor:
         for i, path in enumerate(image_paths, 1):
             try:
                 nodes, relations, next_context = self._process_single_page(Path(path), current_context, i)
+                
+                # Ensure next_context is always a PageContext
+                if not isinstance(next_context, PageContext):
+                    logger.warning(f"[VLM] Page {i} - next_context is not PageContext, resetting to empty")
+                    next_context = PageContext()
                 
                 # --- LOGIC XỬ LÝ BẢNG BỊ NGẮT (BACKWARD MERGE - MẠNH MẼ HƠN) ---
                 if nodes and last_table_of_prev_page:

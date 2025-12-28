@@ -327,7 +327,7 @@ You must process the page text in this EXACT order to prevent content errors:
 }}
 
 ## CONTEXT FROM PREVIOUS PAGE (Use this for Step 2)
-Last Active Node ID: {prev_context.get('current_article_id')}
+{prev_context}
 """
 
 # [CRITICAL UPDATE] Semantic Extraction Prompt - Anti-Hallucination Logic
