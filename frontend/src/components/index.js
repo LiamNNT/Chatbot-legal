@@ -6,3 +6,4 @@ export { default as RAGContextPanel } from './RAGContextPanel';
 export { default as SettingsModal } from './SettingsModal';
 export { default as SystemInfoModal } from './SystemInfoModal';
 export { default as KGExtractionPanel } from './KGExtractionPanel';
+export { default as DataBrowserPanel } from './DataBrowserPanel';

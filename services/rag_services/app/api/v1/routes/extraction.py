@@ -80,156 +80,6 @@ def get_extraction_status(job_id: str) -> Optional[ExtractionStatus]:
 
 
 # =============================================================================
-# Stage 1: VLM Structure Extraction Only
-# =============================================================================
-
-async def run_stage1_pipeline(
-    job_id: str,
-    pdf_path: Path,
-    category: str
-):
-    """
-    Run Stage 1: VLM for structural extraction only.
-    
-    Output: JSON with document structure (chapters, articles, clauses)
-    """
-    try:
-        extraction_jobs[job_id]["status"] = "processing"
-        extraction_jobs[job_id]["current_step"] = "Đang chuyển PDF sang ảnh..."
-        extraction_jobs[job_id]["progress"] = 10
-        
-        # Import extraction modules
-        from app.core.extraction.hybrid_extractor import StructureExtractor, VLMConfig
-        from pdf2image import convert_from_path
-        from PIL import Image
-        
-        # Convert PDF to images with optimized settings
-        images_dir = pdf_path.parent / f"{pdf_path.stem}_images"
-        images_dir.mkdir(exist_ok=True)
-        
-        loop = asyncio.get_event_loop()
-        # Reduced DPI from 200 to 150 to reduce token cost while maintaining readability
-        pages = await loop.run_in_executor(
-            None,
-            lambda: convert_from_path(str(pdf_path), dpi=150)
-        )
-        
-        image_paths = []
-        for i, page in enumerate(pages):
-            img_path = images_dir / f"page_{i+1}.jpg"  # Use JPEG for smaller file size
-            # Save with JPEG compression (quality 85 is good balance)
-            await loop.run_in_executor(
-                None, 
-                lambda p=page, ip=img_path: p.save(str(ip), "JPEG", quality=85, optimize=True)
-            )
-            image_paths.append(str(img_path))
-        
-        extraction_jobs[job_id]["progress"] = 20
-        extraction_jobs[job_id]["current_step"] = f"Đã chuyển {len(pages)} trang. Đang khởi tạo VLM..."
-        
-        # Initialize VLM extractor
-        vlm_config = VLMConfig.from_env()
-        structure_extractor = StructureExtractor(vlm_config)
-        
-        # Stage 1: VLM Structure Extraction
-        extraction_jobs[job_id]["current_step"] = "Stage 1: Trích xuất cấu trúc với VLM..."
-        extraction_jobs[job_id]["progress"] = 30
-        
-        structure_result = await loop.run_in_executor(
-            None,
-            lambda: structure_extractor.extract_from_images(image_paths)
-        )
-        
-        # Convert Pydantic model to dict
-        if hasattr(structure_result, 'model_dump'):
-            structure_dict = structure_result.model_dump()
-        else:
-            structure_dict = structure_result
-        
-        # POST-PROCESSING: Auto-fix relations for amendment documents
-        from app.core.extraction.page_merger import auto_fix_amendment_relations
-        structure_dict = auto_fix_amendment_relations(structure_dict)
-        
-        # POST-PROCESSING: Clean and validate extraction result
-        from app.core.extraction.cleaner import clean_extraction_result
-        
-        extraction_jobs[job_id]["current_step"] = "Đang dọn dẹp và xác thực kết quả..."
-        extraction_jobs[job_id]["progress"] = 85
-        
-        # Wrap structure in result format for cleaner
-        temp_result = {
-            "source_file": pdf_path.name,
-            "structure": structure_dict
-        }
-        cleaned_result, cleaning_stats = clean_extraction_result(temp_result)
-        structure_dict = cleaned_result.get("structure", structure_dict)
-        
-        # Log cleaning stats
-        if cleaning_stats.duplicate_nodes_removed > 0:
-            logger.info(f"Removed {cleaning_stats.duplicate_nodes_removed} duplicate nodes")
-        if cleaning_stats.invalid_modifications_removed > 0:
-            logger.info(f"Removed {cleaning_stats.invalid_modifications_removed} invalid modifications")
-        if cleaning_stats.is_original_document:
-            logger.info("Document detected as ORIGINAL (not amendment) - modifications cleared")
-        if cleaning_stats.errors:
-            logger.warning(f"Cleaning detected {len(cleaning_stats.errors)} issues")
-        
-        extraction_jobs[job_id]["progress"] = 90
-        extraction_jobs[job_id]["current_step"] = f"Stage 1 hoàn thành: {len(structure_dict.get('articles', []))} điều"
-        
-        # Save result
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        result = {
-            "extraction_id": job_id,
-            "stage": "stage1",
-            "source_file": pdf_path.name,
-            "extracted_at": datetime.now().isoformat(),
-            "category": category,
-            "page_count": len(pages),
-            "structure": structure_dict,
-            "cleaning_applied": True,
-            "document_type": "original" if cleaning_stats.is_original_document else "amendment",
-            "cleaning_stats": {
-                "duplicates_removed": cleaning_stats.duplicate_nodes_removed,
-                "orphan_relations_removed": cleaning_stats.orphan_relations_removed,
-                "invalid_modifications_removed": cleaning_stats.invalid_modifications_removed,
-                "is_original_document": cleaning_stats.is_original_document,
-                "issues_detected": len(cleaning_stats.errors),
-                "issues": cleaning_stats.errors[:10] if cleaning_stats.errors else []
-            }
-        }
-        
-        result_file = RESULTS_DIR / f"stage1_{timestamp}_{job_id[:8]}.json"
-        with open(result_file, 'w', encoding='utf-8') as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        
-        # Complete
-        extraction_jobs[job_id]["status"] = "completed"
-        extraction_jobs[job_id]["progress"] = 100
-        extraction_jobs[job_id]["current_step"] = "Stage 1 hoàn thành!"
-        extraction_jobs[job_id]["completed_at"] = datetime.now().isoformat()
-        extraction_jobs[job_id]["result_file"] = str(result_file.name)
-        extraction_jobs[job_id]["stats"] = {
-            "pages": len(pages),
-            "chapters": len(structure_dict.get("chapters", [])),
-            "articles": len(structure_dict.get("articles", [])),
-            "clauses": len(structure_dict.get("clauses", [])),
-            "duplicates_removed": cleaning_stats.duplicate_nodes_removed,
-            "issues_detected": len(cleaning_stats.errors)
-        }
-        
-        # Cleanup images
-        shutil.rmtree(images_dir, ignore_errors=True)
-        
-    except Exception as e:
-        import traceback
-        extraction_jobs[job_id]["status"] = "failed"
-        extraction_jobs[job_id]["error"] = str(e)
-        extraction_jobs[job_id]["current_step"] = f"Lỗi: {str(e)}"
-        print(f"Stage 1 extraction error: {traceback.format_exc()}")
-
-
-# =============================================================================
 # Stage 2: LLM Semantic Extraction (FIXED TABLE MERGE)
 # =============================================================================
 
@@ -328,6 +178,8 @@ async def run_stage2_pipeline(
         
         async def process_article(article):
             try:
+                print(f"[Stage2] Processing article: {article.get('id', 'unknown')}, text length: {len(article.get('full_text', ''))}")
+                
                 article_result = await loop.run_in_executor(
                     None,
                     lambda: semantic_extractor.extract_from_article(
@@ -337,10 +189,14 @@ async def run_stage2_pipeline(
                     )
                 )
                 
+                print(f"[Stage2] Result type for {article.get('id', '')}: {type(article_result)}")
+                
                 if hasattr(article_result, 'model_dump'):
                     article_dict = article_result.model_dump()
+                    print(f"[Stage2] model_dump keys: {article_dict.keys()}")
                 else:
                     article_dict = article_result if isinstance(article_result, dict) else {}
+                    print(f"[Stage2] Direct dict keys: {article_dict.keys() if article_dict else 'empty'}")
                 
                 entities = []
                 for entity in article_dict.get('nodes', []):
@@ -355,9 +211,14 @@ async def run_stage2_pipeline(
                 # Collect modifications (for amendment documents)
                 modifications = article_dict.get('modifications', [])
                 
+                print(f"[Stage2] {article.get('id', '')}: {len(entities)} entities, {len(relations)} relations, {len(modifications)} modifications")
+                
                 return {"entities": entities, "relations": relations, "modifications": modifications, "error": None}
                 
             except Exception as e:
+                import traceback
+                print(f"[Stage2] ERROR processing {article.get('id', '')}: {e}")
+                print(traceback.format_exc())
                 return {"entities": [], "relations": [], "modifications": [], "error": {"article_id": article.get('id', ''), "error": str(e)}}
         
         # Process in batches
@@ -412,6 +273,9 @@ async def run_stage2_pipeline(
         
         extraction_jobs[job_id]["progress"] = 90
         
+        # Initialize stats dict before Neo4j push
+        neo4j_stats = {}
+        
         # Push to Neo4j if requested
         if push_to_neo4j:
             extraction_jobs[job_id]["current_step"] = "Đang đẩy dữ liệu lên Neo4j..."
@@ -428,13 +292,13 @@ async def run_stage2_pipeline(
                         category=category,
                         clear_first=False
                     )
-                    extraction_jobs[job_id]["stats"]["neo4j"] = {
+                    neo4j_stats = {
                         "entities": stats.entities,
                         "merged": stats.entities_merged,
                         "relations": stats.semantic_relations
                     }
             except Exception as e:
-                extraction_jobs[job_id]["stats"]["neo4j_error"] = str(e)
+                neo4j_stats["neo4j_error"] = str(e)
         
         # Complete
         extraction_jobs[job_id]["status"] = "completed"
@@ -448,7 +312,8 @@ async def run_stage2_pipeline(
             "tables_merged": table_merged_count,
             "entities": len(all_entities),
             "relations": len(all_relations),
-            "errors": len(errors)
+            "errors": len(errors),
+            "neo4j": neo4j_stats if neo4j_stats else None
         }
         
     except Exception as e:
@@ -663,6 +528,9 @@ async def run_extraction_pipeline(
         
         extraction_jobs[job_id]["progress"] = 90
         
+        # Initialize neo4j stats
+        neo4j_stats = {}
+        
         # Push to Neo4j if requested
         if push_to_neo4j:
             extraction_jobs[job_id]["current_step"] = "Đang đẩy dữ liệu lên Neo4j..."
@@ -679,13 +547,13 @@ async def run_extraction_pipeline(
                         category=category,
                         clear_first=False
                     )
-                    extraction_jobs[job_id]["stats"]["neo4j"] = {
+                    neo4j_stats = {
                         "entities": stats.entities,
                         "merged": stats.entities_merged,
                         "relations": stats.semantic_relations
                     }
             except Exception as e:
-                extraction_jobs[job_id]["stats"]["neo4j_error"] = str(e)
+                neo4j_stats["neo4j_error"] = str(e)
         
         # Complete
         extraction_jobs[job_id]["status"] = "completed"
@@ -699,7 +567,8 @@ async def run_extraction_pipeline(
             "clauses_merged": clause_merged,
             "tables_merged": table_merged,
             "entities": semantic_result.get("stats", {}).get("entities", 0),
-            "relations": semantic_result.get("stats", {}).get("relations", 0)
+            "relations": semantic_result.get("stats", {}).get("relations", 0),
+            "neo4j": neo4j_stats if neo4j_stats else None
         }
         
         # Cleanup images
@@ -771,20 +640,147 @@ async def upload_and_extract(
 
 
 # =============================================================================
-# Stage 1 Endpoint: VLM Only
+# Stage 1: HYBRID Mode - LlamaParse + VLM
 # =============================================================================
 
-@router.post("/stage1/upload", response_model=ExtractionStatus)
-async def upload_and_extract_stage1(
+# Check if hybrid mode is enabled
+USE_HYBRID_EXTRACTION = os.getenv("USE_HYBRID_EXTRACTION", "false").lower() in ("true", "1", "yes")
+
+
+async def run_hybrid_stage1_pipeline(
+    job_id: str,
+    pdf_path: Path,
+    category: str
+):
+    """
+    Run Hybrid Stage 1: LlamaParse for text + VLM for structure verification.
+    
+    This mode combines:
+    - LlamaParse: Superior OCR quality, table extraction
+    - VLM: Accurate structure boundaries (chapter/article detection)
+    
+    Benefits over pure VLM:
+    - Better text extraction quality
+    - Better table handling
+    - Lower API costs (VLM only for verification, not all content)
+    - Handles multi-page content correctly
+    """
+    try:
+        extraction_jobs[job_id]["status"] = "processing"
+        extraction_jobs[job_id]["current_step"] = "Đang khởi tạo LlamaParse + VLM hybrid..."
+        extraction_jobs[job_id]["progress"] = 5
+        
+        # Import hybrid extractor
+        from app.core.extraction.hybrid_llamaparse_vlm import HybridExtractor
+        
+        loop = asyncio.get_event_loop()
+        
+        # Initialize hybrid extractor
+        extraction_jobs[job_id]["current_step"] = "Đang khởi tạo hybrid extractor..."
+        extraction_jobs[job_id]["progress"] = 10
+        
+        extractor = HybridExtractor.from_env()
+        
+        # Run hybrid extraction
+        extraction_jobs[job_id]["current_step"] = "Đang trích xuất với LlamaParse..."
+        extraction_jobs[job_id]["progress"] = 20
+        
+        result = await extractor.extract_from_pdf(pdf_path, category)
+        
+        # Convert to dict
+        structure_dict = result.to_dict()
+        
+        extraction_jobs[job_id]["current_step"] = "Đang dọn dẹp và xác thực kết quả..."
+        extraction_jobs[job_id]["progress"] = 85
+        
+        # POST-PROCESSING: Clean and validate
+        from app.core.extraction.cleaner import clean_extraction_result
+        
+        temp_result = {
+            "source_file": pdf_path.name,
+            "structure": structure_dict
+        }
+        cleaned_result, cleaning_stats = clean_extraction_result(temp_result)
+        structure_dict = cleaned_result.get("structure", structure_dict)
+        
+        extraction_jobs[job_id]["progress"] = 90
+        extraction_jobs[job_id]["current_step"] = f"Hybrid Stage 1 hoàn thành: {len(structure_dict.get('articles', []))} điều"
+        
+        # Save result
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_result = {
+            "extraction_id": job_id,
+            "stage": "stage1_hybrid",
+            "extraction_mode": "llamaparse_vlm_hybrid",
+            "source_file": pdf_path.name,
+            "extracted_at": datetime.now().isoformat(),
+            "category": category,
+            "page_count": structure_dict.get("page_count", 0),
+            "structure": structure_dict,
+            "cleaning_applied": True,
+            "document_type": "original" if cleaning_stats.is_original_document else "amendment",
+            "cleaning_stats": {
+                "duplicates_removed": cleaning_stats.duplicate_nodes_removed,
+                "orphan_relations_removed": cleaning_stats.orphan_relations_removed,
+                "invalid_modifications_removed": cleaning_stats.invalid_modifications_removed,
+                "is_original_document": cleaning_stats.is_original_document,
+                "issues_detected": len(cleaning_stats.errors),
+                "issues": cleaning_stats.errors[:10] if cleaning_stats.errors else []
+            }
+        }
+        
+        result_file = RESULTS_DIR / f"stage1_hybrid_{timestamp}_{job_id[:8]}.json"
+        with open(result_file, 'w', encoding='utf-8') as f:
+            json.dump(save_result, f, ensure_ascii=False, indent=2)
+        
+        # Complete
+        extraction_jobs[job_id]["status"] = "completed"
+        extraction_jobs[job_id]["progress"] = 100
+        extraction_jobs[job_id]["current_step"] = "Hybrid Stage 1 hoàn thành!"
+        extraction_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+        extraction_jobs[job_id]["result_file"] = str(result_file.name)
+        extraction_jobs[job_id]["stats"] = {
+            "pages": structure_dict.get("page_count", 0),
+            "chapters": len(structure_dict.get("chapters", [])),
+            "articles": len(structure_dict.get("articles", [])),
+            "clauses": len(structure_dict.get("clauses", [])),
+            "tables": len(structure_dict.get("tables", [])),
+            "extraction_mode": "hybrid_llamaparse_vlm",
+            "duplicates_removed": cleaning_stats.duplicate_nodes_removed,
+            "issues_detected": len(cleaning_stats.errors)
+        }
+        
+    except Exception as e:
+        import traceback
+        extraction_jobs[job_id]["status"] = "failed"
+        extraction_jobs[job_id]["error"] = str(e)
+        extraction_jobs[job_id]["current_step"] = f"Lỗi: {str(e)}"
+        logger.error(f"Hybrid Stage 1 extraction error: {traceback.format_exc()}")
+
+
+@router.post("/stage1/hybrid/upload", response_model=ExtractionStatus)
+@router.post("/stage1/upload", response_model=ExtractionStatus)  # Alias for backward compatibility
+async def upload_and_extract_stage1_hybrid(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     category: str = "Quy chế Đào tạo"
 ):
     """
-    Stage 1: Upload PDF and extract document structure using VLM.
+    Stage 1: Upload PDF and extract using LlamaParse + VLM (Hybrid Mode).
+    
+    This endpoint combines:
+    - LlamaParse: For high-quality text and table extraction
+    - VLM: For accurate structure boundary detection
+    
+    Benefits:
+    - Better text quality than pure VLM
+    - Better structure detection than pure LlamaParse
+    - Lower API costs
+    - Superior table handling
     
     Returns JSON with chapters, articles, clauses structure.
-    This can then be used as input for Stage 2.
+    
+    Note: Both /stage1/upload and /stage1/hybrid/upload point to this endpoint.
     """
     # Validate file
     if not file.filename.lower().endswith('.pdf'):
@@ -810,8 +806,8 @@ async def upload_and_extract_stage1(
         "job_id": job_id,
         "status": "pending",
         "progress": 0,
-        "current_step": "Đang khởi tạo Stage 1...",
-        "stage": "stage1",
+        "current_step": "Đang khởi tạo Hybrid Stage 1 (LlamaParse + VLM)...",
+        "stage": "stage1_hybrid",
         "created_at": datetime.now().isoformat(),
         "completed_at": None,
         "result_file": None,
@@ -819,9 +815,9 @@ async def upload_and_extract_stage1(
         "stats": None
     }
     
-    # Start Stage 1 extraction in background
+    # Start hybrid extraction in background
     background_tasks.add_task(
-        run_stage1_pipeline,
+        run_hybrid_stage1_pipeline,
         job_id,
         pdf_path,
         category

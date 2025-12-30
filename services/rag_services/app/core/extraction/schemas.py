@@ -227,12 +227,20 @@ class LLMConfig(BaseModel):
 # =============================================================================
 
 VALID_ENTITY_TYPES = {
+    # Core academic entities
     "MON_HOC", "QUY_DINH", "DIEU_KIEN", "SINH_VIEN", "KHOA",
     "KY_HOC", "HOC_PHI", "DIEM_SO", "TIN_CHI", "THOI_GIAN",
     "NGANH", "CHUONG_TRINH_DAO_TAO", "GIANG_VIEN",
     "CHUNG_CHI", "DO_KHO", "DOI_TUONG", "TAI_CHINH", "DIEU_KIEN_SO",
     # Extended types for amendment documents
-    "VAN_BAN", "SO_LUONG", "MUC_PHI", "DIEU_KHOAN"
+    "VAN_BAN", "SO_LUONG", "MUC_PHI", "DIEU_KHOAN",
+    # Additional common entity types LLM might generate
+    "HOC_PHAN", "LOP", "PHONG_DAO_TAO", "KHOA_LY", "HOC_KY",
+    "BANG_DIEM", "HOC_BONG", "KY_THI", "BAI_THI", "LUAN_VAN",
+    "THUC_TAP", "DO_AN", "KHOA_LUAN", "CONCEPT", "PROCESS",
+    "ORGANIZATION", "PERSON", "DOCUMENT", "REQUIREMENT", "RULE",
+    # Vietnamese variations
+    "HOCPHAN", "HOCKY", "SINHVIEN", "GIANGVIEN", "BANGDIEM"
 }
 
 VALID_RELATION_TYPES = {
@@ -242,7 +250,10 @@ VALID_RELATION_TYPES = {
     "THUOC_CHUONG_TRINH", "QUAN_LY",
     "DAT_DIEM", "TUONG_DUONG", "MIEN_GIAM", "CHI_PHOI", "THUOC_VE",
     # Extended relation types
-    "GIOI_HAN", "SUA_DOI", "THAY_THE", "BO_SUNG", "BAI_BO"
+    "GIOI_HAN", "SUA_DOI", "THAY_THE", "BO_SUNG", "BAI_BO",
+    # Additional common relation types
+    "CONTAINS", "REFERENCES", "REQUIRES", "RELATES_TO", "DEFINES",
+    "DANG_KY", "HOAN_THANH", "THAM_GIA", "THUOC", "BAO_GOM"
 }
 
 UNIFIED_ACADEMIC_SCHEMA = """
@@ -336,32 +347,37 @@ SEMANTIC_EXTRACTION_PROMPT = """Bạn là chuyên gia xây dựng Knowledge Grap
 ## NHIỆM VỤ
 Trích xuất Thực thể (Entities), Quan hệ (Relations), và **Sửa đổi (Modifications)**.
 
-##QUY TẮC SỐ 1: LOGIC XÁC ĐỊNH VĂN BẢN (ANTI-HALLUCINATION)
+## QUY TẮC SỐ 1: LOGIC XÁC ĐỊNH VĂN BẢN (ANTI-HALLUCINATION)
 Trước khi trích xuất `modifications`, bạn phải xác định loại văn bản hiện tại.
 
 **TRƯỜNG HỢP 1: VĂN BẢN GỐC (Base Regulation)**
 - **Dấu hiệu:** Tiêu đề là "QUY CHẾ...", "QUY ĐỊNH...", "LUẬT...". Nội dung đưa ra các định nghĩa, quy tắc mới.
 - **Hành động:** `modifications` = [] (Mảng rỗng).
 - **Lý do:** Văn bản gốc KHÔNG sửa đổi chính nó. Nó thiết lập quy định mới.
-- *Ví dụ:* "Quy chế 790" -> modifications: []
 
 **TRƯỜNG HỢP 2: VĂN BẢN SỬA ĐỔI (Amendment Document)**
 - **Dấu hiệu:** Tiêu đề chứa "Sửa đổi, bổ sung", "Cập nhật". Nội dung ghi rõ "Sửa đổi Khoản X Điều Y của Quyết định Z".
 - **Hành động:** Trích xuất vào `modifications`.
-- **Điều kiện bắt buộc:** `target_document_signature` PHẢI KHÁC `source_document_id`.
 
 ## 2. HƯỚNG DẪN TRÍCH XUẤT CHI TIẾT
 
-### A. Thực thể & Quan hệ (Luôn thực hiện)
-- Trích xuất: MON_HOC, HOC_PHI, TIN_CHI, DIEM_SO, THOI_GIAN.
-- Quan hệ: YEU_CAU, GIOI_HAN, AP_DUNG_CHO.
+### A. Thực thể (Entities)
+Các loại thực thể cần trích xuất:
+- MON_HOC: Tên môn học, học phần (VD: "Toán cao cấp", "Anh văn 1")
+- HOC_PHI: Các khoản phí (VD: "học phí học kỳ", "học phí tín chỉ")
+- TIN_CHI: Số tín chỉ, khối lượng học tập (VD: "3 tín chỉ", "120 tín chỉ")
+- DIEM_SO: Điểm số, thang điểm (VD: "điểm A", "8.0", "điểm trung bình")
+- THOI_GIAN: Thời hạn, kỳ hạn (VD: "4 năm", "học kỳ 1", "2 tuần")
+- SINH_VIEN: Đối tượng sinh viên (VD: "sinh viên năm nhất", "sinh viên chính quy")
+- DIEU_KIEN: Các điều kiện, yêu cầu (VD: "điều kiện tốt nghiệp", "điều kiện đăng ký")
+- QUY_DINH: Các quy định, quy chế (VD: "quy định về học lại", "quy chế đào tạo")
 
-### B. Modifications (Chỉ thực hiện nếu là TRƯỜNG HỢP 2)
-Nếu phát hiện câu: "Sửa đổi Khoản 3 Điều 4 của Quyết định 790/QĐ-ĐHCNTT":
-- action: "AMENDS"
-- target_document_signature: "790/QĐ-ĐHCNTT"
-- target_article: "Điều 4"
-- target_clause: "Khoản 3"
+### B. Quan hệ (Relations)
+Các loại quan hệ cần trích xuất:
+- YEU_CAU: A yêu cầu B (VD: Tốt nghiệp YEU_CAU 120 tín chỉ)
+- GIOI_HAN: A giới hạn B (VD: Học kỳ GIOI_HAN 24 tín chỉ)
+- AP_DUNG_CHO: A áp dụng cho B (VD: Quy định AP_DUNG_CHO sinh viên chính quy)
+- DIEU_KIEN_TIEN_QUYET: A là điều kiện tiên quyết của B
 
 ## INPUT DATA
 ID: {article_id}
@@ -369,13 +385,24 @@ Title: {article_title}
 Text:
 {article_text}
 
-## OUTPUT FORMAT (JSON ONLY)
+## OUTPUT FORMAT (JSON ONLY - STRICT FORMAT)
+```json
 {{
-  "document_type": "ORIGINAL" | "AMENDMENT",  <-- Hãy xác định loại trước
-  "entities": [...],
-  "relations": [...],
-  "modifications": [
-    // TUYỆT ĐỐI ĐỂ TRỐNG NẾU document_type LÀ "ORIGINAL"
-  ]
+  "document_type": "ORIGINAL",
+  "entities": [
+    {{"id": "entity_1", "name": "Tên thực thể", "type": "MON_HOC"}},
+    {{"id": "entity_2", "name": "Tên khác", "type": "TIN_CHI"}}
+  ],
+  "relations": [
+    {{"source_id": "entity_1", "target_id": "entity_2", "type": "YEU_CAU"}}
+  ],
+  "modifications": []
 }}
+```
+
+**QUAN TRỌNG - FORMAT BẮT BUỘC:**
+- Mỗi entity PHẢI có 3 trường: "id", "name", "type"
+- Mỗi relation PHẢI có 3 trường: "source_id", "target_id", "type"
+- KHÔNG được viết dạng {{"MON_HOC": "Toán"}} - SAI FORMAT!
+- PHẢI viết dạng {{"id": "mon_toan", "name": "Toán", "type": "MON_HOC"}} - ĐÚNG FORMAT!
 """

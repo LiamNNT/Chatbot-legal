@@ -344,23 +344,127 @@ class SemanticExtractor:
         if not isinstance(data, dict): return {"entities": [], "relations": [], "modifications": []}
         return data
     
+    def _normalize_entity(self, ent: Any, index: int) -> Dict[str, Any]:
+        """
+        Normalize entity to standard format {id, text, type}.
+        
+        Handles various LLM output formats:
+        1. String: "Sinh viên" -> {"id": "sinh_vien", "text": "Sinh viên", "type": "CONCEPT"}
+        2. Dict with {TYPE: value}: {"MON_HOC": "Toán"} -> {"id": "toan", "text": "Toán", "type": "MON_HOC"}
+        3. Standard format: {"id": "x", "name": "y", "type": "z"} -> convert name to text
+        """
+        if isinstance(ent, str):
+            # Case 1: Plain string
+            return {
+                "id": ent.lower().replace(" ", "_").replace("-", "_")[:50],
+                "text": ent,
+                "type": "CONCEPT"
+            }
+        
+        if isinstance(ent, dict):
+            # Check if it's already in standard format (with name or text)
+            if "type" in ent and ("name" in ent or "text" in ent):
+                # Convert 'name' to 'text' for SemanticNode compatibility
+                text_value = ent.get("text") or ent.get("name")
+                return {
+                    "id": ent.get("id", text_value.lower().replace(" ", "_")[:50] if text_value else f"ent_{index}"),
+                    "text": text_value,
+                    "type": ent.get("type", "CONCEPT")
+                }
+            
+            # Case 2: {TYPE: value} format like {"MON_HOC": "Toán cao cấp"}
+            # The key is the type, the value is the name
+            for key, value in ent.items():
+                if key.upper() in VALID_ENTITY_TYPES or key.isupper():
+                    # This looks like {TYPE: value} format
+                    text_val = str(value) if value else key
+                    return {
+                        "id": text_val.lower().replace(" ", "_").replace("-", "_")[:50],
+                        "text": text_val,
+                        "type": key.upper()
+                    }
+            
+            # Case 3: Dict but missing type - try to extract what we can
+            text_val = ent.get("text") or ent.get("name") or ent.get("id") or str(ent)
+            return {
+                "id": ent.get("id", text_val.lower().replace(" ", "_")[:50]),
+                "text": text_val,
+                "type": ent.get("type", "CONCEPT")
+            }
+        
+        # Fallback for other types
+        return {
+            "id": f"entity_{index}",
+            "text": str(ent),
+            "type": "CONCEPT"
+        }
+    
+    def _normalize_relation(self, rel: Any, index: int) -> Optional[Dict[str, Any]]:
+        """
+        Normalize relation to standard format {source_id, target_id, type}.
+        
+        Handles various LLM output formats:
+        1. String: skip (not useful)
+        2. Dict with {TYPE: value}: {"YEU_CAU": "Điều kiện"} -> skip (missing source/target)
+        3. Standard format: {"source_id": "x", "target_id": "y", "type": "z"} -> kept as is
+        """
+        if isinstance(rel, str):
+            return None  # Skip string relations
+        
+        if isinstance(rel, dict):
+            # Check if it's in standard format
+            if "source_id" in rel and "target_id" in rel:
+                return rel
+            
+            # Check if it's {TYPE: value} format - skip these as they lack source/target
+            for key in rel.keys():
+                if key.upper() in VALID_RELATION_TYPES or key.isupper():
+                    # This is {TYPE: value} format, can't use without source/target
+                    return None
+            
+            # Try to extract source/target from other common keys
+            source = rel.get("source") or rel.get("from") or rel.get("entity1")
+            target = rel.get("target") or rel.get("to") or rel.get("entity2")
+            rel_type = rel.get("type") or rel.get("relation") or "RELATES_TO"
+            
+            if source and target:
+                return {
+                    "source_id": str(source),
+                    "target_id": str(target),
+                    "type": str(rel_type).upper()
+                }
+        
+        return None  # Skip invalid relations
+
     def _post_process_extraction(self, data: Dict[str, Any], parent_article_id: str) -> Dict[str, Any]:
         id_mapping = {}
         processed_entities = []
+        
         # Normalize Entity IDs
-        for ent in data.get("entities", []):
-            old_id = str(ent.get("id", "unknown"))
+        for i, ent in enumerate(data.get("entities", [])):
+            # Normalize entity to standard format
+            normalized = self._normalize_entity(ent, i)
+            
+            old_id = str(normalized.get("id", f"ent_{i}"))
             new_id = f"{parent_article_id}_ent_{old_id}"
             id_mapping[old_id] = new_id
-            processed_entities.append({**ent, "id": new_id})
+            processed_entities.append({**normalized, "id": new_id})
             
         # Update Relation IDs
         processed_relations = []
-        for rel in data.get("relations", []):
-            src, tgt = str(rel.get("source_id")), str(rel.get("target_id"))
+        for i, rel in enumerate(data.get("relations", [])):
+            # Normalize relation to standard format
+            normalized = self._normalize_relation(rel, i)
+            if normalized is None:
+                continue
+            
+            src = str(normalized.get("source_id", ""))
+            tgt = str(normalized.get("target_id", ""))
+            if not src or not tgt:
+                continue  # Skip incomplete relations
             new_src = id_mapping.get(src, f"{parent_article_id}_ent_{src}")
             new_tgt = id_mapping.get(tgt, f"{parent_article_id}_ent_{tgt}")
-            processed_relations.append({**rel, "source_id": new_src, "target_id": new_tgt})
+            processed_relations.append({**normalized, "source_id": new_src, "target_id": new_tgt})
         
         # Process modifications - ensure source_text_id is set
         processed_modifications = []
@@ -441,14 +545,52 @@ class SemanticExtractor:
             logger.info(f"[Stage2] LLM response for {article_id}: {raw_text[:500]}...")
             
             data = self._parse_llm_response(raw_text)
+            
+            # DEBUG: Log parsed data BEFORE post-processing (handle various formats)
+            raw_entities = data.get('entities', [])
+            raw_relations = data.get('relations', [])
+            logger.info(f"[Stage2] Parsed data for {article_id}: entities={len(raw_entities)}, relations={len(raw_relations)}")
+            
+            # Sample entity info - handle string/dict formats
+            if raw_entities:
+                sample_info = []
+                for e in raw_entities[:3]:
+                    if isinstance(e, str):
+                        sample_info.append(f"str:'{e[:20]}...'")
+                    elif isinstance(e, dict):
+                        # Check for {TYPE: value} format
+                        keys = list(e.keys())
+                        if len(keys) == 1 and keys[0].isupper():
+                            sample_info.append(f"{{TYPE:val}}:{keys[0]}")
+                        else:
+                            sample_info.append(f"dict:{e.get('type', 'NO_TYPE')}")
+                    else:
+                        sample_info.append(f"other:{type(e).__name__}")
+                logger.info(f"[Stage2] Sample entities: {sample_info}")
+            
             data = self._post_process_extraction(data, article_id)
             
             # DEBUG: Log extraction results
-            logger.info(f"[Stage2] Extracted from {article_id}: {len(data.get('entities', []))} entities, {len(data.get('relations', []))} relations, {len(data.get('modifications', []))} modifications")
+            logger.info(f"[Stage2] Post-processed from {article_id}: {len(data.get('entities', []))} entities, {len(data.get('relations', []))} relations, {len(data.get('modifications', []))} modifications")
             
-            nodes = [SemanticNode(**e, source_article_id=article_id) for e in data["entities"] if self._validate_entity_type(e.get("type", ""))]
+            # DEBUG: Check which entities pass validation
+            valid_entities = []
+            invalid_entities = []
+            for e in data["entities"]:
+                etype = e.get("type", "")
+                if self._validate_entity_type(etype):
+                    valid_entities.append(e)
+                else:
+                    invalid_entities.append({"id": e.get("id"), "type": etype})
+            
+            if invalid_entities:
+                logger.warning(f"[Stage2] {article_id}: {len(invalid_entities)} entities have invalid types: {invalid_entities[:5]}")
+            
+            nodes = [SemanticNode(**e, source_article_id=article_id) for e in valid_entities]
             relations = [SemanticRelation(**r, source_article_id=article_id) for r in data["relations"] if self._validate_relation_type(r.get("type", ""))]
             modifications = [Modification(**m) for m in data.get("modifications", [])]
+            
+            logger.info(f"[Stage2] Final for {article_id}: {len(nodes)} valid nodes, {len(relations)} valid relations")
             
             return SemanticExtractionResult(article_id=article_id, nodes=nodes, relations=relations, modifications=modifications)
         except Exception as e:

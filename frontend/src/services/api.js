@@ -168,7 +168,7 @@ export const testAgents = async () => {
 const RAG_SERVICE_URL = import.meta.env.VITE_RAG_SERVICE_URL || 'http://localhost:8002';
 
 /**
- * Upload PDF and start KG extraction
+ * Upload PDF and start KG extraction (Legacy VLM mode)
  * @param {File} file - PDF file to extract
  * @param {string} category - Document category
  * @param {boolean} pushToNeo4j - Whether to push to Neo4j
@@ -190,6 +190,62 @@ export const uploadForExtraction = async (file, category = 'Quy chế Đào tạ
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.detail || 'Upload failed');
+  }
+
+  return response.json();
+};
+
+/**
+ * Upload PDF and start Stage 1 extraction (VLM only - Structure)
+ * @param {File} file - PDF file to extract
+ * @param {string} category - Document category
+ * @returns {Promise} Job status
+ */
+export const uploadForStage1Extraction = async (file, category = 'Quy chế Đào tạo') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const url = new URL(`${RAG_SERVICE_URL}/v1/extraction/stage1/upload`);
+  url.searchParams.append('category', category);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Stage 1 upload failed');
+  }
+
+  return response.json();
+};
+
+/**
+ * Upload PDF and start HYBRID extraction (LlamaParse + VLM)
+ * This mode combines:
+ * - LlamaParse: For high-quality text and table extraction
+ * - VLM: For accurate structure boundary detection
+ * 
+ * @param {File} file - PDF file to extract
+ * @param {string} category - Document category
+ * @returns {Promise} Job status
+ */
+export const uploadForHybridExtraction = async (file, category = 'Quy chế Đào tạo') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const url = new URL(`${RAG_SERVICE_URL}/v1/extraction/stage1/hybrid/upload`);
+  url.searchParams.append('category', category);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Hybrid extraction upload failed');
   }
 
   return response.json();
@@ -282,6 +338,8 @@ export default {
   getAgentsInfo,
   testAgents,
   uploadForExtraction,
+  uploadForStage1Extraction,
+  uploadForHybridExtraction,
   getExtractionStatus,
   getExtractionResult,
   uploadToNeo4j,

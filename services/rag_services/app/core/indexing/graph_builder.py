@@ -437,10 +437,15 @@ class Neo4jGraphBuilder:
         for entity in stage2_data.get("entities", []):
             entity_id = entity["id"]  # Local ID like "dieu_1_ent_1"
             entity_type = entity["type"]
-            entity_text = entity.get("text", "")
-            normalized_text = entity.get("normalized", entity_text)
+            entity_text = entity.get("text") or entity.get("name") or ""
+            normalized_text = entity.get("normalized") or entity_text or ""
             source_article_id = entity.get("source_article_id", "")
             confidence = entity.get("confidence", 1.0)
+            
+            # Skip entities with empty text
+            if not normalized_text.strip():
+                logger.warning(f"Skipping entity {entity_id} with empty text")
+                continue
             
             # Key for merge: (normalized_text, type)
             merge_key = (normalized_text.lower().strip(), entity_type)
@@ -527,8 +532,11 @@ class Neo4jGraphBuilder:
         entity_lookup = {}
         for ent in entities:
             local_id = ent["id"]
+            text_value = ent.get("normalized") or ent.get("text") or ent.get("name") or ""
+            if not text_value.strip():
+                continue  # Skip entities with empty text
             entity_lookup[local_id] = {
-                "normalized_text": ent.get("normalized", ent.get("text", "")).lower().strip(),
+                "normalized_text": text_value.lower().strip(),
                 "type": ent["type"]
             }
         

@@ -105,7 +105,8 @@ const KGExtractionPanel = ({ onClose }) => {
       let formData = new FormData();
       
       if (mode === 'stage1') {
-        endpoint = `${RAG_SERVICE_URL}/v1/extraction/stage1/upload`;
+        // Stage 1: Hybrid LlamaParse + VLM extraction
+        endpoint = `${RAG_SERVICE_URL}/v1/extraction/stage1/hybrid/upload`;
         formData.append('file', file);
         const url = new URL(endpoint);
         url.searchParams.append('category', category);
@@ -117,7 +118,7 @@ const KGExtractionPanel = ({ onClose }) => {
         
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.detail || 'Upload failed');
+          throw new Error(errorData.detail || 'Stage 1 extraction failed');
         }
         
         const data = await response.json();
@@ -278,8 +279,8 @@ const KGExtractionPanel = ({ onClose }) => {
     switch (mode) {
       case 'stage1':
         return {
-          title: 'Stage 1: Trích xuất cấu trúc (VLM)',
-          description: 'Upload PDF → VLM trích xuất → JSON Structure',
+          title: 'Stage 1: Trích xuất cấu trúc (LlamaParse + VLM)',
+          description: 'Upload PDF → LlamaParse (OCR) + VLM (Structure) → JSON Structure',
           fileType: '.pdf',
           fileLabel: 'PDF',
           icon: (
@@ -288,7 +289,8 @@ const KGExtractionPanel = ({ onClose }) => {
             </svg>
           ),
           color: 'from-purple-500 to-indigo-500',
-          showNeo4j: false
+          showNeo4j: false,
+          extraInfo: 'Hybrid: LlamaParse (text chất lượng) + VLM (cấu trúc chuẩn)'
         };
       case 'stage2':
         return {
@@ -399,7 +401,7 @@ const KGExtractionPanel = ({ onClose }) => {
         </div>
 
         {/* Mode Tabs */}
-        <div className="flex border-b dark:border-gray-700">
+        <div className="flex border-b dark:border-gray-700 overflow-x-auto">
           <button
             onClick={() => handleModeChange('stage1')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
@@ -410,7 +412,7 @@ const KGExtractionPanel = ({ onClose }) => {
           >
             <div className="flex items-center justify-center gap-2">
               <span className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-xs flex items-center justify-center font-bold">1</span>
-              Stage 1: VLM
+              Stage 1
             </div>
           </button>
           <button
@@ -423,7 +425,7 @@ const KGExtractionPanel = ({ onClose }) => {
           >
             <div className="flex items-center justify-center gap-2">
               <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-xs flex items-center justify-center font-bold">2</span>
-              Stage 2: LLM
+              LLM
             </div>
           </button>
           <button

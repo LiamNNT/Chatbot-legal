@@ -354,12 +354,18 @@ def fix_relations_after_dedup(
     """
     Fix relations to use normalized IDs and remove orphans.
     
+    Also removes:
+    - Self-referencing relations (source == target)
+    - Duplicate relations
+    - Orphan relations (pointing to non-existent nodes)
+    
     Returns:
         Tuple of (fixed relations, orphans removed count)
     """
     seen = set()
     fixed = []
     orphans_removed = 0
+    self_refs_removed = 0
     
     for rel in relations:
         source = rel.get("source", "")
@@ -369,6 +375,12 @@ def fix_relations_after_dedup(
         # Normalize IDs
         norm_source = id_mapping.get(source, normalize_node_id(source))
         norm_target = id_mapping.get(target, normalize_node_id(target))
+        
+        # IMPORTANT: Skip self-referencing relations (e.g., dieu_1 CONTAINS dieu_1)
+        if norm_source == norm_target:
+            self_refs_removed += 1
+            logger.debug(f"Removing self-referencing relation: {norm_source} -> {norm_target}")
+            continue
         
         # Check if valid (both nodes exist)
         if norm_source not in valid_node_ids or norm_target not in valid_node_ids:
@@ -385,7 +397,10 @@ def fix_relations_after_dedup(
                 "type": rel_type
             })
     
-    return fixed, orphans_removed
+    if self_refs_removed > 0:
+        logger.info(f"Removed {self_refs_removed} self-referencing relations")
+    
+    return fixed, orphans_removed + self_refs_removed
 
 
 # =============================================================================
@@ -396,22 +411,59 @@ def detect_content_bleeding(articles: List[Dict]) -> List[Dict]:
     """
     Detect articles where content appears to belong to a different article.
     
-    Heuristics:
-    - Article about "Học phí" has content about "Chương trình đào tạo"
-    - Full_text starts with content unrelated to title
+    Enhanced detection for:
+    - Content from other articles mixed in
+    - Chapter titles embedded in article content
+    - Unrelated topic content (e.g., Học phí article has Chương trình đào tạo content)
     """
     issues = []
     
+    # Topic-keyword mapping for Vietnamese legal documents
     keywords_map = {
-        "học phí": ["học phí", "mức phí", "thanh toán", "hphk", "đóng phí"],
-        "chương trình đào tạo": ["chương trình", "học phần", "tín chỉ", "đào tạo"],
-        "tuyển sinh": ["tuyển sinh", "xét tuyển", "đăng ký", "hồ sơ"],
-        "tốt nghiệp": ["tốt nghiệp", "bằng", "xét tốt nghiệp", "bảo vệ"],
+        "học phí": ["học phí", "mức phí", "thanh toán", "hphk", "đóng phí", "học bổng"],
+        "chương trình đào tạo": ["chương trình đào tạo", "học phần", "tín chỉ", "khung chương trình"],
+        "tuyển sinh": ["tuyển sinh", "xét tuyển", "đăng ký xét tuyển", "hồ sơ tuyển sinh"],
+        "tốt nghiệp": ["tốt nghiệp", "xét tốt nghiệp", "bằng tốt nghiệp", "bảo vệ luận văn"],
+        "điểm số": ["điểm", "thang điểm", "điểm chữ", "điểm số", "điểm trung bình"],
+        "học tập": ["học tập", "sinh viên", "người học", "kết quả học tập"],
     }
     
-    for article in articles:
+    for i, article in enumerate(articles):
         title = (article.get("title", "") or "").lower()
-        content = (article.get("full_text", "") or "").lower()[:500]
+        content = (article.get("full_text", "") or "")
+        article_id = article.get("id", f"unknown_{i}")
+        
+        # Check 1: Content contains another article's title (content bleeding)
+        article_num_match = re.search(r'dieu_(\d+)', article_id)
+        if article_num_match:
+            current_num = int(article_num_match.group(1))
+            
+            # Look for other article markers in content
+            other_articles = re.findall(r'^\s*Điều\s+(\d+)[\.\s:：]', content, re.MULTILINE)
+            for other_num_str in other_articles:
+                other_num = int(other_num_str)
+                if other_num != current_num:
+                    issues.append({
+                        "article_id": article_id,
+                        "expected_topic": f"Điều {current_num}",
+                        "detected_topic": f"Điều {other_num} content found inside",
+                        "severity": "high",
+                        "type": "article_bleeding"
+                    })
+        
+        # Check 2: Content contains chapter title (structure bleeding)
+        chapter_in_content = re.search(r'CHƯƠNG\s+[IVXLCDM1-9]+[\.\s:：]', content, re.IGNORECASE)
+        if chapter_in_content:
+            issues.append({
+                "article_id": article_id,
+                "expected_topic": title[:50],
+                "detected_topic": "Chapter title embedded in article content",
+                "severity": "high",
+                "type": "chapter_bleeding"
+            })
+        
+        # Check 3: Topic mismatch (original logic, improved)
+        content_lower = content.lower()[:500]
         
         # Find expected topic from title
         expected_topic = None
@@ -420,24 +472,26 @@ def detect_content_bleeding(articles: List[Dict]) -> List[Dict]:
                 expected_topic = topic
                 break
         
-        if not expected_topic:
-            continue
-        
-        # Check if content matches a DIFFERENT topic
-        for other_topic, other_keywords in keywords_map.items():
-            if other_topic == expected_topic:
-                continue
-            
-            # If content has many keywords from a different topic
-            matches = sum(1 for kw in other_keywords if kw in content)
-            if matches >= 2:
-                issues.append({
-                    "article_id": article.get("id"),
-                    "expected_topic": expected_topic,
-                    "detected_topic": other_topic,
-                    "severity": "high" if matches >= 3 else "medium"
-                })
-                break
+        if expected_topic:
+            # Check if content matches a DIFFERENT topic strongly
+            for other_topic, other_keywords in keywords_map.items():
+                if other_topic == expected_topic:
+                    continue
+                
+                # Count keyword matches
+                matches = sum(1 for kw in other_keywords if kw in content_lower)
+                expected_matches = sum(1 for kw in keywords_map[expected_topic] if kw in content_lower)
+                
+                # If other topic has more matches than expected topic
+                if matches >= 2 and matches > expected_matches:
+                    issues.append({
+                        "article_id": article_id,
+                        "expected_topic": expected_topic,
+                        "detected_topic": other_topic,
+                        "severity": "high" if matches >= 3 else "medium",
+                        "type": "topic_mismatch"
+                    })
+                    break
     
     return issues
 
