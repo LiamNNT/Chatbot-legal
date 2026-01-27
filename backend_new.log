@@ -1,0 +1,145 @@
+
+[94m======================================================================[0m
+[1m                       🛑 STOPPING ALL SERVICES                        [0m
+[94m======================================================================[0m
+
+[93mℹ Stopping Python services...[0m
+[93mℹ Stopping Docker services...[0m
+[93mℹ Using 'docker compose' (v2 plugin)[0m
+[92m✓ All services stopped![0m
+
+[94m======================================================================[0m
+[1m                    🚀 STARTING CHATBOT-UIT BACKEND                    [0m
+[94m======================================================================[0m
+
+[93mℹ Project root: /home/kien/Kien/study/SE363.Q11/Chatbot-UIT[0m
+[93mℹ Python: /home/kien/Kien/study/SE363.Q11/Chatbot-UIT/.venv/bin/python[0m
+
+[1m[1/3] Starting Docker Services[0m
+[93mℹ Using 'docker compose' (v2 plugin)[0m
+[93mℹ Starting OpenSearch, Weaviate, and Neo4j...[0m
+[93mℹ Waiting for services to be ready...[0m
+...............
+[92m✓ All Docker services are healthy![0m
+[93mℹ   - OpenSearch: http://localhost:9200[0m
+[93mℹ   - OpenSearch Dashboards: http://localhost:5601[0m
+[93mℹ   - Weaviate: http://localhost:8090[0m
+[93mℹ   - Neo4j: http://localhost:7474 (bolt://localhost:7687)[0m
+
+[1m[2/3] Starting RAG Service (port 8000)[0m
+[93mℹ Starting RAG service from: /home/kien/Kien/study/SE363.Q11/Chatbot-UIT/services/rag_services[0m
+[93mℹ Waiting for RAG service to start...[0m
+[93mℹ Showing startup logs:[0m
+[2m────────────────────────────────────────────────────────────[0m
+[2m[22:32:36][0m [96m[RAG][0m INFO:     Will watch for changes in these directories: ['/home/kien/Kien/study/SE363.Q11/Chatbot-UIT/services/rag_services']
+[2m[22:32:36][0m [96m[RAG][0m INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[2m[22:32:36][0m [96m[RAG][0m INFO:     Started reloader process [106771] using WatchFiles
+[2m[22:32:39][0m [96m[RAG][0m INFO:     Started server process [106774]
+[2m────────────────────────────────────────────────────────────[0m
+[92m✓ RAG Service started successfully![0m
+[93mℹ   - API: http://localhost:8000[0m
+[93mℹ   - Docs: http://localhost:8000/docs[0m
+
+[1m[3/3] Starting Orchestrator Service (port 8001)[0m
+[2m[22:32:39][0m [96m[RAG][0m INFO:     Waiting for application startup.
+[2m[22:32:39][0m [96m[RAG][0m INFO:     Application startup complete.
+[93mℹ Starting Orchestrator service from: /home/kien/Kien/study/SE363.Q11/Chatbot-UIT/services/orchestrator[0m
+[93mℹ Waiting for Orchestrator service to start...[0m
+[93mℹ Showing startup logs:[0m
+[2m────────────────────────────────────────────────────────────[0m
+[2m[22:32:39][0m [95m[ORCH][0m INFO:     Will watch for changes in these directories: ['/home/kien/Kien/study/SE363.Q11/Chatbot-UIT/services/orchestrator']
+[2m[22:32:39][0m [95m[ORCH][0m INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+[2m[22:32:39][0m [95m[ORCH][0m INFO:     Started reloader process [106815] using WatchFiles
+[2m[22:32:39][0m [95m[ORCH][0m /home/kien/Kien/study/SE363.Q11/Chatbot-UIT/.venv/lib/python3.13/site-packages/pydantic/_internal/_config.py:373: UserWarning: Valid config keys have changed in V2:
+[2m[22:32:40][0m [95m[ORCH][0m * 'schema_extra' has been renamed to 'json_schema_extra'
+[2m[22:32:40][0m [95m[ORCH][0m   warnings.warn(message, UserWarning)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:39,963 - app.main - INFO - Logging level set to: INFO
+[2m[22:32:40][0m [95m[ORCH][0m INFO:     Started server process [106818]
+[2m────────────────────────────────────────────────────────────[0m
+[92m✓ Orchestrator Service started successfully![0m
+[93mℹ   - API: http://localhost:8001[0m
+[93mℹ   - Docs: http://localhost:8001/docs[0m
+
+[94m======================================================================[0m
+[1m                      🎉 BACKEND SERVICES STARTED                      [0m
+[94m======================================================================[0m
+
+[92mServices running:[0m
+  • OpenSearch:           http://localhost:9200
+  • OpenSearch Dashboards: http://localhost:5601
+  • Weaviate:             http://localhost:8090
+  • Neo4j:                http://localhost:7474 (bolt: 7687)
+  • RAG Service:          http://localhost:8000/docs
+  • Orchestrator:         http://localhost:8001/docs
+
+[1mDatabase Credentials:[0m
+  • Neo4j: neo4j / uitchatbot
+
+[1mLog Prefixes:[0m
+  • [96m[RAG][0m  - RAG Service logs
+  • [95m[ORCH][0m - Orchestrator logs
+
+[93mPress Ctrl+C to stop all services[0m
+[2m────────────────────────────────────────────────────────────[0m
+[1m📋 LIVE LOGS:[0m
+[2m────────────────────────────────────────────────────────────[0m
+[2m[22:32:40][0m [95m[ORCH][0m INFO:     Waiting for application startup.
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:39,966 - app.main - INFO - Starting orchestrator service...
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:39,971 - app.core.container - INFO - IRCoT model from config: openai/gpt-4o-mini
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:39,971 - app.core.container - INFO - IRCoT Configuration: enabled=True, mode=automatic, max_iter=3, threshold=6.5, model=openai/gpt-4o-mini
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:39,971 - app.core.container - INFO - 🔍 RAG_SERVICES_PATH: /home/kien/Kien/study/SE363.Q11/Chatbot-UIT/services/rag_services
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:39,971 - app.core.container - INFO - 🔍 Path exists: True
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - INFO - 🔗 Connecting to Neo4j: bolt://localhost:7687
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - WARNING - ⚠ Could not connect to Neo4j: Can't instantiate abstract class Neo4jGraphAdapter without an implementation for abstract methods 'delete_node', 'delete_relationship', 'execute_query', 'find_all_paths', 'find_shortest_path', 'get_relationships', 'get_subgraph', 'get_type_distribution', 'search_nodes', 'update_node'
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - WARNING - Graph Reasoning will be DISABLED
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - INFO - Graph ReAct model from config: openai/gpt-4o-mini
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - INFO - ============================================================
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - INFO - 🚀 Using OPTIMIZED orchestrator (3 agents, 40% cost savings)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - INFO - 🔄 IRCoT ENABLED: max_iterations=3, threshold=6.5
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - INFO - ⚠ Graph Reasoning DISABLED (no graph adapter)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.core.container - INFO - ============================================================
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ✓ Smart Planner initialized with model: openai/gpt-4o-mini
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ✓ Answer Agent initialized with model: openai/gpt-5.1-chat
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ✓ Response formatting built into Answer Agent (optimized pipeline)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ⚠ Graph Reasoning Agent not initialized (no graph_adapter provided)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ✓ IRCoT enabled (mode=automatic, max_iterations=3)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.adapters.conversation_manager - INFO - ConversationManager initialized: max_messages=20, use_redis=False
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ✓ ConversationManager initialized (sliding window, max=20)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ✓ ContextDomainService initialized (query rewriting enabled)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ============================================================
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - 🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (2 Agents + Graph Reasoning + IRCoT + Memory)
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.agents.optimized_orchestrator - INFO - ============================================================
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.main - WARNING - ⚠ Graph Reasoning Agent is NOT available
+[2m[22:32:40][0m [95m[ORCH][0m 2026-01-26 22:32:40,212 - app.main - INFO - Orchestrator service started successfully
+[2m[22:32:40][0m [95m[ORCH][0m INFO:     Application startup complete.
+[2m[22:33:35][0m [96m[RAG][0m WARNING:  WatchFiles detected changes in 'adapters/graph/neo4j_adapter.py'. Reloading...
+[2m[22:33:35][0m [96m[RAG][0m INFO:     Shutting down
+[2m[22:33:35][0m [96m[RAG][0m INFO:     Waiting for application shutdown.
+[2m[22:33:35][0m [96m[RAG][0m INFO:     Application shutdown complete.
+[2m[22:33:35][0m [96m[RAG][0m INFO:     Finished server process [106774]
+[2m[22:33:39][0m [96m[RAG][0m INFO:     Started server process [108874]
+[2m[22:33:39][0m [96m[RAG][0m INFO:     Waiting for application startup.
+[2m[22:33:39][0m [96m[RAG][0m INFO:     Application startup complete.
+
+
+
+[94m======================================================================[0m
+[1m                     🛑 STOPPING BACKEND SERVICES                      [0m
+[94m======================================================================[0m
+
+[93mℹ Stopping Python services...[0m
+[2m[22:33:43][0m [95m[ORCH][0m INFO:     Shutting down
+[2m[22:33:43][0m [96m[RAG][0m INFO:     Shutting down
+[2m[22:33:43][0m [95m[ORCH][0m INFO:     Waiting for application shutdown.
+[2m[22:33:43][0m [95m[ORCH][0m 2026-01-26 22:33:43,471 - app.main - INFO - Shutting down orchestrator service...
+[2m[22:33:43][0m [95m[ORCH][0m 2026-01-26 22:33:43,471 - app.main - INFO - Orchestrator service shutdown complete
+[2m[22:33:43][0m [95m[ORCH][0m INFO:     Application shutdown complete.
+[2m[22:33:43][0m [95m[ORCH][0m INFO:     Finished server process [106818]
+[2m[22:33:43][0m [96m[RAG][0m INFO:     Waiting for application shutdown.
+[2m[22:33:43][0m [96m[RAG][0m INFO:     Application shutdown complete.
+[2m[22:33:43][0m [96m[RAG][0m INFO:     Finished server process [108874]
+[2m[22:33:43][0m [95m[ORCH][0m INFO:     Stopping reloader process [106815]
+[2m[22:33:44][0m [96m[RAG][0m INFO:     Stopping reloader process [106771]
+[92m✓ Process 106771 terminated[0m
+[92m✓ Process 106815 terminated[0m
+[92m✓ All backend services stopped![0m

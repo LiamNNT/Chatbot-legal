@@ -1,23 +1,24 @@
 """
-Neo4j Graph Builder for CatRAG Legal Document Pipeline.
+Neo4j Graph Builder for Legal Document Knowledge Graph Pipeline.
 
-This module ingests the extracted JSON data from the Two-Stage VLM+LLM pipeline
-into Neo4j, following CatRAG architecture principles:
+This module builds a knowledge graph from Vietnamese legal documents
+following the Legal Knowledge Graph schema.
 
-1. Entity Resolution: Merge entities by (normalized_text, type) to avoid duplicates
-2. Category Routing: Create category nodes for topic-based search
-3. Structure Ingestion: Build Document -> Article -> Clause hierarchy
-4. Semantic Relations: Create edges between merged entities
+Architecture:
+1. Document Hierarchy: LegalDocument -> Chapter -> Section -> Article -> Clause -> Point
+2. Semantic Nodes: Concept, ProhibitedAct, Sanction, Right, Obligation
+3. Rich Relationships: THUOC_VE, DINH_NGHIA, BI_XU_LY, THAY_THE, etc.
 
-Author: Legal Document Processing Team
-Date: 2024
+Domain: Pháp luật Quốc gia (National Law)
+Schema Source: knowledge_graph_schema.py
 """
 
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
+from datetime import date
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -29,40 +30,47 @@ class GraphStats:
     """Statistics from graph building process."""
     documents: int = 0
     chapters: int = 0
+    sections: int = 0
     articles: int = 0
     clauses: int = 0
-    entities: int = 0
-    entities_merged: int = 0  # Entities that were merged (not newly created)
+    points: int = 0
+    concepts: int = 0
+    prohibited_acts: int = 0
+    sanctions: int = 0
+    rights: int = 0
+    obligations: int = 0
+    subjects: int = 0
     structural_relations: int = 0
     semantic_relations: int = 0
-    mentions: int = 0
-    categories: int = 0
-    modifications: int = 0  # Legal modification relationships created
+    reference_relations: int = 0
+    amendment_relations: int = 0
+    total_nodes: int = 0
+    total_edges: int = 0
 
 
-class Neo4jGraphBuilder:
+class LegalGraphBuilder:
     """
-    Build Knowledge Graph in Neo4j from extracted legal document data.
+    Build Legal Knowledge Graph in Neo4j from legal document data.
     
-    Implements CatRAG architecture:
-    - Entity Resolution via MERGE on (normalized_text, type)
-    - Category Routing via [:BELONGS_TO] relations
-    - Hierarchical structure: Document -> Chapter -> Article -> Clause
-    - Semantic relations between entities
+    Implements Legal Document Graph architecture:
+    - Hierarchical structure: Document -> Chapter -> Section -> Article -> Clause -> Point
+    - Semantic extraction: Concepts, ProhibitedActs, Sanctions linked to Articles
+    - Legal references: Cross-references between articles and documents
+    - Amendment tracking: THAY_THE, SUA_DOI, BO_SUNG, BAI_BO relationships
     
     Example:
         ```python
-        builder = Neo4jGraphBuilder(
+        builder = LegalGraphBuilder(
             uri="bolt://localhost:7687",
             user="neo4j",
             password="password"
         )
         
-        with open("full_extraction.json") as f:
+        with open("legal_document_data.json") as f:
             data = json.load(f)
         
-        stats = builder.build_graph(data, category="Quy chế Đào tạo")
-        print(f"Created {stats.entities} entities, merged {stats.entities_merged}")
+        stats = builder.build_graph(data)
+        print(f"Created {stats.articles} articles, {stats.concepts} concepts")
         
         builder.close()
         ```
@@ -118,28 +126,45 @@ class Neo4jGraphBuilder:
     
     def create_constraints(self):
         """
-        Create constraints and indexes for optimal performance.
+        Create constraints and indexes for legal document graph.
         
         Indexes on:
-        - Document.id, Article.id, Clause.id (unique)
-        - Entity.normalized_text + Entity.type (composite for merge)
-        - Category.name (unique)
+        - All node types by id (unique)
+        - Article.article_number for quick lookup
+        - Concept.term for semantic search
+        - Full-text indexes for content search
         """
         constraints = [
-            # Unique constraints (also create indexes)
-            "CREATE CONSTRAINT doc_id IF NOT EXISTS FOR (d:Document) REQUIRE d.id IS UNIQUE",
-            "CREATE CONSTRAINT chapter_id IF NOT EXISTS FOR (c:Chapter) REQUIRE c.id IS UNIQUE",
-            "CREATE CONSTRAINT article_id IF NOT EXISTS FOR (a:Article) REQUIRE a.id IS UNIQUE",
-            "CREATE CONSTRAINT clause_id IF NOT EXISTS FOR (c:Clause) REQUIRE c.id IS UNIQUE",
-            "CREATE CONSTRAINT category_name IF NOT EXISTS FOR (c:Category) REQUIRE c.name IS UNIQUE",
+            # Unique constraints for document structure nodes
+            "CREATE CONSTRAINT luat_id IF NOT EXISTS FOR (n:Luật) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT nghi_dinh_id IF NOT EXISTS FOR (n:`Nghị định`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT thong_tu_id IF NOT EXISTS FOR (n:`Thông tư`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT quyet_dinh_id IF NOT EXISTS FOR (n:`Quyết định`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT chuong_id IF NOT EXISTS FOR (n:Chương) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT muc_id IF NOT EXISTS FOR (n:Mục) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT dieu_id IF NOT EXISTS FOR (n:Điều) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT khoan_id IF NOT EXISTS FOR (n:Khoản) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT diem_id IF NOT EXISTS FOR (n:Điểm) REQUIRE n.id IS UNIQUE",
             
-            # Composite index for Entity Resolution (CRITICAL for CatRAG)
-            # Entities are merged by (normalized_text, type) pair
-            "CREATE INDEX entity_merge IF NOT EXISTS FOR (e:Entity) ON (e.normalized_text, e.type)",
+            # Unique constraints for semantic nodes
+            "CREATE CONSTRAINT khai_niem_id IF NOT EXISTS FOR (n:`Khái niệm`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT hanh_vi_cam_id IF NOT EXISTS FOR (n:`Hành vi cấm`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT che_tai_id IF NOT EXISTS FOR (n:`Chế tài`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT quyen_id IF NOT EXISTS FOR (n:Quyền) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT nghia_vu_id IF NOT EXISTS FOR (n:`Nghĩa vụ`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT chu_the_id IF NOT EXISTS FOR (n:`Chủ thể`) REQUIRE n.id IS UNIQUE",
+            "CREATE CONSTRAINT thu_tuc_id IF NOT EXISTS FOR (n:`Thủ tục`) REQUIRE n.id IS UNIQUE",
             
-            # Additional indexes for search
-            "CREATE INDEX entity_type IF NOT EXISTS FOR (e:Entity) ON (e.type)",
-            "CREATE FULLTEXT INDEX entity_text IF NOT EXISTS FOR (e:Entity) ON EACH [e.text, e.normalized_text]",
+            # Indexes for search
+            "CREATE INDEX dieu_number IF NOT EXISTS FOR (n:Điều) ON (n.article_number)",
+            "CREATE INDEX doc_number IF NOT EXISTS FOR (n:Luật) ON (n.document_number)",
+            "CREATE INDEX khai_niem_term IF NOT EXISTS FOR (n:`Khái niệm`) ON (n.term)",
+            "CREATE INDEX status_idx IF NOT EXISTS FOR (n:Luật) ON (n.status)",
+            
+            # Full-text indexes for content search
+            "CREATE FULLTEXT INDEX article_content_ft IF NOT EXISTS FOR (n:Điều) ON EACH [n.content, n.article_title]",
+            "CREATE FULLTEXT INDEX concept_ft IF NOT EXISTS FOR (n:`Khái niệm`) ON EACH [n.term, n.definition]",
+            "CREATE FULLTEXT INDEX prohibited_ft IF NOT EXISTS FOR (n:`Hành vi cấm`) ON EACH [n.prohibited_act, n.content]",
         ]
         
         with self.driver.session(database=self.database) as session:
@@ -149,7 +174,7 @@ class Neo4jGraphBuilder:
                     logger.debug(f"Created: {constraint[:60]}...")
                 except Exception as e:
                     # Constraint might already exist
-                    if "already exists" not in str(e).lower():
+                    if "already exists" not in str(e).lower() and "equivalent" not in str(e).lower():
                         logger.warning(f"Constraint warning: {e}")
         
         logger.info("Constraints and indexes created/verified")
@@ -168,16 +193,14 @@ class Neo4jGraphBuilder:
     
     def build_graph(
         self,
-        extraction_data: Dict[str, Any],
-        category: str = "Quy chế Đào tạo",
+        document_data: Dict[str, Any],
         clear_first: bool = False
     ) -> GraphStats:
         """
-        Build complete knowledge graph from extraction data.
+        Build complete legal knowledge graph from document data.
         
         Args:
-            extraction_data: JSON data from Two-Stage pipeline
-            category: Category name for routing (CatRAG)
+            document_data: Extracted legal document data
             clear_first: Whether to clear database before building
             
         Returns:
@@ -191,617 +214,834 @@ class Neo4jGraphBuilder:
         # Ensure constraints exist
         self.create_constraints()
         
-        # Extract stage data
-        stage1 = extraction_data.get("stage1_structure", {})
-        stage2 = extraction_data.get("stage2_semantic", {})
-        
         with self.driver.session(database=self.database) as session:
-            # 1. Create Category node (CatRAG routing)
-            stats.categories = session.execute_write(
-                self._create_category, category
+            # 1. Create document hierarchy (LegalDocument -> Chapter -> Article -> Clause -> Point)
+            hierarchy_stats = session.execute_write(
+                self._create_document_hierarchy, document_data
+            )
+            stats.documents = hierarchy_stats["documents"]
+            stats.chapters = hierarchy_stats["chapters"]
+            stats.sections = hierarchy_stats["sections"]
+            stats.articles = hierarchy_stats["articles"]
+            stats.clauses = hierarchy_stats["clauses"]
+            stats.points = hierarchy_stats["points"]
+            stats.structural_relations = hierarchy_stats["relations"]
+            
+            # 2. Create semantic nodes (Concepts, ProhibitedActs, Sanctions, etc.)
+            semantic_stats = session.execute_write(
+                self._create_semantic_nodes, document_data
+            )
+            stats.concepts = semantic_stats["concepts"]
+            stats.prohibited_acts = semantic_stats["prohibited_acts"]
+            stats.sanctions = semantic_stats["sanctions"]
+            stats.rights = semantic_stats["rights"]
+            stats.obligations = semantic_stats["obligations"]
+            stats.subjects = semantic_stats["subjects"]
+            stats.semantic_relations = semantic_stats["relations"]
+            
+            # 3. Create reference relationships (cross-references between articles)
+            stats.reference_relations = session.execute_write(
+                self._create_reference_relations, document_data
             )
             
-            # 2. Create structural hierarchy
-            doc_stats = session.execute_write(
-                self._create_document_structure, stage1, category
-            )
-            stats.documents = doc_stats["documents"]
-            stats.chapters = doc_stats["chapters"]
-            stats.articles = doc_stats["articles"]
-            stats.clauses = doc_stats["clauses"]
-            stats.structural_relations = doc_stats["relations"]
-            
-            # 3. Create/Merge entities with Entity Resolution
-            entity_stats = session.execute_write(
-                self._create_entities_with_resolution, stage2
-            )
-            stats.entities = entity_stats["created"]
-            stats.entities_merged = entity_stats["merged"]
-            stats.mentions = entity_stats["mentions"]
-            
-            # 4. Create semantic relations between entities
-            stats.semantic_relations = session.execute_write(
-                self._create_semantic_relations, stage2
-            )
-            
-            # 5. Process legal modifications (amendments, replacements, etc.)
-            modifications_list = stage2.get("modifications", [])
-            if modifications_list:
-                stats.modifications = session.execute_write(
-                    self._process_modifications, modifications_list
+            # 4. Create amendment relationships (THAY_THE, SUA_DOI, etc.)
+            amendments = document_data.get("amendments", [])
+            if amendments:
+                stats.amendment_relations = session.execute_write(
+                    self._create_amendment_relations, amendments
                 )
+            
+            # Calculate totals
+            stats.total_nodes = (
+                stats.documents + stats.chapters + stats.sections + 
+                stats.articles + stats.clauses + stats.points +
+                stats.concepts + stats.prohibited_acts + stats.sanctions +
+                stats.rights + stats.obligations + stats.subjects
+            )
+            stats.total_edges = (
+                stats.structural_relations + stats.semantic_relations +
+                stats.reference_relations + stats.amendment_relations
+            )
         
         logger.info(
             f"Graph built: {stats.documents} docs, {stats.articles} articles, "
-            f"{stats.clauses} clauses, {stats.entities} entities "
-            f"({stats.entities_merged} merged), {stats.semantic_relations} semantic relations, "
-            f"{stats.modifications} modifications"
+            f"{stats.clauses} clauses, {stats.concepts} concepts, "
+            f"{stats.prohibited_acts} prohibited acts, {stats.sanctions} sanctions"
         )
         
         return stats
     
     # =========================================================================
-    # CATEGORY ROUTING (CatRAG)
+    # DOCUMENT HIERARCHY
     # =========================================================================
     
     @staticmethod
-    def _create_category(tx, category_name: str) -> int:
-        """
-        Create Category node for topic-based routing.
-        
-        CatRAG uses categories to route queries to relevant subgraphs.
-        All Articles and Clauses will have [:BELONGS_TO] relation to this category.
-        """
-        query = """
-        MERGE (c:Category {name: $name})
-        ON CREATE SET 
-            c.created_at = datetime(),
-            c.description = 'Legal document category for routing'
-        RETURN c
-        """
-        result = tx.run(query, name=category_name)
-        count = len(list(result))
-        logger.info(f"Category '{category_name}' created/verified")
-        return count
-    
-    # =========================================================================
-    # STRUCTURAL HIERARCHY
-    # =========================================================================
-    
-    @staticmethod
-    def _create_document_structure(
+    def _create_document_hierarchy(
         tx, 
-        stage1_data: Dict[str, Any],
-        category: str
+        document_data: Dict[str, Any]
     ) -> Dict[str, int]:
         """
         Create document structure hierarchy.
         
-        Structure: Document -[:CONTAINS]-> Chapter -[:CONTAINS]-> Article -[:CONTAINS]-> Clause
+        Structure: LegalDocument -> Chapter -> Section -> Article -> Clause -> Point
         
         Also creates:
-        - [:BELONGS_TO] from Article/Clause to Category (CatRAG routing)
-        - [:FOLLOWS] between sequential articles
+        - [:THUOC_VE] from child to parent (belongs to)
+        - [:KE_TIEP] between sequential articles (follows)
         """
-        stats = {"documents": 0, "chapters": 0, "articles": 0, "clauses": 0, "relations": 0}
+        stats = {"documents": 0, "chapters": 0, "sections": 0, 
+                 "articles": 0, "clauses": 0, "points": 0, "relations": 0}
         
-        # --- Create Document node ---
-        doc_data = stage1_data.get("document")
-        if doc_data:
-            query = """
-            MERGE (d:Document {id: $id})
-            SET d.title = $title,
-                d.full_text = $full_text,
-                d.page_range = $page_range,
-                d.source = $source,
+        # --- Create Legal Document node ---
+        doc_info = document_data.get("document", {})
+        if doc_info:
+            doc_type = doc_info.get("document_type", "Luật")
+            label = doc_type  # Use Vietnamese label directly
+            
+            query = f"""
+            MERGE (d:`{label}` {{id: $id}})
+            SET d.document_number = $document_number,
+                d.title = $title,
+                d.content = $content,
+                d.issuing_authority = $issuing_authority,
+                d.issuing_date = $issuing_date,
+                d.effective_date = $effective_date,
+                d.status = $status,
+                d.scope = $scope,
+                d.name = $name,
                 d.updated_at = datetime()
             RETURN d
             """
             tx.run(query,
-                id=doc_data["id"],
-                title=doc_data.get("title", ""),
-                full_text=doc_data.get("full_text", ""),
-                page_range=doc_data.get("page_range", []),
-                source=stage1_data.get("source", "")
+                id=doc_info.get("id", ""),
+                document_number=doc_info.get("document_number", ""),
+                title=doc_info.get("title", ""),
+                content=doc_info.get("content", ""),
+                issuing_authority=doc_info.get("issuing_authority", ""),
+                issuing_date=doc_info.get("issuing_date", ""),
+                effective_date=doc_info.get("effective_date", ""),
+                status=doc_info.get("status", "Còn hiệu lực"),
+                scope=doc_info.get("scope", ""),
+                name=doc_info.get("name", doc_info.get("title", ""))
             )
             stats["documents"] = 1
-            logger.debug(f"Created Document: {doc_data['id']}")
+            logger.debug(f"Created Document: {doc_info.get('id')}")
         
         # --- Create Chapter nodes ---
-        for chapter in stage1_data.get("chapters", []):
+        for chapter in document_data.get("chapters", []):
             query = """
-            MERGE (ch:Chapter {id: $id})
-            SET ch.title = $title,
-                ch.full_text = $full_text,
-                ch.page_range = $page_range,
+            MERGE (ch:Chương {id: $id})
+            SET ch.chapter_number = $chapter_number,
+                ch.chapter_title = $chapter_title,
+                ch.content = $content,
+                ch.name = $name,
+                ch.order_index = $order_index,
                 ch.updated_at = datetime()
             
             WITH ch
-            MATCH (cat:Category {name: $category})
-            MERGE (ch)-[:BELONGS_TO]->(cat)
+            OPTIONAL MATCH (doc) WHERE doc.id = $parent_document_id
+            FOREACH (_ IN CASE WHEN doc IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (ch)-[:THUOC_VE]->(doc)
+            )
             
             RETURN ch
             """
             tx.run(query,
-                id=chapter["id"],
-                title=chapter.get("title", ""),
-                full_text=chapter.get("full_text", ""),
-                page_range=chapter.get("page_range", []),
-                category=category
+                id=chapter.get("id", ""),
+                chapter_number=chapter.get("chapter_number", ""),
+                chapter_title=chapter.get("chapter_title", ""),
+                content=chapter.get("content", ""),
+                name=chapter.get("name", f"Chương {chapter.get('chapter_number', '')}"),
+                order_index=chapter.get("order_index", 0),
+                parent_document_id=chapter.get("parent_document_id", "")
             )
             stats["chapters"] += 1
+            stats["relations"] += 1
         
-        # --- Create Article nodes ---
-        for article in stage1_data.get("articles", []):
+        # --- Create Section nodes (Mục) ---
+        for section in document_data.get("sections", []):
             query = """
-            MERGE (a:Article {id: $id})
-            SET a.title = $title,
-                a.full_text = $full_text,
-                a.page_range = $page_range,
+            MERGE (sec:Mục {id: $id})
+            SET sec.section_number = $section_number,
+                sec.section_title = $section_title,
+                sec.content = $content,
+                sec.name = $name,
+                sec.order_index = $order_index,
+                sec.updated_at = datetime()
+            
+            WITH sec
+            OPTIONAL MATCH (ch:Chương) WHERE ch.id = $parent_chapter_id
+            FOREACH (_ IN CASE WHEN ch IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (sec)-[:THUOC_VE]->(ch)
+            )
+            
+            RETURN sec
+            """
+            tx.run(query,
+                id=section.get("id", ""),
+                section_number=section.get("section_number", ""),
+                section_title=section.get("section_title", ""),
+                content=section.get("content", ""),
+                name=section.get("name", f"Mục {section.get('section_number', '')}"),
+                order_index=section.get("order_index", 0),
+                parent_chapter_id=section.get("parent_chapter_id", "")
+            )
+            stats["sections"] += 1
+            stats["relations"] += 1
+        
+        # --- Create Article nodes (Điều) ---
+        prev_article_id = None
+        for article in document_data.get("articles", []):
+            query = """
+            MERGE (a:Điều {id: $id})
+            SET a.article_number = $article_number,
+                a.article_title = $article_title,
+                a.article_content = $article_content,
+                a.content = $content,
+                a.name = $name,
+                a.article_category = $article_category,
+                a.is_definition_article = $is_definition_article,
+                a.order_index = $order_index,
                 a.updated_at = datetime()
             
             WITH a
-            MATCH (cat:Category {name: $category})
-            MERGE (a)-[:BELONGS_TO]->(cat)
+            
+            // Link to parent (Chapter or Section)
+            OPTIONAL MATCH (parent) 
+            WHERE parent.id IN [$parent_chapter_id, $parent_section_id]
+            FOREACH (_ IN CASE WHEN parent IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (a)-[:THUOC_VE]->(parent)
+            )
+            
+            // Link to document directly if no chapter
+            WITH a
+            OPTIONAL MATCH (doc) WHERE doc.id = $parent_document_id
+            FOREACH (_ IN CASE WHEN doc IS NOT NULL 
+                              AND $parent_chapter_id = '' 
+                              AND $parent_section_id = '' THEN [1] ELSE [] END |
+                MERGE (a)-[:THUOC_VE]->(doc)
+            )
             
             RETURN a
             """
             tx.run(query,
-                id=article["id"],
-                title=article.get("title", ""),
-                full_text=article.get("full_text", ""),
-                page_range=article.get("page_range", []),
-                category=category
+                id=article.get("id", ""),
+                article_number=article.get("article_number", 0),
+                article_title=article.get("article_title", ""),
+                article_content=article.get("article_content", ""),
+                content=article.get("content", article.get("article_content", "")),
+                name=article.get("name", f"Điều {article.get('article_number', '')}"),
+                article_category=article.get("article_category", ""),
+                is_definition_article=article.get("is_definition_article", False),
+                order_index=article.get("order_index", 0),
+                parent_document_id=article.get("parent_document_id", ""),
+                parent_chapter_id=article.get("parent_chapter_id", ""),
+                parent_section_id=article.get("parent_section_id", "")
             )
             stats["articles"] += 1
-            logger.debug(f"Created Article: {article['id']}")
+            stats["relations"] += 1
+            
+            # Create KE_TIEP (follows) relationship with previous article
+            if prev_article_id:
+                follow_query = """
+                MATCH (prev:Điều {id: $prev_id})
+                MATCH (curr:Điều {id: $curr_id})
+                MERGE (prev)-[:KE_TIEP]->(curr)
+                """
+                tx.run(follow_query, prev_id=prev_article_id, curr_id=article.get("id", ""))
+                stats["relations"] += 1
+            
+            prev_article_id = article.get("id", "")
+            logger.debug(f"Created Article: {article.get('id')}")
         
-        # --- Create Clause nodes ---
-        for clause in stage1_data.get("clauses", []):
+        # --- Create Clause nodes (Khoản) ---
+        for clause in document_data.get("clauses", []):
             query = """
-            MERGE (cl:Clause {id: $id})
-            SET cl.title = $title,
-                cl.full_text = $full_text,
-                cl.page_range = $page_range,
+            MERGE (cl:Khoản {id: $id})
+            SET cl.clause_number = $clause_number,
+                cl.clause_content = $clause_content,
+                cl.content = $content,
+                cl.name = $name,
+                cl.order_index = $order_index,
                 cl.updated_at = datetime()
             
             WITH cl
-            MATCH (cat:Category {name: $category})
-            MERGE (cl)-[:BELONGS_TO]->(cat)
+            OPTIONAL MATCH (a:Điều) WHERE a.id = $parent_article_id
+            FOREACH (_ IN CASE WHEN a IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (cl)-[:THUOC_VE]->(a)
+            )
             
             RETURN cl
             """
             tx.run(query,
-                id=clause["id"],
-                title=clause.get("title", ""),
-                full_text=clause.get("full_text", ""),
-                page_range=clause.get("page_range", []),
-                category=category
+                id=clause.get("id", ""),
+                clause_number=clause.get("clause_number", 0),
+                clause_content=clause.get("clause_content", ""),
+                content=clause.get("content", clause.get("clause_content", "")),
+                name=clause.get("name", f"Khoản {clause.get('clause_number', '')}"),
+                order_index=clause.get("order_index", 0),
+                parent_article_id=clause.get("parent_article_id", "")
             )
             stats["clauses"] += 1
-            logger.debug(f"Created Clause: {clause['id']}")
+            stats["relations"] += 1
+            logger.debug(f"Created Clause: {clause.get('id')}")
         
-        # --- Create structural relations ---
-        for rel in stage1_data.get("relations", []):
-            source_id = rel["source"]
-            target_id = rel["target"]
-            rel_type = rel["type"]
+        # --- Create Point nodes (Điểm) ---
+        for point in document_data.get("points", []):
+            query = """
+            MERGE (p:Điểm {id: $id})
+            SET p.point_label = $point_label,
+                p.point_content = $point_content,
+                p.content = $content,
+                p.name = $name,
+                p.order_index = $order_index,
+                p.updated_at = datetime()
             
-            # Dynamic query based on relation type
-            query = f"""
-            MATCH (source) WHERE source.id = $source_id
-            MATCH (target) WHERE target.id = $target_id
-            MERGE (source)-[r:{rel_type}]->(target)
+            WITH p
+            OPTIONAL MATCH (cl:Khoản) WHERE cl.id = $parent_clause_id
+            FOREACH (_ IN CASE WHEN cl IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (p)-[:THUOC_VE]->(cl)
+            )
+            
+            RETURN p
+            """
+            tx.run(query,
+                id=point.get("id", ""),
+                point_label=point.get("point_label", ""),
+                point_content=point.get("point_content", ""),
+                content=point.get("content", point.get("point_content", "")),
+                name=point.get("name", f"Điểm {point.get('point_label', '')}"),
+                order_index=point.get("order_index", 0),
+                parent_clause_id=point.get("parent_clause_id", "")
+            )
+            stats["points"] += 1
+            stats["relations"] += 1
+        
+        logger.info(
+            f"Hierarchy created: {stats['documents']} docs, {stats['chapters']} chapters, "
+            f"{stats['sections']} sections, {stats['articles']} articles, "
+            f"{stats['clauses']} clauses, {stats['points']} points"
+        )
+        
+        return stats
+    
+    # =========================================================================
+    # SEMANTIC NODES
+    # =========================================================================
+    
+    @staticmethod
+    def _create_semantic_nodes(
+        tx,
+        document_data: Dict[str, Any]
+    ) -> Dict[str, int]:
+        """
+        Create semantic nodes extracted from articles.
+        
+        - Concepts (Khái niệm): Definitions from "Giải thích từ ngữ" articles
+        - ProhibitedActs (Hành vi cấm): Prohibited behaviors from articles
+        - Sanctions (Chế tài): Penalties and sanctions
+        - Rights (Quyền): Rights of subjects
+        - Obligations (Nghĩa vụ): Obligations of subjects
+        - Subjects (Chủ thể): Legal entities/subjects
+        """
+        stats = {"concepts": 0, "prohibited_acts": 0, "sanctions": 0, 
+                 "rights": 0, "obligations": 0, "subjects": 0, "relations": 0}
+        
+        # --- Create Concept nodes ---
+        for concept in document_data.get("concepts", []):
+            query = """
+            MERGE (c:`Khái niệm` {id: $id})
+            SET c.term = $term,
+                c.definition = $definition,
+                c.content = $definition,
+                c.name = $term,
+                c.related_terms = $related_terms,
+                c.synonyms = $synonyms,
+                c.keywords = $keywords,
+                c.updated_at = datetime()
+            
+            WITH c
+            
+            // Link to source article
+            OPTIONAL MATCH (a:Điều) WHERE a.id = $source_article_id
+            FOREACH (_ IN CASE WHEN a IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (a)-[:DINH_NGHIA]->(c)
+            )
+            
+            // Link to source document
+            WITH c
+            OPTIONAL MATCH (doc) WHERE doc.id = $source_document_id
+            FOREACH (_ IN CASE WHEN doc IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (c)-[:THUOC_VE]->(doc)
+            )
+            
+            RETURN c
+            """
+            tx.run(query,
+                id=concept.get("id", ""),
+                term=concept.get("term", ""),
+                definition=concept.get("definition", ""),
+                related_terms=concept.get("related_terms", []),
+                synonyms=concept.get("synonyms", []),
+                keywords=concept.get("keywords", []),
+                source_article_id=concept.get("source_article_id", ""),
+                source_document_id=concept.get("source_document_id", "")
+            )
+            stats["concepts"] += 1
+            stats["relations"] += 2  # DINH_NGHIA + THUOC_VE
+        
+        # --- Create ProhibitedAct nodes ---
+        for act in document_data.get("prohibited_acts", []):
+            query = """
+            MERGE (pa:`Hành vi cấm` {id: $id})
+            SET pa.prohibited_act = $prohibited_act,
+                pa.content = $prohibited_act,
+                pa.name = $name,
+                pa.keywords = $keywords,
+                pa.updated_at = datetime()
+            
+            WITH pa
+            
+            // Link to source article with QUY_DINH relationship
+            OPTIONAL MATCH (a:Điều) WHERE a.id = $source_article_id
+            FOREACH (_ IN CASE WHEN a IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (a)-[:QUY_DINH]->(pa)
+            )
+            
+            RETURN pa
+            """
+            tx.run(query,
+                id=act.get("id", ""),
+                prohibited_act=act.get("prohibited_act", ""),
+                name=act.get("name", act.get("prohibited_act", "")[:100]),
+                keywords=act.get("keywords", []),
+                source_article_id=act.get("source_article_id", "")
+            )
+            stats["prohibited_acts"] += 1
+            stats["relations"] += 1
+        
+        # --- Create Sanction nodes ---
+        for sanction in document_data.get("sanctions", []):
+            query = """
+            MERGE (s:`Chế tài` {id: $id})
+            SET s.sanction_type = $sanction_type,
+                s.sanction_content = $sanction_content,
+                s.content = $sanction_content,
+                s.name = $name,
+                s.keywords = $keywords,
+                s.updated_at = datetime()
+            
+            WITH s
+            
+            // Link to source article
+            OPTIONAL MATCH (a:Điều) WHERE a.id = $source_article_id
+            FOREACH (_ IN CASE WHEN a IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (a)-[:QUY_DINH]->(s)
+            )
+            
+            RETURN s
+            """
+            tx.run(query,
+                id=sanction.get("id", ""),
+                sanction_type=sanction.get("sanction_type", ""),
+                sanction_content=sanction.get("sanction_content", ""),
+                name=sanction.get("name", sanction.get("sanction_type", "")),
+                keywords=sanction.get("keywords", []),
+                source_article_id=sanction.get("source_article_id", "")
+            )
+            stats["sanctions"] += 1
+            stats["relations"] += 1
+        
+        # --- Link ProhibitedActs to Sanctions ---
+        for act in document_data.get("prohibited_acts", []):
+            for sanction_id in act.get("related_sanctions", []):
+                query = """
+                MATCH (pa:`Hành vi cấm` {id: $act_id})
+                MATCH (s:`Chế tài` {id: $sanction_id})
+                MERGE (pa)-[:BI_XU_LY]->(s)
+                RETURN pa, s
+                """
+                result = tx.run(query, act_id=act.get("id", ""), sanction_id=sanction_id)
+                if list(result):
+                    stats["relations"] += 1
+        
+        # --- Create Right nodes ---
+        for right in document_data.get("rights", []):
+            query = """
+            MERGE (r:Quyền {id: $id})
+            SET r.right_content = $right_content,
+                r.content = $right_content,
+                r.name = $name,
+                r.conditions = $conditions,
+                r.keywords = $keywords,
+                r.updated_at = datetime()
+            
+            WITH r
+            
+            OPTIONAL MATCH (a:Điều) WHERE a.id = $source_article_id
+            FOREACH (_ IN CASE WHEN a IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (a)-[:QUY_DINH]->(r)
+            )
+            
             RETURN r
             """
-            result = tx.run(query, source_id=source_id, target_id=target_id)
-            if list(result):
+            tx.run(query,
+                id=right.get("id", ""),
+                right_content=right.get("right_content", ""),
+                name=right.get("name", right.get("right_content", "")[:100]),
+                conditions=right.get("conditions", []),
+                keywords=right.get("keywords", []),
+                source_article_id=right.get("source_article_id", "")
+            )
+            stats["rights"] += 1
+            stats["relations"] += 1
+        
+        # --- Create Obligation nodes ---
+        for obligation in document_data.get("obligations", []):
+            query = """
+            MERGE (o:`Nghĩa vụ` {id: $id})
+            SET o.obligation_content = $obligation_content,
+                o.content = $obligation_content,
+                o.name = $name,
+                o.deadline = $deadline,
+                o.keywords = $keywords,
+                o.updated_at = datetime()
+            
+            WITH o
+            
+            OPTIONAL MATCH (a:Điều) WHERE a.id = $source_article_id
+            FOREACH (_ IN CASE WHEN a IS NOT NULL THEN [1] ELSE [] END |
+                MERGE (a)-[:QUY_DINH]->(o)
+            )
+            
+            RETURN o
+            """
+            tx.run(query,
+                id=obligation.get("id", ""),
+                obligation_content=obligation.get("obligation_content", ""),
+                name=obligation.get("name", obligation.get("obligation_content", "")[:100]),
+                deadline=obligation.get("deadline", ""),
+                keywords=obligation.get("keywords", []),
+                source_article_id=obligation.get("source_article_id", "")
+            )
+            stats["obligations"] += 1
+            stats["relations"] += 1
+        
+        # --- Create Subject nodes ---
+        for subject in document_data.get("subjects", []):
+            query = """
+            MERGE (s:`Chủ thể` {id: $id})
+            SET s.subject_type = $subject_type,
+                s.full_name = $full_name,
+                s.abbreviation = $abbreviation,
+                s.description = $description,
+                s.name = $name,
+                s.updated_at = datetime()
+            
+            RETURN s
+            """
+            tx.run(query,
+                id=subject.get("id", ""),
+                subject_type=subject.get("subject_type", ""),
+                full_name=subject.get("full_name", ""),
+                abbreviation=subject.get("abbreviation", ""),
+                description=subject.get("description", ""),
+                name=subject.get("name", subject.get("full_name", ""))
+            )
+            stats["subjects"] += 1
+        
+        # --- Link Subjects to Rights/Obligations ---
+        for right in document_data.get("rights", []):
+            for subject_id in right.get("subject_ids", []):
+                query = """
+                MATCH (s:`Chủ thể` {id: $subject_id})
+                MATCH (r:Quyền {id: $right_id})
+                MERGE (s)-[:CO_QUYEN]->(r)
+                """
+                tx.run(query, subject_id=subject_id, right_id=right.get("id", ""))
+                stats["relations"] += 1
+        
+        for obligation in document_data.get("obligations", []):
+            for subject_id in obligation.get("subject_ids", []):
+                query = """
+                MATCH (s:`Chủ thể` {id: $subject_id})
+                MATCH (o:`Nghĩa vụ` {id: $obligation_id})
+                MERGE (s)-[:CO_NGHIA_VU]->(o)
+                """
+                tx.run(query, subject_id=subject_id, obligation_id=obligation.get("id", ""))
                 stats["relations"] += 1
         
         logger.info(
-            f"Structure created: {stats['documents']} docs, {stats['chapters']} chapters, "
-            f"{stats['articles']} articles, {stats['clauses']} clauses, {stats['relations']} relations"
+            f"Semantic nodes: {stats['concepts']} concepts, {stats['prohibited_acts']} prohibited acts, "
+            f"{stats['sanctions']} sanctions, {stats['rights']} rights, {stats['obligations']} obligations"
         )
         
         return stats
     
     # =========================================================================
-    # ENTITY RESOLUTION (CRITICAL - CatRAG Core)
+    # REFERENCE RELATIONS
     # =========================================================================
     
     @staticmethod
-    def _create_entities_with_resolution(
+    def _create_reference_relations(
         tx,
-        stage2_data: Dict[str, Any]
-    ) -> Dict[str, int]:
-        """
-        Create Entity nodes with resolution/merging.
-        
-        CRITICAL CatRAG LOGIC:
-        - Entities are MERGED by (normalized_text, type) pair
-        - This ensures "sinh viên" mentioned in multiple articles 
-          points to the SAME node
-        - Creates [:MENTIONS] relation from Article/Clause to Entity
-        
-        Example:
-            Article "dieu_1" mentions "sinh viên"
-            Article "dieu_2" also mentions "sinh viên"
-            
-            Result: ONE Entity node, TWO [:MENTIONS] relations
-        """
-        stats = {"created": 0, "merged": 0, "mentions": 0}
-        
-        # Track which entities we've seen to count merges
-        seen_entities = set()
-        
-        for entity in stage2_data.get("entities", []):
-            entity_id = entity["id"]  # Local ID like "dieu_1_ent_1"
-            entity_type = entity["type"]
-            entity_text = entity.get("text") or entity.get("name") or ""
-            normalized_text = entity.get("normalized") or entity_text or ""
-            source_article_id = entity.get("source_article_id", "")
-            confidence = entity.get("confidence", 1.0)
-            
-            # Skip entities with empty text
-            if not normalized_text.strip():
-                logger.warning(f"Skipping entity {entity_id} with empty text")
-                continue
-            
-            # Key for merge: (normalized_text, type)
-            merge_key = (normalized_text.lower().strip(), entity_type)
-            
-            # MERGE Entity by (normalized_text, type) - NOT by local ID!
-            # This is the core of Entity Resolution
-            query = """
-            MERGE (e:Entity {normalized_text: $normalized_text, type: $type})
-            ON CREATE SET 
-                e.text = $text,
-                e.created_at = datetime(),
-                e.mention_count = 1
-            ON MATCH SET 
-                e.mention_count = coalesce(e.mention_count, 0) + 1,
-                e.updated_at = datetime()
-            
-            WITH e
-            
-            // Create MENTIONS relation from source Article/Clause
-            OPTIONAL MATCH (source) 
-            WHERE source.id = $source_id 
-              AND (source:Article OR source:Clause)
-            
-            FOREACH (_ IN CASE WHEN source IS NOT NULL THEN [1] ELSE [] END |
-                MERGE (source)-[m:MENTIONS]->(e)
-                ON CREATE SET 
-                    m.confidence = $confidence,
-                    m.local_id = $local_id,
-                    m.created_at = datetime()
-            )
-            
-            RETURN e.mention_count AS count
-            """
-            
-            result = tx.run(query,
-                normalized_text=normalized_text.lower().strip(),
-                type=entity_type,
-                text=entity_text,
-                source_id=source_article_id,
-                confidence=confidence,
-                local_id=entity_id
-            )
-            
-            record = result.single()
-            mention_count = record["count"] if record else 1
-            
-            if merge_key in seen_entities:
-                stats["merged"] += 1
-            else:
-                stats["created"] += 1
-                seen_entities.add(merge_key)
-            
-            stats["mentions"] += 1
-        
-        logger.info(
-            f"Entities: {stats['created']} created, {stats['merged']} merged, "
-            f"{stats['mentions']} mentions"
-        )
-        
-        return stats
-    
-    # =========================================================================
-    # SEMANTIC RELATIONS
-    # =========================================================================
-    
-    @staticmethod
-    def _create_semantic_relations(
-        tx,
-        stage2_data: Dict[str, Any]
+        document_data: Dict[str, Any]
     ) -> int:
         """
-        Create semantic relations between entities.
+        Create reference relationships between articles and documents.
         
-        Relations like YEU_CAU, AP_DUNG_CHO, DIEU_KIEN_TIEN_QUYET
-        connect entities extracted from the same article.
-        
-        Important: We need to find the MERGED entities (by normalized_text + type),
-        not the local IDs.
+        Types:
+        - THAM_CHIEU: Internal reference between articles
+        - DAN_CHIEU: External reference to another document
+        - VIEN_DAN: Citing legal basis
         """
         count = 0
-        entities = stage2_data.get("entities", [])
         
-        # Build lookup: local_id -> (normalized_text, type)
-        entity_lookup = {}
-        for ent in entities:
-            local_id = ent["id"]
-            text_value = ent.get("normalized") or ent.get("text") or ent.get("name") or ""
-            if not text_value.strip():
-                continue  # Skip entities with empty text
-            entity_lookup[local_id] = {
-                "normalized_text": text_value.lower().strip(),
-                "type": ent["type"]
-            }
-        
-        for rel in stage2_data.get("relations", []):
-            source_id = rel["source_id"]  # Local ID like "dieu_1_ent_1"
-            target_id = rel["target_id"]
-            rel_type = rel["type"]
-            confidence = rel.get("confidence", 1.0)
-            evidence = rel.get("evidence", "")
-            source_article = rel.get("source_article_id", "")
+        for ref in document_data.get("references", []):
+            ref_type = ref.get("type", "THAM_CHIEU")
+            source_id = ref.get("source_id", "")
+            target_id = ref.get("target_id", "")
+            reference_text = ref.get("reference_text", "")
             
-            # Lookup the normalized entity info
-            source_info = entity_lookup.get(source_id)
-            target_info = entity_lookup.get(target_id)
-            
-            if not source_info or not target_info:
-                logger.warning(f"Relation skipped: entity not found ({source_id} or {target_id})")
+            if not source_id or not target_id:
                 continue
             
-            # Find merged entities and create relation
             query = f"""
-            MATCH (source:Entity {{
-                normalized_text: $source_text, 
-                type: $source_type
-            }})
-            MATCH (target:Entity {{
-                normalized_text: $target_text, 
-                type: $target_type
-            }})
-            MERGE (source)-[r:{rel_type}]->(target)
+            MATCH (source) WHERE source.id = $source_id
+            MATCH (target) WHERE target.id = $target_id
+            MERGE (source)-[r:`{ref_type}`]->(target)
             ON CREATE SET 
-                r.confidence = $confidence,
-                r.evidence = $evidence,
-                r.source_article = $source_article,
+                r.reference_text = $reference_text,
                 r.created_at = datetime()
             RETURN r
             """
             
             result = tx.run(query,
-                source_text=source_info["normalized_text"],
-                source_type=source_info["type"],
-                target_text=target_info["normalized_text"],
-                target_type=target_info["type"],
-                confidence=confidence,
-                evidence=evidence,
-                source_article=source_article
+                source_id=source_id,
+                target_id=target_id,
+                reference_text=reference_text
             )
             
             if list(result):
                 count += 1
         
-        logger.info(f"Semantic relations created: {count}")
+        logger.info(f"Reference relations created: {count}")
         return count
     
     # =========================================================================
-    # LEGAL MODIFICATIONS PROCESSING
+    # AMENDMENT RELATIONS
     # =========================================================================
     
     @staticmethod
-    def _process_modifications(
+    def _create_amendment_relations(
         tx,
-        modifications_list: List[Dict[str, Any]]
+        amendments: List[Dict[str, Any]]
     ) -> int:
         """
-        Process legal modifications (amendments, replacements, supplements, repeals).
+        Create amendment relationships between documents.
         
-        For each modification:
-        1. Find the Source Node (new regulation) by source_text_id
-        2. Find the Target Node (old regulation) by document signature, article, clause
-        3. Create modification relationship (AMENDS, REPLACES, SUPPLEMENTS, REPEALS)
-        4. Update status of Target Node based on action type
-        
-        Args:
-            tx: Neo4j transaction
-            modifications_list: List of modification dictionaries
-            
-        Returns:
-            Number of modification relationships created
+        Types:
+        - THAY_THE: New document replaces old document
+        - SUA_DOI: New document amends old document
+        - BO_SUNG: New document supplements old document
+        - BAI_BO: New document repeals old document
         """
         count = 0
         
         # Mapping of action to target status
         action_to_status = {
-            "AMENDS": "amended",
-            "REPLACES": "expired",
-            "SUPPLEMENTS": "amended",
-            "REPEALS": "expired"
+            "thay thế": "Hết hiệu lực",
+            "sửa đổi": "Bị sửa đổi",
+            "bổ sung": "Bị sửa đổi",
+            "bãi bỏ": "Bị bãi bỏ"
         }
         
-        for mod in modifications_list:
-            action = mod.get("action", "AMENDS")
-            source_text_id = mod.get("source_text_id", "")
-            target_doc_sig = mod.get("target_document_signature", "")
-            target_article = mod.get("target_article", "")
-            target_clause = mod.get("target_clause", "")
-            effective_date = mod.get("effective_date")
-            description = mod.get("description", "")
+        for amendment in amendments:
+            amendment_type = amendment.get("type", "sửa đổi")
+            source_id = amendment.get("source_id", "")  # New document
+            target_id = amendment.get("target_id", "")  # Old document
+            effective_date = amendment.get("effective_date", "")
+            description = amendment.get("description", "")
             
-            if not source_text_id or not target_doc_sig:
-                logger.warning(f"Modification skipped: missing source_text_id or target_document_signature")
+            if not source_id or not target_id:
                 continue
             
-            # Determine target status based on action
-            new_status = action_to_status.get(action, "amended")
+            new_status = action_to_status.get(amendment_type, "Bị sửa đổi")
             
-            # Build dynamic Cypher query to find and link nodes
-            # The query tries to match target by document signature and optionally article/clause
+            # Map Vietnamese edge type
+            edge_type_map = {
+                "thay thế": "thay thế",
+                "sửa đổi": "sửa đổi",
+                "bổ sung": "bổ sung",
+                "bãi bỏ": "bãi bỏ"
+            }
+            edge_type = edge_type_map.get(amendment_type, "sửa đổi")
+            
             query = f"""
-            // Find source node (the new regulation making the modification)
-            MATCH (source)
-            WHERE source.id = $source_text_id
-              AND (source:Article OR source:Clause OR source:Document)
-            
-            // Find target node by document signature pattern
-            // Try to match against Document, Article, or Clause nodes
-            OPTIONAL MATCH (target_doc:Document)
-            WHERE target_doc.id CONTAINS $target_doc_sig
-               OR target_doc.title CONTAINS $target_doc_sig
-            
-            // Try to find target article within that document or by ID pattern
-            OPTIONAL MATCH (target_art:Article)
-            WHERE (target_art.id CONTAINS $target_doc_sig OR 
-                   target_art.title CONTAINS $target_article_pattern)
-              AND ($target_article = '' OR 
-                   target_art.title CONTAINS $target_article OR 
-                   target_art.id CONTAINS $target_article_id_pattern)
-            
-            // Try to find target clause
-            OPTIONAL MATCH (target_cl:Clause)
-            WHERE target_cl.id CONTAINS $target_doc_sig
-              AND ($target_clause = '' OR 
-                   target_cl.title CONTAINS $target_clause OR
-                   target_cl.id CONTAINS $target_clause_id_pattern)
-            
-            // Determine the most specific target node
-            WITH source,
-                 CASE 
-                     WHEN target_cl IS NOT NULL AND $target_clause <> '' THEN target_cl
-                     WHEN target_art IS NOT NULL THEN target_art
-                     WHEN target_doc IS NOT NULL THEN target_doc
-                     ELSE NULL
-                 END AS target
-            
-            WHERE target IS NOT NULL
-            
-            // Create the modification relationship
-            MERGE (source)-[r:{action}]->(target)
-            ON CREATE SET
+            MATCH (source) WHERE source.id = $source_id
+            MATCH (target) WHERE target.id = $target_id
+            MERGE (source)-[r:`{edge_type}`]->(target)
+            ON CREATE SET 
                 r.description = $description,
                 r.effective_date = $effective_date,
                 r.created_at = datetime()
             
-            // Update target node status
-            SET target.status = $new_status,
-                target.modified_by = source.id,
-                target.modification_date = CASE 
-                    WHEN $effective_date IS NOT NULL THEN $effective_date 
-                    ELSE toString(datetime()) 
-                END
+            SET target.status = $new_status
             
-            RETURN source.id AS source_id, target.id AS target_id, type(r) AS rel_type
+            RETURN r
             """
             
-            # Extract article/clause ID patterns (e.g., "Điều 4" -> "dieu_4")
-            target_article_id = ""
-            if target_article:
-                # Convert "Điều 4" or "Điều 10" to "dieu_4" or "dieu_10"
-                import re
-                match = re.search(r'[Đđ]i[eề]u\s*(\d+)', target_article)
-                if match:
-                    target_article_id = f"dieu_{match.group(1)}"
+            result = tx.run(query,
+                source_id=source_id,
+                target_id=target_id,
+                description=description,
+                effective_date=effective_date,
+                new_status=new_status
+            )
             
-            target_clause_id = ""
-            if target_clause:
-                # Convert "Khoản 3" to "khoan_3"
-                import re
-                match = re.search(r'[Kk]ho[aả]n\s*(\d+)', target_clause)
-                if match:
-                    target_clause_id = f"khoan_{match.group(1)}"
-            
-            try:
-                result = tx.run(query,
-                    source_text_id=source_text_id,
-                    target_doc_sig=target_doc_sig,
-                    target_article=target_article or "",
-                    target_article_pattern=target_article or "",
-                    target_article_id_pattern=target_article_id,
-                    target_clause=target_clause or "",
-                    target_clause_id_pattern=target_clause_id,
-                    description=description,
-                    effective_date=effective_date,
-                    new_status=new_status
-                )
-                
-                records = list(result)
-                if records:
-                    for rec in records:
-                        logger.info(
-                            f"Modification created: ({rec['source_id']})-[:{rec['rel_type']}]->({rec['target_id']})"
-                        )
-                        count += 1
-                else:
-                    logger.warning(
-                        f"Modification target not found: {target_doc_sig} / {target_article} / {target_clause}"
-                    )
-                    
-            except Exception as e:
-                logger.error(f"Error creating modification relationship: {e}")
-                continue
+            if list(result):
+                count += 1
+                logger.info(f"Amendment created: {source_id} -{amendment_type}-> {target_id}")
         
-        logger.info(f"Legal modifications processed: {count}")
+        logger.info(f"Amendment relations created: {count}")
         return count
     
     # =========================================================================
     # QUERY HELPERS
     # =========================================================================
     
-    def get_entity_by_text(self, text: str, entity_type: str = None) -> List[Dict]:
+    def find_article_by_number(self, article_number: int, document_id: str = None) -> List[Dict]:
         """
-        Find entity by text (for testing/debugging).
+        Find article by article number.
         """
         with self.driver.session(database=self.database) as session:
-            if entity_type:
+            if document_id:
                 query = """
-                MATCH (e:Entity {type: $type})
-                WHERE toLower(e.text) CONTAINS toLower($text)
-                   OR toLower(e.normalized_text) CONTAINS toLower($text)
-                RETURN e
+                MATCH (a:Điều {article_number: $article_number})-[:THUOC_VE*]->(doc)
+                WHERE doc.id = $document_id
+                RETURN a
                 """
-                result = session.run(query, text=text, type=entity_type)
+                result = session.run(query, article_number=article_number, document_id=document_id)
             else:
                 query = """
-                MATCH (e:Entity)
-                WHERE toLower(e.text) CONTAINS toLower($text)
-                   OR toLower(e.normalized_text) CONTAINS toLower($text)
-                RETURN e
+                MATCH (a:Điều {article_number: $article_number})
+                RETURN a
                 """
-                result = session.run(query, text=text)
+                result = session.run(query, article_number=article_number)
             
-            return [dict(record["e"]) for record in result]
+            return [dict(record["a"]) for record in result]
     
-    def get_article_entities(self, article_id: str) -> List[Dict]:
+    def find_concepts_by_term(self, term: str) -> List[Dict]:
         """
-        Get all entities mentioned in an article.
+        Find concepts by term (partial match).
         """
         with self.driver.session(database=self.database) as session:
             query = """
-            MATCH (a {id: $article_id})-[:MENTIONS]->(e:Entity)
-            RETURN e, a.title AS article_title
+            MATCH (c:`Khái niệm`)
+            WHERE toLower(c.term) CONTAINS toLower($term)
+            RETURN c
+            """
+            result = session.run(query, term=term)
+            return [dict(record["c"]) for record in result]
+    
+    def find_prohibited_acts(self, keyword: str = None) -> List[Dict]:
+        """
+        Find prohibited acts, optionally filtered by keyword.
+        """
+        with self.driver.session(database=self.database) as session:
+            if keyword:
+                query = """
+                MATCH (pa:`Hành vi cấm`)
+                WHERE toLower(pa.prohibited_act) CONTAINS toLower($keyword)
+                   OR toLower(pa.content) CONTAINS toLower($keyword)
+                RETURN pa
+                """
+                result = session.run(query, keyword=keyword)
+            else:
+                query = """
+                MATCH (pa:`Hành vi cấm`)
+                RETURN pa
+                LIMIT 50
+                """
+                result = session.run(query)
+            
+            return [dict(record["pa"]) for record in result]
+    
+    def find_sanctions_for_violation(self, violation_id: str) -> List[Dict]:
+        """
+        Find sanctions associated with a prohibited act.
+        """
+        with self.driver.session(database=self.database) as session:
+            query = """
+            MATCH (pa:`Hành vi cấm` {id: $violation_id})-[:BI_XU_LY]->(s:`Chế tài`)
+            RETURN s, pa.prohibited_act AS violation
+            """
+            result = session.run(query, violation_id=violation_id)
+            return [{"sanction": dict(record["s"]), "violation": record["violation"]} for record in result]
+    
+    def find_legal_basis(self, document_id: str) -> List[Dict]:
+        """
+        Find legal basis (documents cited by this document).
+        """
+        with self.driver.session(database=self.database) as session:
+            query = """
+            MATCH (doc)-[r:VIEN_DAN|DAN_CHIEU]->(basis)
+            WHERE doc.id = $document_id
+            RETURN basis, type(r) AS relation_type
+            """
+            result = session.run(query, document_id=document_id)
+            return [{"document": dict(record["basis"]), "relation": record["relation_type"]} for record in result]
+    
+    def find_latest_version(self, document_id: str) -> Dict:
+        """
+        Find the latest version of a document (following amendment chain).
+        """
+        with self.driver.session(database=self.database) as session:
+            query = """
+            MATCH path = (new)-[:`thay thế`|`sửa đổi`*0..]->(old)
+            WHERE old.id = $document_id
+            WITH new, length(path) AS depth
+            ORDER BY depth DESC
+            LIMIT 1
+            RETURN new
+            """
+            result = session.run(query, document_id=document_id)
+            record = result.single()
+            return dict(record["new"]) if record else {}
+    
+    def get_article_structure(self, article_id: str) -> Dict:
+        """
+        Get full structure of an article including clauses, points, and semantic nodes.
+        """
+        with self.driver.session(database=self.database) as session:
+            query = """
+            MATCH (a:Điều {id: $article_id})
+            OPTIONAL MATCH (a)<-[:THUOC_VE]-(cl:Khoản)
+            OPTIONAL MATCH (cl)<-[:THUOC_VE]-(p:Điểm)
+            OPTIONAL MATCH (a)-[:DINH_NGHIA]->(c:`Khái niệm`)
+            OPTIONAL MATCH (a)-[:QUY_DINH]->(pa:`Hành vi cấm`)
+            OPTIONAL MATCH (a)-[:QUY_DINH]->(s:`Chế tài`)
+            RETURN a, 
+                   collect(DISTINCT cl) AS clauses,
+                   collect(DISTINCT p) AS points,
+                   collect(DISTINCT c) AS concepts,
+                   collect(DISTINCT pa) AS prohibited_acts,
+                   collect(DISTINCT s) AS sanctions
             """
             result = session.run(query, article_id=article_id)
-            return [{"entity": dict(r["e"]), "article": r["article_title"]} for r in result]
-    
-    def get_category_articles(self, category_name: str) -> List[Dict]:
-        """
-        Get all articles in a category (CatRAG routing).
-        """
-        with self.driver.session(database=self.database) as session:
-            query = """
-            MATCH (a:Article)-[:BELONGS_TO]->(c:Category {name: $category})
-            RETURN a.id AS id, a.title AS title
-            ORDER BY a.id
-            """
-            result = session.run(query, category=category_name)
-            return [dict(r) for r in result]
+            record = result.single()
+            
+            if not record:
+                return {}
+            
+            return {
+                "article": dict(record["a"]),
+                "clauses": [dict(cl) for cl in record["clauses"]],
+                "points": [dict(p) for p in record["points"]],
+                "concepts": [dict(c) for c in record["concepts"]],
+                "prohibited_acts": [dict(pa) for pa in record["prohibited_acts"]],
+                "sanctions": [dict(s) for s in record["sanctions"]]
+            }
     
     def get_graph_stats(self) -> Dict[str, int]:
         """
@@ -809,13 +1049,14 @@ class Neo4jGraphBuilder:
         """
         with self.driver.session(database=self.database) as session:
             query = """
-            MATCH (d:Document) WITH count(d) AS docs
-            MATCH (a:Article) WITH docs, count(a) AS articles
-            MATCH (cl:Clause) WITH docs, articles, count(cl) AS clauses
-            MATCH (e:Entity) WITH docs, articles, clauses, count(e) AS entities
-            MATCH ()-[r:MENTIONS]->() WITH docs, articles, clauses, entities, count(r) AS mentions
-            MATCH ()-[r]->() WITH docs, articles, clauses, entities, mentions, count(r) AS total_rels
-            RETURN docs, articles, clauses, entities, mentions, total_rels
+            MATCH (n:Luật) WITH count(n) AS laws
+            MATCH (n:Điều) WITH laws, count(n) AS articles
+            MATCH (n:Khoản) WITH laws, articles, count(n) AS clauses
+            MATCH (n:`Khái niệm`) WITH laws, articles, clauses, count(n) AS concepts
+            MATCH (n:`Hành vi cấm`) WITH laws, articles, clauses, concepts, count(n) AS prohibited_acts
+            MATCH (n:`Chế tài`) WITH laws, articles, clauses, concepts, prohibited_acts, count(n) AS sanctions
+            MATCH ()-[r]->() WITH laws, articles, clauses, concepts, prohibited_acts, sanctions, count(r) AS total_relations
+            RETURN laws, articles, clauses, concepts, prohibited_acts, sanctions, total_relations
             """
             result = session.run(query)
             record = result.single()
@@ -828,7 +1069,7 @@ class Neo4jGraphBuilder:
 
 def main():
     """
-    CLI to build graph from extraction JSON file.
+    CLI to build legal graph from extraction JSON file.
     """
     import argparse
     from dotenv import load_dotenv
@@ -836,12 +1077,11 @@ def main():
     
     load_dotenv()
     
-    parser = argparse.ArgumentParser(description="Build Neo4j graph from extraction JSON")
-    parser.add_argument("json_file", help="Path to extraction JSON file")
+    parser = argparse.ArgumentParser(description="Build Neo4j Legal Knowledge Graph from JSON")
+    parser.add_argument("json_file", help="Path to legal document JSON file")
     parser.add_argument("--uri", default=os.getenv("NEO4J_URI", "bolt://localhost:7687"))
     parser.add_argument("--user", default=os.getenv("NEO4J_USER", "neo4j"))
     parser.add_argument("--password", default=os.getenv("NEO4J_PASSWORD", "password"))
-    parser.add_argument("--category", default="Quy chế Đào tạo", help="Category name for routing")
     parser.add_argument("--clear", action="store_true", help="Clear database before building")
     
     args = parser.parse_args()
@@ -856,36 +1096,39 @@ def main():
         data = json.load(f)
     
     print(f"\n{'='*60}")
-    print("NEO4J GRAPH BUILDER")
+    print("LEGAL KNOWLEDGE GRAPH BUILDER")
     print(f"{'='*60}")
     print(f"Source: {json_path.name}")
     print(f"Neo4j: {args.uri}")
-    print(f"Category: {args.category}")
     
     # Build graph
     try:
-        with Neo4jGraphBuilder(
+        with LegalGraphBuilder(
             uri=args.uri,
             user=args.user,
             password=args.password
         ) as builder:
             stats = builder.build_graph(
-                extraction_data=data,
-                category=args.category,
+                document_data=data,
                 clear_first=args.clear
             )
             
             print(f"\n{'='*60}")
             print("BUILD COMPLETE")
             print(f"{'='*60}")
-            print(f"  Documents: {stats.documents}")
-            print(f"  Articles:  {stats.articles}")
-            print(f"  Clauses:   {stats.clauses}")
-            print(f"  Entities:  {stats.entities} (merged: {stats.entities_merged})")
-            print(f"  Mentions:  {stats.mentions}")
-            print(f"  Structural Relations: {stats.structural_relations}")
-            print(f"  Semantic Relations:   {stats.semantic_relations}")
-            print(f"  Legal Modifications:  {stats.modifications}")
+            print(f"  Documents:       {stats.documents}")
+            print(f"  Chapters:        {stats.chapters}")
+            print(f"  Sections:        {stats.sections}")
+            print(f"  Articles:        {stats.articles}")
+            print(f"  Clauses:         {stats.clauses}")
+            print(f"  Points:          {stats.points}")
+            print(f"  Concepts:        {stats.concepts}")
+            print(f"  Prohibited Acts: {stats.prohibited_acts}")
+            print(f"  Sanctions:       {stats.sanctions}")
+            print(f"  Rights:          {stats.rights}")
+            print(f"  Obligations:     {stats.obligations}")
+            print(f"  Total Nodes:     {stats.total_nodes}")
+            print(f"  Total Edges:     {stats.total_edges}")
             
             # Show graph stats
             print(f"\nGraph Statistics:")

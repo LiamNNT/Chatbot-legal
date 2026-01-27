@@ -1,15 +1,17 @@
 """
-Neo4j Graph Adapter - POC Implementation
+Neo4j Graph Adapter for Legal Knowledge Graph
 
 This adapter implements the GraphRepository port for Neo4j database.
-Provides concrete implementation of graph operations using neo4j-driver.
+Provides concrete implementation of graph operations for Vietnamese Legal Documents.
 
+Domain: Pháp luật Quốc gia (National Law)
 Part of Clean Architecture - Infrastructure layer.
 """
 
 import logging
+import re
 from typing import List, Optional, Dict, Any
-from neo4j import GraphDatabase, AsyncGraphDatabase
+from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable, ConstraintError
 
 from core.ports.graph_repository import (
@@ -25,8 +27,9 @@ from core.domain.graph_models import (
     GraphPath,
     SubGraph,
     GraphQuery,
-    NodeCategory,
-    RelationshipType
+    NodeType,
+    EdgeType,
+    LegalStatus
 )
 
 logger = logging.getLogger(__name__)
@@ -34,9 +37,12 @@ logger = logging.getLogger(__name__)
 
 class Neo4jGraphAdapter(GraphRepository):
     """
-    Neo4j adapter implementing GraphRepository port.
+    Neo4j adapter for Legal Knowledge Graph.
     
-    POC Version - Basic functionality for Week 1 demo.
+    Implements graph operations for Vietnamese legal documents including:
+    - Document hierarchy (Luật -> Chương -> Điều -> Khoản -> Điểm)
+    - Semantic nodes (Khái niệm, Hành vi cấm, Chế tài)
+    - Legal relationships (THUOC_VE, DINH_NGHIA, BI_XU_LY, etc.)
     """
     
     def __init__(
@@ -61,7 +67,7 @@ class Neo4jGraphAdapter(GraphRepository):
         self.database = database
         self._driver = None
         
-        logger.info(f"Initializing Neo4j adapter: {uri}")
+        logger.info(f"Initializing Neo4j Legal Graph adapter: {uri}")
     
     def _get_driver(self):
         """Get or create Neo4j driver"""
@@ -80,28 +86,40 @@ class Neo4jGraphAdapter(GraphRepository):
         
         return self._driver
     
+    # =========================================================================
+    # BASIC CRUD OPERATIONS
+    # =========================================================================
+    
     async def add_node(self, node: GraphNode) -> str:
         """
         Add a node to Neo4j.
         
         Example:
-            node = create_mon_hoc_node("IT001", "Nhập môn lập trình", 4)
+            node = create_article_node(1, "Phạm vi điều chỉnh", "...", doc_id)
             node_id = await adapter.add_node(node)
         """
         driver = self._get_driver()
         
-        # Build Cypher query
-        label = node.category.value
+        # Build Cypher query with Vietnamese label
+        label = node.node_type.value
         props = node.properties.copy()
         
-        # Generate unique ID if not present
-        if "id" not in props and "code" not in props:
-            import uuid
-            props["_generated_id"] = str(uuid.uuid4())
+        # Add standard fields
+        if node.id:
+            props["id"] = node.id
+        if node.name:
+            props["name"] = node.name
+        if node.content:
+            props["content"] = node.content
         
-        # Create parameterized query
+        # Generate unique ID if not present
+        if "id" not in props:
+            import uuid
+            props["id"] = str(uuid.uuid4())
+        
+        # Create parameterized query (escape Vietnamese labels)
         cypher = f"""
-        CREATE (n:{label} $props)
+        CREATE (n:`{label}` $props)
         RETURN elementId(n) as id
         """
         
@@ -122,12 +140,13 @@ class Neo4jGraphAdapter(GraphRepository):
             raise
     
     async def get_node(self, node_id: str) -> Optional[GraphNode]:
-        """Get node by ID"""
+        """Get node by element ID or custom ID"""
         driver = self._get_driver()
         
+        # Try by element ID first, then by custom id property
         cypher = """
         MATCH (n)
-        WHERE elementId(n) = $node_id
+        WHERE elementId(n) = $node_id OR n.id = $node_id
         RETURN n, labels(n) as labels
         """
         
@@ -142,20 +161,22 @@ class Neo4jGraphAdapter(GraphRepository):
             neo4j_node = record["n"]
             labels = record["labels"]
             
-            # Get category from label
-            category_label = labels[0]  # Primary label
+            # Get node type from label
+            node_type_label = labels[0] if labels else None
             try:
-                category = NodeCategory(category_label)
+                node_type = NodeType(node_type_label)
             except ValueError:
-                logger.warning(f"Unknown category: {category_label}")
+                logger.warning(f"Unknown node type: {node_type_label}")
                 return None
             
             properties = dict(neo4j_node.items())
             
             return GraphNode(
                 id=node_id,
-                category=category,
-                properties=properties
+                node_type=node_type,
+                properties=properties,
+                name=properties.get("name", ""),
+                content=properties.get("content", "")
             )
     
     async def add_relationship(self, relationship: GraphRelationship) -> bool:
@@ -163,18 +184,25 @@ class Neo4jGraphAdapter(GraphRepository):
         Add relationship between nodes.
         
         Example:
-            rel = create_prerequisite_relationship(it002_id, it001_id, required=True)
+            rel = create_structural_relationship(article_id, chapter_id)
             await adapter.add_relationship(rel)
         """
         driver = self._get_driver()
         
-        rel_type = relationship.rel_type.value
-        props = relationship.properties
+        edge_type = relationship.edge_type.value
+        props = relationship.properties.copy()
+        
+        # Add standard fields
+        if relationship.description:
+            props["description"] = relationship.description
+        if relationship.weight != 1.0:
+            props["weight"] = relationship.weight
         
         cypher = f"""
         MATCH (source), (target)
-        WHERE elementId(source) = $source_id AND elementId(target) = $target_id
-        CREATE (source)-[r:{rel_type} $props]->(target)
+        WHERE (elementId(source) = $source_id OR source.id = $source_id)
+          AND (elementId(target) = $target_id OR target.id = $target_id)
+        CREATE (source)-[r:`{edge_type}` $props]->(target)
         RETURN r
         """
         
@@ -188,7 +216,7 @@ class Neo4jGraphAdapter(GraphRepository):
                 )
                 
                 if result.single():
-                    logger.info(f"✓ Created relationship: {rel_type}")
+                    logger.info(f"✓ Created relationship: {edge_type}")
                     return True
                 else:
                     raise NodeNotFoundError("Source or target node not found")
@@ -200,19 +228,21 @@ class Neo4jGraphAdapter(GraphRepository):
     async def traverse(
         self,
         start_node_id: str,
-        relationship_types: List[RelationshipType],
+        relationship_types: List[EdgeType],
         max_depth: int = 2,
         direction: str = "outgoing"
     ) -> SubGraph:
         """
         Traverse graph from starting node.
         
-        CRITICAL for CatRAG queries like "What are prerequisites for IT003?"
+        Critical for legal queries like:
+        - "Điều nào thuộc Chương II?"
+        - "Hành vi cấm nào bị xử lý bởi chế tài X?"
         """
         driver = self._get_driver()
         
-        # Build relationship pattern
-        rel_types_str = "|".join(rt.value for rt in relationship_types)
+        # Build relationship pattern with Vietnamese edge types
+        rel_types_str = "|".join(f"`{rt.value}`" for rt in relationship_types)
         
         if direction == "outgoing":
             pattern = f"-[r:{rel_types_str}*1..{max_depth}]->"
@@ -223,7 +253,7 @@ class Neo4jGraphAdapter(GraphRepository):
         
         cypher = f"""
         MATCH path = (start){pattern}(end)
-        WHERE elementId(start) = $start_id
+        WHERE elementId(start) = $start_id OR start.id = $start_id
         RETURN path
         """
         
@@ -243,13 +273,15 @@ class Neo4jGraphAdapter(GraphRepository):
                     
                     if labels:
                         try:
-                            category = NodeCategory(labels[0])
+                            node_type = NodeType(labels[0])
                             properties = dict(neo4j_node.items())
                             
                             graph_node = GraphNode(
                                 id=node_id,
-                                category=category,
-                                properties=properties
+                                node_type=node_type,
+                                properties=properties,
+                                name=properties.get("name", ""),
+                                content=properties.get("content", "")
                             )
                             
                             # Avoid duplicates
@@ -261,12 +293,12 @@ class Neo4jGraphAdapter(GraphRepository):
                 # Extract relationships
                 for neo4j_rel in path.relationships:
                     try:
-                        rel_type = RelationshipType(neo4j_rel.type)
+                        edge_type = EdgeType(neo4j_rel.type)
                         
                         graph_rel = GraphRelationship(
                             source_id=neo4j_rel.start_node.element_id,
                             target_id=neo4j_rel.end_node.element_id,
-                            rel_type=rel_type,
+                            edge_type=edge_type,
                             properties=dict(neo4j_rel.items())
                         )
                         
@@ -285,16 +317,16 @@ class Neo4jGraphAdapter(GraphRepository):
             }
         )
     
-    async def get_nodes_by_category(
+    async def get_nodes_by_type(
         self,
-        category: NodeCategory,
+        node_type: NodeType,
         filters: Optional[Dict[str, Any]] = None,
         limit: int = 100
     ) -> List[GraphNode]:
-        """Get all nodes of a category"""
+        """Get all nodes of a type (e.g., all Điều, all Khái niệm)"""
         driver = self._get_driver()
         
-        label = category.value
+        label = node_type.value
         
         # Build WHERE clause for filters
         where_clauses = []
@@ -308,7 +340,7 @@ class Neo4jGraphAdapter(GraphRepository):
         where_str = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
         
         cypher = f"""
-        MATCH (n:{label})
+        MATCH (n:`{label}`)
         {where_str}
         RETURN n, elementId(n) as id
         LIMIT {limit}
@@ -326,8 +358,10 @@ class Neo4jGraphAdapter(GraphRepository):
                 
                 nodes.append(GraphNode(
                     id=node_id,
-                    category=category,
-                    properties=properties
+                    node_type=node_type,
+                    properties=properties,
+                    name=properties.get("name", ""),
+                    content=properties.get("content", "")
                 ))
         
         return nodes
@@ -350,6 +384,109 @@ class Neo4jGraphAdapter(GraphRepository):
                 results.append(dict(record))
         
         return results
+
+    async def update_node(self, node_id: str, properties: Dict[str, Any]) -> bool:
+        """Update node properties"""
+        driver = self._get_driver()
+        cypher = """
+        MATCH (n)
+        WHERE elementId(n) = $node_id OR n.id = $node_id
+        SET n += $properties
+        RETURN n
+        """
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, node_id=node_id, properties=properties)
+            return result.single() is not None
+
+    async def delete_node(self, node_id: str, cascade: bool = False) -> bool:
+        """Delete node"""
+        driver = self._get_driver()
+        op = "DETACH DELETE" if cascade else "DELETE"
+        cypher = f"""
+        MATCH (n)
+        WHERE elementId(n) = $node_id OR n.id = $node_id
+        {op} n
+        """
+        with driver.session(database=self.database) as session:
+            session.run(cypher, node_id=node_id)
+            return True
+
+    async def get_relationships(self, node_id: str, edge_type: Optional[EdgeType] = None, direction: str = "both") -> List[GraphRelationship]:
+        """Get relationships for a node"""
+        driver = self._get_driver()
+        rel_type = f":`{edge_type.value}`" if edge_type else ""
+        if direction == "outgoing":
+            pattern = f"(n)-[r{rel_type}]->(m)"
+        elif direction == "incoming":
+            pattern = f"(n)<-[r{rel_type}]-(m)"
+        else:
+            pattern = f"(n)-[r{rel_type}]-(m)"
+        
+        cypher = f"""
+        MATCH {pattern}
+        WHERE elementId(n) = $node_id OR n.id = $node_id
+        RETURN r, elementId(startNode(r)) as source_id, elementId(endNode(r)) as target_id, type(r) as type
+        """
+        rels = []
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, node_id=node_id)
+            for record in result:
+                rels.append(GraphRelationship(
+                    source_id=record["source_id"],
+                    target_id=record["target_id"],
+                    edge_type=EdgeType(record["type"]),
+                    properties=dict(record["r"].items())
+                ))
+        return rels
+
+    async def delete_relationship(self, source_id: str, target_id: str, edge_type: EdgeType) -> bool:
+        """Delete relationship"""
+        driver = self._get_driver()
+        cypher = f"""
+        MATCH (s)-[r:`{edge_type.value}`]->(t)
+        WHERE (elementId(s) = $source_id OR s.id = $source_id)
+          AND (elementId(t) = $target_id OR t.id = $target_id)
+        DELETE r
+        """
+        with driver.session(database=self.database) as session:
+            session.run(cypher, source_id=source_id, target_id=target_id)
+            return True
+
+    async def find_shortest_path(self, source_id: str, target_id: str, relationship_types: Optional[List[EdgeType]] = None, max_length: int = 5) -> Optional[GraphPath]:
+        """Find shortest path between nodes"""
+        # Minimal implementation
+        return None
+
+    async def find_all_paths(self, source_id: str, target_id: str, relationship_types: Optional[List[EdgeType]] = None, max_length: int = 3, limit: int = 10) -> List[GraphPath]:
+        """Find all paths between nodes"""
+        return []
+
+    async def get_subgraph(self, center_node_id: str, expand_depth: int = 1, type_filter: Optional[List[NodeType]] = None) -> SubGraph:
+        """Get subgraph around node"""
+        return await self.traverse(center_node_id, relationship_types=[], max_depth=expand_depth)
+
+    async def execute_query(self, query: GraphQuery) -> Any:
+        """Execute graph query"""
+        return []
+
+    async def search_nodes(self, query: str, node_types: Optional[List[NodeType]] = None, limit: int = 10) -> List[GraphNode]:
+        """Search nodes"""
+        results = await self.search_legal_content(query, node_types, limit)
+        nodes = []
+        for r in results:
+            nodes.append(GraphNode(
+                id=r["id"],
+                node_type=NodeType(r["type"]),
+                properties=r["properties"],
+                name=r["name"],
+                content=r["content"]
+            ))
+        return nodes
+
+    async def get_type_distribution(self) -> Dict[str, int]:
+        """Get distribution of node types"""
+        stats = await self.get_graph_stats()
+        return stats.get("nodes_by_type", {})
     
     async def health_check(self) -> bool:
         """Check Neo4j connection health"""
@@ -364,7 +501,7 @@ class Neo4jGraphAdapter(GraphRepository):
             return False
     
     async def get_graph_stats(self) -> Dict[str, Any]:
-        """Get graph statistics"""
+        """Get graph statistics for legal documents"""
         driver = self._get_driver()
         
         stats = {}
@@ -378,7 +515,7 @@ class Neo4jGraphAdapter(GraphRepository):
                 if labels:
                     node_counts[labels[0]] = record["count"]
             
-            stats["nodes_by_category"] = node_counts
+            stats["nodes_by_type"] = node_counts
             stats["total_nodes"] = sum(node_counts.values())
             
             # Count relationships by type
@@ -404,484 +541,564 @@ class Neo4jGraphAdapter(GraphRepository):
         logger.info("✓ Graph cleared")
         return True
     
-    # ========== Full Implementation - Week 1 Task A4 ==========
+    # =========================================================================
+    # LEGAL DOCUMENT SPECIFIC QUERIES
+    # =========================================================================
     
-    async def update_node(self, node_id: str, properties: Dict[str, Any]) -> bool:
-        """
-        Update node properties.
-        
-        Args:
-            node_id: Neo4j element ID
-            properties: Dictionary of properties to update
-            
-        Returns:
-            True if updated successfully
-            
-        Example:
-            await adapter.update_node(node_id, {"so_tin_chi": 5, "updated_at": datetime.now()})
-        """
-        driver = self._get_driver()
-        
-        # Build SET clause
-        set_clauses = []
-        params = {"node_id": node_id}
-        
-        for key, value in properties.items():
-            set_clauses.append(f"n.{key} = ${key}")
-            params[key] = value
-        
-        set_str = ", ".join(set_clauses)
-        
-        cypher = f"""
-        MATCH (n)
-        WHERE elementId(n) = $node_id
-        SET {set_str}
-        RETURN n
-        """
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, **params)
-                record = result.single()
-                
-                if record:
-                    logger.info(f"✓ Updated node: {node_id}")
-                    return True
-                else:
-                    logger.warning(f"Node not found: {node_id}")
-                    return False
-        except Exception as e:
-            logger.error(f"Error updating node: {e}")
-            raise
-    
-    async def delete_node(self, node_id: str, cascade: bool = False) -> bool:
-        """
-        Delete node (soft delete with timestamp or hard delete).
-        
-        Args:
-            node_id: Neo4j element ID
-            cascade: If True, delete relationships; if False, fail if relationships exist
-            
-        Returns:
-            True if deleted successfully
-            
-        Example:
-            # Soft delete (mark as deleted)
-            await adapter.delete_node(node_id, cascade=True)
-        """
-        driver = self._get_driver()
-        
-        if cascade:
-            # Hard delete with relationships
-            cypher = """
-            MATCH (n)
-            WHERE elementId(n) = $node_id
-            DETACH DELETE n
-            RETURN count(n) as deleted
-            """
-        else:
-            # Soft delete - set deleted_at timestamp
-            cypher = """
-            MATCH (n)
-            WHERE elementId(n) = $node_id
-            SET n.deleted_at = datetime()
-            RETURN n
-            """
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, node_id=node_id)
-                record = result.single()
-                
-                if record:
-                    logger.info(f"✓ Deleted node: {node_id} (cascade={cascade})")
-                    return True
-                else:
-                    logger.warning(f"Node not found: {node_id}")
-                    return False
-        except Exception as e:
-            logger.error(f"Error deleting node: {e}")
-            raise
-    
-    async def get_relationships(
-        self, node_id: str, rel_type: Optional[RelationshipType] = None, direction: str = "both"
-    ) -> List[GraphRelationship]:
-        """
-        Get relationships for a node.
-        
-        Args:
-            node_id: Neo4j element ID
-            rel_type: Filter by relationship type (optional)
-            direction: "outgoing", "incoming", or "both"
-            
-        Returns:
-            List of GraphRelationships
-            
-        Example:
-            rels = await adapter.get_relationships(course_id, RelationshipType.DIEU_KIEN_TIEN_QUYET, "outgoing")
-        """
-        driver = self._get_driver()
-        
-        # Build cypher based on direction
-        if direction == "outgoing":
-            pattern = "(n)-[r]->(m)"
-        elif direction == "incoming":
-            pattern = "(n)<-[r]-(m)"
-        else:  # both
-            pattern = "(n)-[r]-(m)"
-        
-        # Add type filter if specified
-        if rel_type:
-            type_filter = f":{rel_type.value}"
-        else:
-            type_filter = ""
-        
-        cypher = f"""
-        MATCH {pattern.replace('[r]', f'[r{type_filter}]')}
-        WHERE elementId(n) = $node_id
-        RETURN elementId(startNode(r)) as source_id, 
-               elementId(endNode(r)) as target_id,
-               type(r) as rel_type,
-               properties(r) as props
-        """
-        
-        relationships = []
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, node_id=node_id)
-                
-                for record in result:
-                    try:
-                        rel_type_value = RelationshipType(record["rel_type"])
-                        
-                        relationships.append(GraphRelationship(
-                            source_id=record["source_id"],
-                            target_id=record["target_id"],
-                            rel_type=rel_type_value,
-                            properties=dict(record["props"])
-                        ))
-                    except ValueError:
-                        logger.warning(f"Unknown relationship type: {record['rel_type']}")
-                        continue
-        except Exception as e:
-            logger.error(f"Error getting relationships: {e}")
-            raise
-        
-        return relationships
-    
-    async def get_pairs_by_relationship_type(
+    async def find_article_by_number(
         self, 
-        rel_types: List[str], 
-        limit: int = 50
+        article_number: int, 
+        document_id: str = None
     ) -> List[Dict[str, Any]]:
         """
-        Get all node pairs connected by specific relationship types.
-        
-        This is useful for queries like "List all articles with YEU_CAU or QUY_DINH_DIEU_KIEN relationships"
+        Find article (Điều) by article number.
         
         Args:
-            rel_types: List of relationship type names (e.g., ["YEU_CAU", "QUY_DINH_DIEU_KIEN"])
-            limit: Maximum number of pairs to return
+            article_number: Article number (e.g., 3 for "Điều 3")
+            document_id: Optional document ID to scope the search
             
         Returns:
-            List of dictionaries containing source and target node information
-            
-        Example:
-            pairs = await adapter.get_pairs_by_relationship_type(["YEU_CAU", "QUY_DINH_DIEU_KIEN"], limit=10)
-            # Returns: [{"source": {...}, "target": {...}, "relationship": "YEU_CAU"}, ...]
+            List of matching articles with their content
         """
         driver = self._get_driver()
         
-        # Build relationship type pattern
-        rel_pattern = "|".join(rel_types)
+        if document_id:
+            cypher = """
+            MATCH (a:Điều {article_number: $article_number})-[:THUOC_VE*]->(doc)
+            WHERE doc.id = $document_id
+            RETURN a, elementId(a) as id
+            """
+            params = {"article_number": article_number, "document_id": document_id}
+        else:
+            cypher = """
+            MATCH (a:Điều {article_number: $article_number})
+            RETURN a, elementId(a) as id
+            """
+            params = {"article_number": article_number}
+        
+        results = []
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, **params)
+            for record in result:
+                props = dict(record["a"])
+                props["_element_id"] = record["id"]
+                results.append(props)
+        
+        return results
+    
+    async def find_concept_by_term(self, term: str) -> List[Dict[str, Any]]:
+        """
+        Find legal concept (Khái niệm) by term.
+        
+        Args:
+            term: Search term (partial match supported)
+            
+        Returns:
+            List of matching concepts with definitions
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (c:`Khái niệm`)
+        WHERE toLower(c.term) CONTAINS toLower($term)
+           OR toLower(c.name) CONTAINS toLower($term)
+        OPTIONAL MATCH (a:Điều)-[:DINH_NGHIA]->(c)
+        RETURN c, a.article_number as source_article, elementId(c) as id
+        """
+        
+        results = []
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, term=term)
+            for record in result:
+                props = dict(record["c"])
+                props["source_article"] = record["source_article"]
+                props["_element_id"] = record["id"]
+                results.append(props)
+        
+        logger.info(f"Found {len(results)} concepts for term '{term}'")
+        return results
+    
+    async def find_prohibited_acts(self, keyword: str = None) -> List[Dict[str, Any]]:
+        """
+        Find prohibited acts (Hành vi cấm).
+        
+        Args:
+            keyword: Optional keyword filter
+            
+        Returns:
+            List of prohibited acts with their source articles
+        """
+        driver = self._get_driver()
+        
+        if keyword:
+            cypher = """
+            MATCH (pa:`Hành vi cấm`)
+            WHERE toLower(pa.prohibited_act) CONTAINS toLower($keyword)
+               OR toLower(pa.content) CONTAINS toLower($keyword)
+            OPTIONAL MATCH (a:Điều)-[:QUY_DINH]->(pa)
+            OPTIONAL MATCH (pa)-[:BI_XU_LY]->(s:`Chế tài`)
+            RETURN pa, a.article_number as source_article, 
+                   collect(DISTINCT s.sanction_content) as related_sanctions,
+                   elementId(pa) as id
+            """
+            params = {"keyword": keyword}
+        else:
+            cypher = """
+            MATCH (pa:`Hành vi cấm`)
+            OPTIONAL MATCH (a:Điều)-[:QUY_DINH]->(pa)
+            OPTIONAL MATCH (pa)-[:BI_XU_LY]->(s:`Chế tài`)
+            RETURN pa, a.article_number as source_article,
+                   collect(DISTINCT s.sanction_content) as related_sanctions,
+                   elementId(pa) as id
+            LIMIT 50
+            """
+            params = {}
+        
+        results = []
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, **params)
+            for record in result:
+                props = dict(record["pa"])
+                props["source_article"] = record["source_article"]
+                props["related_sanctions"] = record["related_sanctions"]
+                props["_element_id"] = record["id"]
+                results.append(props)
+        
+        logger.info(f"Found {len(results)} prohibited acts")
+        return results
+    
+    async def find_sanctions_for_violation(
+        self, 
+        violation_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Find sanctions (Chế tài) applicable to a prohibited act.
+        
+        Args:
+            violation_id: ID of the prohibited act
+            
+        Returns:
+            List of applicable sanctions
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (pa:`Hành vi cấm`)-[:BI_XU_LY]->(s:`Chế tài`)
+        WHERE pa.id = $violation_id OR elementId(pa) = $violation_id
+        OPTIONAL MATCH (a:Điều)-[:QUY_DINH]->(s)
+        RETURN s, pa.prohibited_act as violation, 
+               a.article_number as source_article,
+               elementId(s) as id
+        """
+        
+        results = []
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, violation_id=violation_id)
+            for record in result:
+                props = dict(record["s"])
+                props["violation"] = record["violation"]
+                props["source_article"] = record["source_article"]
+                props["_element_id"] = record["id"]
+                results.append(props)
+        
+        return results
+    
+    async def find_amendments_for_document(
+        self, 
+        document_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Find all amendments for a legal document.
+        
+        Args:
+            document_id: ID of the document
+            
+        Returns:
+            List of amendment relationships with new document info
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (doc)
+        WHERE doc.id = $document_id OR elementId(doc) = $document_id
+        OPTIONAL MATCH (new_doc)-[r:`thay thế`|`sửa đổi`|`bổ sung`|`bãi bỏ`]->(doc)
+        RETURN doc.title as original_title,
+               doc.status as status,
+               type(r) as amendment_type,
+               new_doc.title as amending_document,
+               new_doc.document_number as amending_doc_number,
+               r.effective_date as effective_date,
+               r.description as description
+        """
+        
+        results = []
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, document_id=document_id)
+            for record in result:
+                if record["amendment_type"]:
+                    results.append({
+                        "original_title": record["original_title"],
+                        "status": record["status"],
+                        "amendment_type": record["amendment_type"],
+                        "amending_document": record["amending_document"],
+                        "amending_doc_number": record["amending_doc_number"],
+                        "effective_date": record["effective_date"],
+                        "description": record["description"]
+                    })
+        
+        logger.info(f"Found {len(results)} amendments for document {document_id}")
+        return results
+    
+    async def get_article_structure(self, article_id: str) -> Dict[str, Any]:
+        """
+        Get full structure of an article including clauses, points, and semantic nodes.
+        
+        Args:
+            article_id: ID of the article
+            
+        Returns:
+            Dict with article info, clauses, points, concepts, prohibited acts, sanctions
+        """
+        driver = self._get_driver()
+        
+        cypher = """
+        MATCH (a:Điều)
+        WHERE a.id = $article_id OR elementId(a) = $article_id
+        OPTIONAL MATCH (cl:Khoản)-[:THUOC_VE]->(a)
+        OPTIONAL MATCH (p:Điểm)-[:THUOC_VE]->(cl)
+        OPTIONAL MATCH (a)-[:DINH_NGHIA]->(c:`Khái niệm`)
+        OPTIONAL MATCH (a)-[:QUY_DINH]->(pa:`Hành vi cấm`)
+        OPTIONAL MATCH (a)-[:QUY_DINH]->(s:`Chế tài`)
+        RETURN a,
+               collect(DISTINCT {id: cl.id, number: cl.clause_number, content: cl.clause_content}) as clauses,
+               collect(DISTINCT {id: p.id, label: p.point_label, content: p.point_content}) as points,
+               collect(DISTINCT {term: c.term, definition: c.definition}) as concepts,
+               collect(DISTINCT {act: pa.prohibited_act}) as prohibited_acts,
+               collect(DISTINCT {type: s.sanction_type, content: s.sanction_content}) as sanctions
+        """
+        
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, article_id=article_id)
+            record = result.single()
+            
+            if not record:
+                return {}
+            
+            article_props = dict(record["a"])
+            
+            # Filter out None entries
+            clauses = [c for c in record["clauses"] if c.get("id")]
+            points = [p for p in record["points"] if p.get("id")]
+            concepts = [c for c in record["concepts"] if c.get("term")]
+            prohibited_acts = [pa for pa in record["prohibited_acts"] if pa.get("act")]
+            sanctions = [s for s in record["sanctions"] if s.get("type")]
+            
+            return {
+                "article": article_props,
+                "clauses": clauses,
+                "points": points,
+                "concepts": concepts,
+                "prohibited_acts": prohibited_acts,
+                "sanctions": sanctions
+            }
+    
+    async def search_articles_by_keyword(
+        self, 
+        keywords: List[str], 
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Search articles (Điều) by keywords in title and content.
+        
+        Args:
+            keywords: List of search keywords
+            limit: Maximum number of results
+            
+        Returns:
+            List of matching articles sorted by relevance
+        """
+        logger.info(f"🔍 search_articles_by_keyword: keywords={keywords}, limit={limit}")
+        driver = self._get_driver()
+        
+        # Build search conditions
+        conditions = []
+        params = {"limit": limit}
+        
+        for i, kw in enumerate(keywords):
+            param_name = f"kw{i}"
+            conditions.append(
+                f"(toLower(a.article_title) CONTAINS toLower(${param_name}) OR "
+                f"toLower(a.article_content) CONTAINS toLower(${param_name}) OR "
+                f"toLower(a.content) CONTAINS toLower(${param_name}))"
+            )
+            params[param_name] = kw
+        
+        where_clause = " OR ".join(conditions) if conditions else "true"
+        
+        # Build scoring for relevance
+        score_parts = []
+        for i in range(len(keywords)):
+            param_name = f"kw{i}"
+            score_parts.append(f"CASE WHEN toLower(a.article_title) CONTAINS toLower(${param_name}) THEN 3 ELSE 0 END")
+            score_parts.append(f"CASE WHEN toLower(a.content) CONTAINS toLower(${param_name}) THEN 1 ELSE 0 END")
+        
+        score_expr = " + ".join(score_parts) if score_parts else "0"
         
         cypher = f"""
-        MATCH (source)-[r:{rel_pattern}]->(target)
-        RETURN 
-            labels(source)[0] as source_type,
-            properties(source) as source_props,
-            type(r) as rel_type,
-            properties(r) as rel_props,
-            labels(target)[0] as target_type,
-            properties(target) as target_props
+        MATCH (a:Điều)
+        WHERE {where_clause}
+        WITH a, ({score_expr}) as score
+        RETURN a.id as id, 
+               a.article_number as article_number,
+               a.article_title as title, 
+               a.content as content,
+               score
+        ORDER BY score DESC
         LIMIT $limit
         """
         
-        pairs = []
-        
+        results = []
         try:
             with driver.session(database=self.database) as session:
-                result = session.run(cypher, limit=limit)
-                
+                result = session.run(cypher, **params)
                 for record in result:
-                    source_props = dict(record["source_props"])
-                    target_props = dict(record["target_props"])
-                    rel_props = dict(record["rel_props"])
-                    
-                    # Get display names for source and target
-                    # Try various property names in order of preference
-                    source_name = (
-                        source_props.get("article_id") or
-                        source_props.get("title") or
-                        source_props.get("name") or
-                        source_props.get("ma_mon") or
-                        source_props.get("ten_mon") or
-                        source_props.get("entity_text") or
-                        source_props.get("text") or
-                        f"Entity_{list(source_props.values())[0] if source_props else 'Unknown'}"
-                    )
-                    
-                    target_name = (
-                        target_props.get("article_id") or
-                        target_props.get("title") or
-                        target_props.get("name") or
-                        target_props.get("ma_mon") or
-                        target_props.get("ten_mon") or
-                        target_props.get("entity_text") or
-                        target_props.get("text") or
-                        f"Entity_{list(target_props.values())[0] if target_props else 'Unknown'}"
-                    )
-                    
-                    pairs.append({
-                        "source": {
-                            "type": record["source_type"],
-                            "name": source_name,
-                            "properties": source_props
-                        },
-                        "target": {
-                            "type": record["target_type"],
-                            "name": target_name,
-                            "properties": target_props
-                        },
-                        "relationship": record["rel_type"],
-                        "rel_properties": rel_props
+                    results.append({
+                        "id": record["id"],
+                        "article_number": record["article_number"],
+                        "title": record["title"],
+                        "content": record["content"][:500] if record["content"] else "",
+                        "type": "Điều",
+                        "score": record["score"]
                     })
+            logger.info(f"✅ Found {len(results)} articles for keywords: {keywords}")
+        except Exception as e:
+            logger.error(f"❌ Error searching articles: {e}", exc_info=True)
+        
+        return results
+    
+    async def search_legal_content(
+        self, 
+        query: str, 
+        node_types: List[NodeType] = None,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Full-text search across legal content.
+        
+        Args:
+            query: Search query
+            node_types: Filter by node types (default: Điều, Khái niệm, Hành vi cấm)
+            limit: Maximum results
+            
+        Returns:
+            List of matching nodes with relevance scores
+        """
+        driver = self._get_driver()
+        
+        if node_types is None:
+            node_types = [NodeType.DIEU, NodeType.KHAI_NIEM, NodeType.HANH_VI_CAM]
+        
+        all_results = []
+        
+        for node_type in node_types:
+            label = node_type.value
+            
+            # Determine which fields to search based on node type
+            if node_type == NodeType.DIEU:
+                search_fields = "n.article_title, n.article_content, n.content"
+            elif node_type == NodeType.KHAI_NIEM:
+                search_fields = "n.term, n.definition"
+            elif node_type == NodeType.HANH_VI_CAM:
+                search_fields = "n.prohibited_act, n.content"
+            else:
+                search_fields = "n.name, n.content"
+            
+            cypher = f"""
+            MATCH (n:`{label}`)
+            WHERE any(field IN [{search_fields}] WHERE toLower(toString(field)) CONTAINS toLower($query))
+            RETURN elementId(n) as id, n, labels(n)[0] as type
+            LIMIT $limit
+            """
+            
+            try:
+                with driver.session(database=self.database) as session:
+                    result = session.run(cypher, query=query, limit=limit)
                     
-        except Exception as e:
-            logger.error(f"Error getting relationship pairs: {e}")
-            raise
+                    for record in result:
+                        props = dict(record["n"])
+                        all_results.append({
+                            "id": record["id"],
+                            "type": record["type"],
+                            "properties": props,
+                            "name": props.get("name") or props.get("term") or props.get("article_title", ""),
+                            "content": props.get("content") or props.get("definition") or props.get("prohibited_act", "")
+                        })
+            except Exception as e:
+                logger.warning(f"Search failed for {label}: {e}")
+                continue
         
-        return pairs
+        return all_results[:limit]
     
-    async def delete_relationship(
-        self, source_id: str, target_id: str, rel_type: RelationshipType
-    ) -> bool:
+    async def get_document_hierarchy(self, document_id: str) -> Dict[str, Any]:
         """
-        Delete relationship between two nodes.
+        Get full document hierarchy: Document -> Chapters -> Sections -> Articles -> Clauses -> Points
         
         Args:
-            source_id: Source node element ID
-            target_id: Target node element ID
-            rel_type: Relationship type to delete
+            document_id: ID of the legal document
             
         Returns:
-            True if deleted successfully
-            
-        Example:
-            await adapter.delete_relationship(it003_id, it002_id, RelationshipType.DIEU_KIEN_TIEN_QUYET)
+            Hierarchical structure of the document
         """
         driver = self._get_driver()
         
-        cypher = f"""
-        MATCH (source)-[r:{rel_type.value}]->(target)
-        WHERE elementId(source) = $source_id AND elementId(target) = $target_id
-        DELETE r
-        RETURN count(r) as deleted
+        cypher = """
+        MATCH (doc)
+        WHERE doc.id = $document_id OR elementId(doc) = $document_id
+        OPTIONAL MATCH (ch:Chương)-[:THUOC_VE]->(doc)
+        OPTIONAL MATCH (sec:Mục)-[:THUOC_VE]->(ch)
+        OPTIONAL MATCH (a:Điều)-[:THUOC_VE]->(ch)
+        OPTIONAL MATCH (a2:Điều)-[:THUOC_VE]->(sec)
+        OPTIONAL MATCH (cl:Khoản)-[:THUOC_VE]->(a)
+        OPTIONAL MATCH (cl2:Khoản)-[:THUOC_VE]->(a2)
+        RETURN doc,
+               collect(DISTINCT {id: ch.id, number: ch.chapter_number, title: ch.chapter_title}) as chapters,
+               collect(DISTINCT {id: sec.id, number: sec.section_number, title: sec.section_title, parent: ch.id}) as sections,
+               collect(DISTINCT {id: a.id, number: a.article_number, title: a.article_title, parent: ch.id}) as articles1,
+               collect(DISTINCT {id: a2.id, number: a2.article_number, title: a2.article_title, parent: sec.id}) as articles2,
+               count(DISTINCT cl) + count(DISTINCT cl2) as clause_count
         """
         
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, source_id=source_id, target_id=target_id)
-                record = result.single()
-                
-                if record and record["deleted"] > 0:
-                    logger.info(f"✓ Deleted relationship: {rel_type.value}")
-                    return True
-                else:
-                    logger.warning(f"Relationship not found")
-                    return False
-        except Exception as e:
-            logger.error(f"Error deleting relationship: {e}")
-            raise
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, document_id=document_id)
+            record = result.single()
+            
+            if not record:
+                return {}
+            
+            doc_props = dict(record["doc"])
+            
+            # Filter and combine
+            chapters = [c for c in record["chapters"] if c.get("id")]
+            sections = [s for s in record["sections"] if s.get("id")]
+            articles = [a for a in record["articles1"] if a.get("id")]
+            articles.extend([a for a in record["articles2"] if a.get("id")])
+            
+            return {
+                "document": doc_props,
+                "chapters": chapters,
+                "sections": sections,
+                "articles": articles,
+                "clause_count": record["clause_count"]
+            }
     
-    async def find_shortest_path(
-        self, source_id: str, target_id: str, 
-        relationship_types: Optional[List[RelationshipType]] = None, max_length: int = 5
-    ) -> Optional[GraphPath]:
+    async def get_related_articles(
+        self, 
+        article_id: str, 
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
         """
-        Find shortest path between two nodes (Dijkstra/BFS).
-        
-        Critical for CatRAG: Finding prerequisite chains for courses.
+        Find articles related to a given article via shared concepts or references.
         
         Args:
-            source_id: Source node element ID
-            target_id: Target node element ID
-            relationship_types: List of relationship types to follow (None = all)
-            max_length: Maximum path length
+            article_id: ID of the source article
             
         Returns:
-            GraphPath if found, None otherwise
-            
-        Example:
-            # Find prerequisite chain from SE363 to IT001
-            path = await adapter.find_shortest_path(se363_id, it001_id, [RelationshipType.DIEU_KIEN_TIEN_QUYET])
+            List of related articles with relationship info
         """
         driver = self._get_driver()
         
-        # Build relationship type filter
-        if relationship_types:
-            rel_types_str = "|".join([rt.value for rt in relationship_types])
-            rel_filter = f":{rel_types_str}"
-        else:
-            rel_filter = ""
+        cypher = """
+        MATCH (a:Điều)
+        WHERE a.id = $article_id OR elementId(a) = $article_id
         
-        cypher = f"""
-        MATCH path = shortestPath((source)-[{rel_filter}*1..{max_length}]->(target))
-        WHERE elementId(source) = $source_id AND elementId(target) = $target_id
-        RETURN path,
-               [node IN nodes(path) | {{id: elementId(node), labels: labels(node), properties: properties(node)}}] as nodes,
-               [rel IN relationships(path) | {{type: type(rel), properties: properties(rel)}}] as rels,
-               length(path) as path_length
+        // Find articles sharing concepts
+        OPTIONAL MATCH (a)-[:DINH_NGHIA]->(c:`Khái niệm`)<-[:DINH_NGHIA]-(related1:Điều)
+        
+        // Find articles in same chapter
+        OPTIONAL MATCH (a)-[:THUOC_VE]->(ch:Chương)<-[:THUOC_VE]-(related2:Điều)
+        
+        // Find articles via references
+        OPTIONAL MATCH (a)-[:`tham chiếu`]-(related3:Điều)
+        
+        WITH a, collect(DISTINCT related1) + collect(DISTINCT related2) + collect(DISTINCT related3) as all_related
+        UNWIND all_related as related
+        WHERE related <> a AND related IS NOT NULL
+        
+        RETURN DISTINCT related.id as id,
+               related.article_number as article_number,
+               related.article_title as title,
+               related.content as content
+        LIMIT $limit
         """
         
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, source_id=source_id, target_id=target_id)
-                record = result.single()
-                
-                if not record:
-                    logger.info(f"No path found between {source_id} and {target_id}")
-                    return None
-                
-                # Convert to GraphPath
-                nodes_data = record["nodes"]
-                rels_data = record["rels"]
-                
-                # Build GraphNode objects
-                graph_nodes = []
-                for node_data in nodes_data:
-                    try:
-                        category = NodeCategory(node_data["labels"][0])
-                        graph_nodes.append(GraphNode(
-                            id=node_data["id"],
-                            category=category,
-                            properties=node_data["properties"]
-                        ))
-                    except (ValueError, IndexError):
-                        logger.warning(f"Invalid node in path")
-                        continue
-                
-                # Build GraphRelationship objects
-                graph_rels = []
-                for i, rel_data in enumerate(rels_data):
-                    try:
-                        rel_type = RelationshipType(rel_data["type"])
-                        graph_rels.append(GraphRelationship(
-                            source_id=nodes_data[i]["id"],
-                            target_id=nodes_data[i+1]["id"],
-                            rel_type=rel_type,
-                            properties=rel_data["properties"]
-                        ))
-                    except (ValueError, IndexError):
-                        logger.warning(f"Invalid relationship in path")
-                        continue
-                
-                return GraphPath(
-                    nodes=graph_nodes,
-                    relationships=graph_rels
-                    # length is auto-calculated
-                )
-                
-        except Exception as e:
-            logger.error(f"Error finding shortest path: {e}")
-            raise
+        results = []
+        with driver.session(database=self.database) as session:
+            result = session.run(cypher, article_id=article_id, limit=limit)
+            for record in result:
+                results.append({
+                    "id": record["id"],
+                    "article_number": record["article_number"],
+                    "title": record["title"],
+                    "content": record["content"][:300] if record["content"] else "",
+                    "type": "Điều"
+                })
+        
+        logger.info(f"Found {len(results)} related articles for {article_id}")
+        return results
     
-    async def find_all_paths(
-        self, source_id: str, target_id: str,
-        relationship_types: Optional[List[RelationshipType]] = None,
-        max_length: int = 3, limit: int = 10
-    ) -> List[GraphPath]:
-        """Find all paths"""
-        # TODO: Implement in full version
-        raise NotImplementedError("POC: Not yet implemented")
-    
-    async def get_subgraph(
-        self, center_node_id: str, expand_depth: int = 1,
-        category_filter: Optional[List[NodeCategory]] = None
-    ) -> SubGraph:
-        """Get subgraph"""
-        # TODO: Implement in full version
-        raise NotImplementedError("POC: Not yet implemented")
-    
-    async def execute_query(self, query: GraphQuery) -> SubGraph:
-        """Execute graph query"""
-        # TODO: Implement in full version
-        raise NotImplementedError("POC: Not yet implemented")
+    # =========================================================================
+    # BATCH OPERATIONS
+    # =========================================================================
     
     async def add_nodes_batch(self, nodes: List[GraphNode]) -> List[str]:
         """
-        Batch add nodes with optimized MERGE query (Deduplication enabled).
-        
-        Uses MERGE instead of CREATE to prevent duplicate nodes.
-        Merges based on the standard ID key for each label (ma_mon, ma_khoa, etc).
+        Batch add nodes with MERGE to prevent duplicates.
         
         Args:
             nodes: List of GraphNodes to add
             
         Returns:
-            List of assigned node IDs (elementId from Neo4j)
-            
-        Example:
-            nodes = [create_mon_hoc_node(...), create_mon_hoc_node(...)]
-            node_ids = await adapter.add_nodes_batch(nodes)
+            List of assigned node IDs
         """
         if not nodes:
             return []
         
-        from core.domain.schema_mapper import SchemaMapper
-        
         driver = self._get_driver()
         
-        # Group nodes by category for batch processing
-        nodes_by_category = {}
+        # Group nodes by type for batch processing
+        nodes_by_type = {}
         for node in nodes:
-            category = node.category.value
-            if category not in nodes_by_category:
-                nodes_by_category[category] = []
-            nodes_by_category[category].append(node)
+            type_label = node.node_type.value
+            if type_label not in nodes_by_type:
+                nodes_by_type[type_label] = []
+            nodes_by_type[type_label].append(node)
         
         all_node_ids = []
         
-        # Batch insert per category using MERGE
-        for category, category_nodes in nodes_by_category.items():
-            # Get the standard ID key for this category
-            id_key = SchemaMapper.PROPERTY_MAPPING.get(category, {}).get("id_key", "id")
-            
+        # Batch insert per type using MERGE
+        for type_label, type_nodes in nodes_by_type.items():
             # Prepare data for UNWIND
             nodes_data = []
-            for node in category_nodes:
+            for node in type_nodes:
                 props = node.properties.copy()
+                if node.id:
+                    props["id"] = node.id
+                if node.name:
+                    props["name"] = node.name
+                if node.content:
+                    props["content"] = node.content
                 
-                # Ensure ID key exists
-                if id_key not in props:
-                    # Try to extract from common keys
-                    id_value = props.get("code") or props.get("id") or props.get("name")
-                    if id_value:
-                        # Clean the ID
-                        id_value = SchemaMapper.extract_clean_id(str(id_value), category)
-                        props[id_key] = id_value
-                    else:
-                        # Generate fallback ID
-                        import uuid
-                        props[id_key] = f"auto_{str(uuid.uuid4())[:8]}"
+                # Ensure ID exists
+                if "id" not in props:
+                    import uuid
+                    props["id"] = str(uuid.uuid4())
                 
                 nodes_data.append(props)
             
             # Use MERGE to prevent duplicates
             cypher = f"""
             UNWIND $nodes_data as node_props
-            MERGE (n:{category} {{{id_key}: node_props.{id_key}}})
+            MERGE (n:`{type_label}` {{id: node_props.id}})
             SET n += node_props
             RETURN elementId(n) as id
             """
@@ -893,7 +1110,7 @@ class Neo4jGraphAdapter(GraphRepository):
                     for record in result:
                         all_node_ids.append(record["id"])
                 
-                logger.info(f"✓ Batch created/updated {len(category_nodes)} nodes of type {category}")
+                logger.info(f"✓ Batch created/updated {len(type_nodes)} nodes of type {type_label}")
             except Exception as e:
                 logger.error(f"Error in batch node creation: {e}")
                 raise
@@ -902,17 +1119,13 @@ class Neo4jGraphAdapter(GraphRepository):
     
     async def add_relationships_batch(self, relationships: List[GraphRelationship]) -> int:
         """
-        Batch add relationships with optimized UNWIND query.
+        Batch add relationships.
         
         Args:
             relationships: List of GraphRelationships to add
             
         Returns:
             Number of relationships created
-            
-        Example:
-            rels = [create_prerequisite_relationship(...), ...]
-            count = await adapter.add_relationships_batch(rels)
         """
         if not relationships:
             return 0
@@ -922,21 +1135,16 @@ class Neo4jGraphAdapter(GraphRepository):
         # Group by relationship type
         rels_by_type = {}
         for rel in relationships:
-            # Handle both string and enum types
-            # Check if it has .value attribute (enum) instead of isinstance
-            if hasattr(rel.rel_type, 'value'):
-                rel_type = rel.rel_type.value
-            else:
-                rel_type = rel.rel_type
+            edge_type = rel.edge_type.value if hasattr(rel.edge_type, 'value') else rel.edge_type
             
-            if rel_type not in rels_by_type:
-                rels_by_type[rel_type] = []
-            rels_by_type[rel_type].append(rel)
+            if edge_type not in rels_by_type:
+                rels_by_type[edge_type] = []
+            rels_by_type[edge_type].append(rel)
         
         total_created = 0
         
         # Batch insert per type
-        for rel_type, type_rels in rels_by_type.items():
+        for edge_type, type_rels in rels_by_type.items():
             # Prepare data for UNWIND
             rels_data = []
             for rel in type_rels:
@@ -949,9 +1157,10 @@ class Neo4jGraphAdapter(GraphRepository):
             cypher = f"""
             UNWIND $rels_data as rel_data
             MATCH (source), (target)
-            WHERE elementId(source) = rel_data.source_id AND elementId(target) = rel_data.target_id
-            CREATE (source)-[r:{rel_type}]->(target)
-            SET r = rel_data.props
+            WHERE (source.id = rel_data.source_id OR elementId(source) = rel_data.source_id)
+              AND (target.id = rel_data.target_id OR elementId(target) = rel_data.target_id)
+            MERGE (source)-[r:`{edge_type}`]->(target)
+            SET r += rel_data.props
             RETURN count(r) as created
             """
             
@@ -962,898 +1171,17 @@ class Neo4jGraphAdapter(GraphRepository):
                     created = record["created"] if record else 0
                     total_created += created
                 
-                logger.info(f"✓ Batch created {created} relationships of type {rel_type}")
+                logger.info(f"✓ Batch created {created} relationships of type {edge_type}")
             except Exception as e:
                 logger.error(f"Error in batch relationship creation: {e}")
                 raise
         
         return total_created
     
-    async def search_nodes(
-        self, query: str, categories: Optional[List[NodeCategory]] = None, limit: int = 10
-    ) -> List[GraphNode]:
-        """
-        Full-text search on nodes using Neo4j's full-text indexes.
-        
-        Uses the full-text indexes created in 02_create_indexes.cypher.
-        
-        Args:
-            query: Search query string (Vietnamese or English)
-            categories: Filter by node categories (optional)
-            limit: Maximum results
-            
-        Returns:
-            List of matching GraphNodes sorted by relevance score
-            
-        Example:
-            # Search for courses about "cấu trúc dữ liệu"
-            results = await adapter.search_nodes("cấu trúc dữ liệu", [NodeCategory.MON_HOC], limit=5)
-        """
-        driver = self._get_driver()
-        
-        # Map categories to index names
-        index_names = {
-            NodeCategory.MON_HOC: "mon_hoc_fulltext",
-            NodeCategory.KHOA: "khoa_fulltext",
-            NodeCategory.CHUONG_TRINH_DAO_TAO: "chuong_trinh_fulltext",
-            NodeCategory.QUY_DINH: "quy_dinh_fulltext",
-            NodeCategory.GIANG_VIEN: "giang_vien_fulltext"
-        }
-        
-        all_results = []
-        
-        # Search in specified categories or all
-        search_categories = categories if categories else list(index_names.keys())
-        
-        for category in search_categories:
-            index_name = index_names.get(category)
-            if not index_name:
-                continue
-            
-            cypher = """
-            CALL db.index.fulltext.queryNodes($index_name, $search_text)
-            YIELD node, score
-            RETURN elementId(node) as id, node, score
-            ORDER BY score DESC
-            LIMIT $limit
-            """
-            
-            try:
-                with driver.session(database=self.database) as session:
-                    result = session.run(cypher, index_name=index_name, search_text=query, limit=limit)
-                    
-                    for record in result:
-                        neo4j_node = record["node"]
-                        node_id = record["id"]
-                        score = record["score"]
-                        
-                        properties = dict(neo4j_node.items())
-                        properties["_search_score"] = score  # Add relevance score
-                        
-                        graph_node = GraphNode(
-                            id=node_id,
-                            category=category,
-                            properties=properties
-                        )
-                        
-                        all_results.append((score, graph_node))
-            except Exception as e:
-                logger.warning(f"Full-text search failed for {category}: {e}")
-                continue
-        
-        # Sort by score and return nodes
-        all_results.sort(key=lambda x: x[0], reverse=True)
-        return [node for score, node in all_results[:limit]]
+    # =========================================================================
+    # UTILITY METHODS
+    # =========================================================================
     
-    # ========== CatRAG-Specific Methods ==========
-    
-    async def find_prerequisites_chain(
-        self, 
-        course_code: str,
-        max_depth: int = 10
-    ) -> List[GraphPath]:
-        """
-        Find all prerequisite chains for a course (CatRAG-specific).
-        
-        This is a critical query for the Router Agent to handle prerequisite questions.
-        Returns all paths from the course to foundational courses.
-        
-        Args:
-            course_code: Course code (e.g., "SE363", "IT004")
-            max_depth: Maximum prerequisite chain depth
-            
-        Returns:
-            List of GraphPaths representing prerequisite chains
-            
-        Example:
-            # Find all prerequisites for SE363 (AI course)
-            chains = await adapter.find_prerequisites_chain("SE363")
-            # Returns: SE363 -> IT003 -> IT002 -> IT001
-        """
-        driver = self._get_driver()
-        
-        cypher = f"""
-        MATCH (target:MON_HOC {{ma_mon: $course_code}})
-        MATCH path = (target)-[:DIEU_KIEN_TIEN_QUYET*1..{max_depth}]->(prereq:MON_HOC)
-        WITH path, length(path) as depth
-        ORDER BY depth DESC
-        RETURN path,
-               [node IN nodes(path) | {{
-                   id: elementId(node),
-                   code: node.ma_mon,
-                   name: node.ten_mon,
-                   credits: node.so_tin_chi
-               }}] as nodes,
-               [rel IN relationships(path) | {{
-                   type: type(rel),
-                   required: rel.loai = 'bat_buoc',
-                   min_grade: rel.diem_toi_thieu
-               }}] as rels,
-               depth
-        """
-        
-        paths = []
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, course_code=course_code)
-                
-                for record in result:
-                    nodes_data = record["nodes"]
-                    rels_data = record["rels"]
-                    depth = record["depth"]
-                    
-                    # Build GraphNode objects
-                    graph_nodes = []
-                    for node_data in nodes_data:
-                        graph_nodes.append(GraphNode(
-                            id=node_data["id"],
-                            category=NodeCategory.MON_HOC,
-                            properties={
-                                "code": node_data["code"],  # Required by validation
-                                "ma_mon": node_data["code"],
-                                "name": node_data["name"],  # Required
-                                "ten_mon": node_data["name"],
-                                "credits": node_data["credits"],  # Required
-                                "so_tin_chi": node_data["credits"]
-                            }
-                        ))
-                    
-                    # Build GraphRelationship objects
-                    graph_rels = []
-                    for i, rel_data in enumerate(rels_data):
-                        graph_rels.append(GraphRelationship(
-                            source_id=nodes_data[i]["id"],
-                            target_id=nodes_data[i+1]["id"],
-                            rel_type=RelationshipType.DIEU_KIEN_TIEN_QUYET,
-                            properties={
-                                "loai": "bat_buoc" if rel_data["required"] else "khuyen_nghi",
-                                "diem_toi_thieu": rel_data["min_grade"]
-                            }
-                        ))
-                    
-                    paths.append(GraphPath(
-                        nodes=graph_nodes,
-                        relationships=graph_rels
-                        # length is auto-calculated in __post_init__
-                    ))
-            
-            logger.info(f"Found {len(paths)} prerequisite paths for {course_code}")
-            return paths
-            
-        except Exception as e:
-            logger.error(f"Error finding prerequisite chain: {e}")
-            raise
-    
-    async def find_related_courses(
-        self,
-        course_code: str,
-        similarity_threshold: float = 0.7,
-        limit: int = 5
-    ) -> List[GraphNode]:
-        """
-        Find semantically related courses (CatRAG-specific).
-        
-        Uses LIEN_QUAN relationships with similarity scores.
-        
-        Args:
-            course_code: Course code
-            similarity_threshold: Minimum similarity score (0.0-1.0)
-            limit: Maximum results
-            
-        Returns:
-            List of related course GraphNodes
-        """
-        driver = self._get_driver()
-        
-        cypher = """
-        MATCH (source:MON_HOC {ma_mon: $course_code})-[r:LIEN_QUAN]-(related:MON_HOC)
-        WHERE r.do_tuong_tu >= $threshold
-        RETURN elementId(related) as id, related, r.do_tuong_tu as similarity
-        ORDER BY similarity DESC
-        LIMIT $limit
-        """
-        
-        related_courses = []
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(
-                    cypher,
-                    course_code=course_code,
-                    threshold=similarity_threshold,
-                    limit=limit
-                )
-                
-                for record in result:
-                    neo4j_node = record["related"]
-                    node_id = record["id"]
-                    similarity = record["similarity"]
-                    
-                    properties = dict(neo4j_node.items())
-                    properties["_similarity_score"] = similarity
-                    
-                    related_courses.append(GraphNode(
-                        id=node_id,
-                        category=NodeCategory.MON_HOC,
-                        properties=properties
-                    ))
-            
-            logger.info(f"Found {len(related_courses)} related courses for {course_code}")
-            return related_courses
-            
-        except Exception as e:
-            logger.error(f"Error finding related courses: {e}")
-            raise
-    
-    async def get_category_distribution(self) -> Dict[str, int]:
-        """Get category distribution"""
-        stats = await self.get_graph_stats()
-        return stats.get("nodes_by_category", {})
-    
-    # ========== CatRAG Schema Methods (Article, Entity, Community) ==========
-    
-    async def search_articles_by_keyword(
-        self, 
-        keywords: List[str], 
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        Search Article nodes by keywords in title and content.
-        
-        For CatRAG schema with Article nodes containing 'title', 'content' fields.
-        
-        ENHANCED: 
-        - Prioritize compound terms (phrases with spaces) by requiring exact match
-        - Use scoring to rank results by number of keywords matched
-        """
-        logger.info(f"🔍 search_articles_by_keyword called with keywords: {keywords}, limit: {limit}")
-        driver = self._get_driver()
-        
-        # Separate compound terms (phrases with spaces) from single keywords
-        compound_terms = [kw for kw in keywords if ' ' in kw]
-        single_keywords = [kw for kw in keywords if ' ' not in kw]
-        
-        logger.info(f"   Compound terms: {compound_terms}")
-        logger.info(f"   Single keywords: {single_keywords}")
-        
-        # Build search pattern
-        # For compound terms: require exact match (AND logic within the compound)
-        # For single keywords: use OR logic
-        conditions = []
-        params = {"limit": limit}
-        
-        # Compound terms get higher priority - if any compound term matches, include
-        for i, ct in enumerate(compound_terms):
-            param_name = f"ct{i}"
-            conditions.append(
-                f"(toLower(a.title) CONTAINS toLower(${param_name}) OR toLower(a.full_text) CONTAINS toLower(${param_name}))"
-            )
-            params[param_name] = ct
-        
-        # Single keywords as fallback
-        for i, kw in enumerate(single_keywords):
-            param_name = f"kw{i}"
-            conditions.append(
-                f"(toLower(a.title) CONTAINS toLower(${param_name}) OR toLower(a.full_text) CONTAINS toLower(${param_name}))"
-            )
-            params[param_name] = kw
-        
-        where_clause = " OR ".join(conditions) if conditions else "true"
-        
-        # ENHANCED: Add scoring to prioritize articles matching more keywords
-        # and especially compound terms
-        score_parts = []
-        for i in range(len(compound_terms)):
-            param_name = f"ct{i}"
-            # Compound terms get weight 3 (higher priority)
-            score_parts.append(f"CASE WHEN toLower(a.title) CONTAINS toLower(${param_name}) THEN 3 ELSE 0 END")
-            score_parts.append(f"CASE WHEN toLower(a.full_text) CONTAINS toLower(${param_name}) THEN 2 ELSE 0 END")
-        
-        for i in range(len(single_keywords)):
-            param_name = f"kw{i}"
-            # Single keywords get weight 1
-            score_parts.append(f"CASE WHEN toLower(a.title) CONTAINS toLower(${param_name}) THEN 1 ELSE 0 END")
-            score_parts.append(f"CASE WHEN toLower(a.full_text) CONTAINS toLower(${param_name}) THEN 0.5 ELSE 0 END")
-        
-        score_expr = " + ".join(score_parts) if score_parts else "0"
-        
-        cypher = f"""
-        MATCH (a:Article)
-        WHERE {where_clause}
-        WITH a, ({score_expr}) as score
-        RETURN elementId(a) as element_id, a.id as article_id, a.title as title, 
-               a.full_text as content, score
-        ORDER BY score DESC
-        LIMIT $limit
-        """
-        
-        results = []
-        try:
-            logger.info(f"📝 Executing Cypher with scoring...")
-            logger.info(f"📝 With params: {list(params.keys())}")
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, **params)
-                for record in result:
-                    results.append({
-                        "id": record["element_id"],
-                        "article_id": record["article_id"],
-                        "title": record["title"],
-                        "content": record["content"][:500] if record["content"] else "",
-                        "type": "Article",
-                        "score": record["score"]
-                    })
-            logger.info(f"✅ Found {len(results)} articles for keywords: {keywords}")
-            if results:
-                logger.info(f"   Top result: {results[0].get('title')} (score: {results[0].get('score')})")
-        except Exception as e:
-            logger.error(f"❌ Error searching articles: {e}", exc_info=True)
-        
-        return results
-    
-    async def search_entities_by_keyword(
-        self, 
-        keywords: List[str], 
-        limit: int = 20
-    ) -> List[Dict[str, Any]]:
-        """
-        Search Entity nodes by name.
-        
-        For CatRAG schema with Entity nodes containing 'name', 'type', 'description' fields.
-        """
-        driver = self._get_driver()
-        
-        # Build search pattern
-        keyword_conditions = []
-        for i, kw in enumerate(keywords):
-            keyword_conditions.append(
-                f"(toLower(e.name) CONTAINS toLower($kw{i}) OR toLower(e.description) CONTAINS toLower($kw{i}))"
-            )
-        
-        where_clause = " OR ".join(keyword_conditions) if keyword_conditions else "true"
-        
-        cypher = f"""
-        MATCH (e:Entity)
-        WHERE {where_clause}
-        RETURN elementId(e) as id, e.name as name, e.type as type, 
-               e.description as description
-        LIMIT $limit
-        """
-        
-        params = {"limit": limit}
-        for i, kw in enumerate(keywords):
-            params[f"kw{i}"] = kw
-        
-        results = []
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, **params)
-                for record in result:
-                    results.append({
-                        "id": record["id"],
-                        "name": record["name"],
-                        "type": record["type"],
-                        "description": record["description"][:200] if record["description"] else "",
-                        "node_type": "Entity"
-                    })
-            logger.info(f"Found {len(results)} entities for keywords: {keywords}")
-        except Exception as e:
-            logger.error(f"Error searching entities: {e}")
-        
-        return results
-    
-    async def get_article_with_entities(
-        self, 
-        article_number: int
-    ) -> Dict[str, Any]:
-        """
-        Get an Article by its article_number along with related entities.
-        
-        Returns:
-            Dict with article info and list of entities it MENTIONS
-        """
-        driver = self._get_driver()
-        
-        # Convert article_number to article id (e.g., 19 -> "dieu_19")
-        article_id = f"dieu_{article_number}"
-        
-        cypher = """
-        MATCH (a:Article {id: $article_id})
-        OPTIONAL MATCH (a)-[:MENTIONS]->(e:Entity)
-        RETURN a.title as title, a.full_text as content,
-               collect(DISTINCT {name: e.text, type: e.type}) as entities
-        """
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, article_id=article_id)
-                record = result.single()
-                
-                if record:
-                    # Filter out null entities
-                    entities = [e for e in record["entities"] if e.get("name")]
-                    return {
-                        "title": record["title"],
-                        "content": record["content"],
-                        "article_number": article_number,
-                        "entities": entities,
-                        "type": "Article"
-                    }
-        except Exception as e:
-            logger.error(f"Error getting article {article_number}: {e}")
-        
-        return {}
-    
-    async def get_all_communities(self) -> List[Dict[str, Any]]:
-        """
-        Get all Community nodes with their summaries.
-        
-        For GLOBAL reasoning - returns community summaries.
-        """
-        driver = self._get_driver()
-        
-        cypher = """
-        MATCH (c:Community)
-        OPTIONAL MATCH (a:Article)-[:BELONGS_TO]->(c)
-        RETURN c.name as name, c.summary as summary, c.size as size,
-               c.key_entities as key_entities,
-               collect(DISTINCT a.title) as articles
-        ORDER BY c.size DESC
-        """
-        
-        results = []
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher)
-                for record in result:
-                    results.append({
-                        "name": record["name"],
-                        "summary": record["summary"],
-                        "size": record["size"],
-                        "key_entities": record["key_entities"],
-                        "articles": record["articles"][:5],  # Limit article titles
-                        "type": "Community"
-                    })
-            logger.info(f"Found {len(results)} communities")
-        except Exception as e:
-            logger.error(f"Error getting communities: {e}")
-        
-        return results
-    
-    async def find_article_path(
-        self, 
-        start_article_number: int, 
-        end_article_number: int,
-        max_depth: int = 5
-    ) -> List[Dict[str, Any]]:
-        """
-        Find path between two Articles via NEXT_ARTICLE or shared Entity relationships.
-        
-        For MULTI_HOP reasoning.
-        """
-        driver = self._get_driver()
-        
-        # Try NEXT_ARTICLE path first
-        cypher = """
-        MATCH (start:Article {article_number: $start_num})
-        MATCH (end:Article {article_number: $end_num})
-        MATCH path = shortestPath((start)-[:NEXT_ARTICLE*..%d]->(end))
-        RETURN [node in nodes(path) | {
-            article_number: node.article_number,
-            title: node.title
-        }] as path_nodes,
-        length(path) as path_length
-        """ % max_depth
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(
-                    cypher, 
-                    start_num=start_article_number, 
-                    end_num=end_article_number
-                )
-                record = result.single()
-                
-                if record:
-                    return [{
-                        "path_nodes": record["path_nodes"],
-                        "path_length": record["path_length"],
-                        "path_type": "NEXT_ARTICLE"
-                    }]
-        except Exception as e:
-            logger.warning(f"No NEXT_ARTICLE path found: {e}")
-        
-        # Fallback: Try via shared entities
-        cypher2 = """
-        MATCH (start:Article {article_number: $start_num})
-        MATCH (end:Article {article_number: $end_num})
-        MATCH path = (start)-[:MENTIONS]->(:Entity)<-[:MENTIONS]-(end)
-        RETURN [node in nodes(path) | {
-            name: coalesce(node.title, node.name),
-            type: labels(node)[0]
-        }] as path_nodes,
-        length(path) as path_length
-        LIMIT 3
-        """
-        
-        results = []
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(
-                    cypher2, 
-                    start_num=start_article_number, 
-                    end_num=end_article_number
-                )
-                for record in result:
-                    results.append({
-                        "path_nodes": record["path_nodes"],
-                        "path_length": record["path_length"],
-                        "path_type": "SHARED_ENTITY"
-                    })
-        except Exception as e:
-            logger.error(f"Error finding article path: {e}")
-        
-        return results
-    
-    async def get_related_articles_by_entity(
-        self, 
-        entity_name: str,
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        Find Articles that MENTION a specific Entity.
-        
-        For LOCAL reasoning - "Các điều khoản nào liên quan đến X?"
-        """
-        driver = self._get_driver()
-        
-        cypher = """
-        MATCH (e:Entity)
-        WHERE toLower(e.name) CONTAINS toLower($entity_name)
-        WITH e LIMIT 1
-        MATCH (a:Article)-[:MENTIONS]->(e)
-        RETURN a.article_number as article_number, a.title as title,
-               a.content as content, e.name as entity_name
-        LIMIT $limit
-        """
-        
-        results = []
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, entity_name=entity_name, limit=limit)
-                for record in result:
-                    results.append({
-                        "article_number": record["article_number"],
-                        "title": record["title"],
-                        "content": record["content"][:500] if record["content"] else "",
-                        "related_entity": record["entity_name"],
-                        "type": "Article"
-                    })
-            logger.info(f"Found {len(results)} articles mentioning '{entity_name}'")
-        except Exception as e:
-            logger.error(f"Error finding related articles: {e}")
-        
-        return results
-
-    async def get_latest_version_of_article(
-        self,
-        article_title: str
-    ) -> Dict[str, Any]:
-        """
-        Find the latest version of an article by checking AMENDS relationships.
-        
-        If Article A AMENDS Article B, then A is the newer version.
-        Returns the amending article (source of AMENDS) with the original article info.
-        
-        Use case: When user asks about "Điều 14", check if it has been amended
-        and return the newer content along with amendment info.
-        
-        Args:
-            article_title: Title or partial title of the article to check
-            
-        Returns:
-            Dict with:
-            - original_article: The article that was searched for
-            - amending_article: The article that amends it (if any)
-            - amendment_description: Description of the amendment
-            - is_amended: Boolean indicating if article has been amended
-        """
-        driver = self._get_driver()
-        
-        # First find the article being queried
-        # Then check if any article AMENDS it
-        cypher = """
-        MATCH (original:Article)
-        WHERE toLower(original.title) CONTAINS toLower($title_search)
-        OPTIONAL MATCH (amending:Article)-[r:AMENDS]->(original)
-        RETURN original.title as original_title,
-               original.full_text as original_text,
-               amending.title as amending_title,
-               amending.full_text as amending_text,
-               r.description as amendment_description
-        LIMIT 5
-        """
-        
-        results = {
-            "original_article": None,
-            "amending_article": None,
-            "amendment_description": None,
-            "is_amended": False,
-            "all_amendments": []
-        }
-        
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, title_search=article_title)
-                
-                for record in result:
-                    # Set original article info (first match)
-                    if results["original_article"] is None:
-                        results["original_article"] = {
-                            "title": record["original_title"],
-                            "text": record["original_text"]
-                        }
-                    
-                    # Check for amendments
-                    if record["amending_title"]:
-                        results["is_amended"] = True
-                        
-                        # Extract ONLY the relevant section for this article
-                        amending_text = record["amending_text"] or ""
-                        original_title = record["original_title"] or article_title
-                        
-                        extracted_section = self._extract_amendment_section(
-                            amending_text, 
-                            original_title
-                        )
-                        
-                        amendment_info = {
-                            "amending_title": record["amending_title"],
-                            "amending_text": extracted_section or amending_text,
-                            "description": record["amendment_description"],
-                            "extracted": extracted_section is not None
-                        }
-                        results["all_amendments"].append(amendment_info)
-                        
-                        # Set primary amending article (first one found)
-                        if results["amending_article"] is None:
-                            results["amending_article"] = {
-                                "title": record["amending_title"],
-                                "text": extracted_section or amending_text,
-                                "extracted": extracted_section is not None
-                            }
-                            results["amendment_description"] = record["amendment_description"]
-                
-                if results["is_amended"]:
-                    logger.info(f"Found {len(results['all_amendments'])} amendments for '{article_title}'")
-                else:
-                    logger.info(f"No amendments found for '{article_title}'")
-                    
-        except Exception as e:
-            logger.error(f"Error finding article amendments: {e}")
-        
-        return results
-
-    async def get_all_amendments(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """
-        Get all AMENDS relationships in the graph.
-        
-        Returns list of amendment info for displaying to user or debugging.
-        """
-        driver = self._get_driver()
-        
-        cypher = """
-        MATCH (amending:Article)-[r:AMENDS]->(original:Article)
-        RETURN amending.title as amending_title,
-               original.title as original_title,
-               r.description as description,
-               amending.full_text as amending_text
-        LIMIT $limit
-        """
-        
-        results = []
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, limit=limit)
-                for record in result:
-                    results.append({
-                        "amending_title": record["amending_title"],
-                        "original_title": record["original_title"],
-                        "description": record["description"],
-                        "amending_text": record["amending_text"][:500] if record["amending_text"] else None
-                    })
-            logger.info(f"Found {len(results)} AMENDS relationships")
-        except Exception as e:
-            logger.error(f"Error getting amendments: {e}")
-        
-        return results
-
-    async def search_with_amendments(
-        self,
-        keywords: List[str],
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        Search articles by keywords and automatically include amendment info.
-        
-        This is the KEY method for ensuring chatbot answers with latest info.
-        When an article is found that has been amended, include BOTH:
-        1. The original article (for context)
-        2. The amending article with updated content (marked as priority)
-        
-        Args:
-            keywords: List of search keywords
-            limit: Max results
-            
-        Returns:
-            List of articles with amendment enrichment
-        """
-        driver = self._get_driver()
-        
-        # Search for articles and include any amendments
-        # Priority: title match > full_text match
-        cypher = """
-        // First find articles matching keywords
-        MATCH (a:Article)
-        WHERE any(kw IN $keywords WHERE 
-            toLower(a.full_text) CONTAINS toLower(kw) OR
-            toLower(a.title) CONTAINS toLower(kw)
-        )
-        
-        // Calculate relevance score: title match gets higher priority
-        WITH a,
-            REDUCE(score = 0, kw IN $keywords | 
-                score + CASE WHEN toLower(a.title) CONTAINS toLower(kw) THEN 10 ELSE 0 END +
-                CASE WHEN toLower(a.full_text) CONTAINS toLower(kw) THEN 1 ELSE 0 END
-            ) as relevance
-        
-        // Check if this article has been amended
-        OPTIONAL MATCH (amending:Article)-[r:AMENDS]->(a)
-        
-        // Return both original and amendment info, sorted by relevance
-        RETURN a.title as title,
-               a.full_text as text,
-               a.id as id,
-               CASE WHEN amending IS NOT NULL THEN true ELSE false END as is_amended,
-               amending.title as amending_title,
-               amending.full_text as amending_text,
-               r.description as amendment_description,
-               relevance
-        ORDER BY relevance DESC
-        LIMIT $limit
-        """
-        
-        results = []
-        try:
-            with driver.session(database=self.database) as session:
-                result = session.run(cypher, keywords=keywords, limit=limit)
-                
-                for record in result:
-                    article = {
-                        "title": record["title"],
-                        "text": record["text"],
-                        "id": record["id"],
-                        "is_amended": record["is_amended"],
-                        "type": "Article"
-                    }
-                    
-                    # If article has been amended, extract ONLY the relevant section
-                    if record["is_amended"] and record["amending_text"]:
-                        original_title = record["title"] or ""
-                        amending_text = record["amending_text"] or ""
-                        
-                        # Extract the specific section for THIS article from the amending document
-                        extracted_section = self._extract_amendment_section(
-                            amending_text, 
-                            original_title
-                        )
-                        
-                        if extracted_section:
-                            # Use extracted section as the new content
-                            article["text"] = extracted_section
-                            article["is_amended"] = True
-                            article["_replaced_from"] = original_title
-                        else:
-                            # Fallback: keep original but mark as amended
-                            article["is_amended"] = True
-                            article["amendment_note"] = record["amendment_description"]
-                    
-                    results.append(article)
-                    
-            logger.info(f"Found {len(results)} articles for keywords {keywords}")
-            
-        except Exception as e:
-            logger.error(f"Error searching with amendments: {e}")
-        
-        return results
-
-    def _extract_amendment_section(
-        self, 
-        amending_text: str, 
-        original_title: str
-    ) -> Optional[str]:
-        """
-        Extract the specific amendment section from the amending document
-        that corresponds to the original article.
-        
-        For example, if original_title is "Điều 14" and amending_text contains:
-        "--- Mục b khoản 1 Điều 14 ---\nContent here...\n--- Điều 23 ---"
-        
-        This method extracts ONLY the content between those markers.
-        
-        Args:
-            amending_text: Full text of the amending document (e.g., Điều 1)
-            original_title: Title of the original article being amended (e.g., "Điều 14")
-            
-        Returns:
-            The extracted section text, or None if not found
-        """
-        import re
-        
-        if not amending_text or not original_title:
-            return None
-            
-        # Extract the article number from title (e.g., "Điều 14" -> "14")
-        article_match = re.search(r'Điều\s*(\d+)', original_title, re.IGNORECASE)
-        if not article_match:
-            return None
-            
-        article_number = article_match.group(1)
-        
-        # Pattern to find section markers like:
-        # "--- Khoản X Điều Y ---" or "--- Mục X khoản Y Điều Z ---"
-        # The content follows until the next "---" marker or end of text
-        
-        # Build pattern to find this article's section
-        # Match variations like:
-        # - "--- Điều 14 ---"
-        # - "--- Khoản 1 Điều 14 ---"
-        # - "--- Mục b khoản 1 Điều 14 ---"
-        section_pattern = rf'---[^-]*Điều\s*{article_number}\s*---\s*(.*?)(?=---|\Z)'
-        
-        match = re.search(section_pattern, amending_text, re.DOTALL | re.IGNORECASE)
-        
-        if match:
-            extracted = match.group(1).strip()
-            if extracted:
-                logger.info(f"Extracted amendment section for {original_title}: {len(extracted)} chars")
-                return extracted
-        
-        # Alternative: Try finding content that mentions the article directly
-        # This handles cases where formatting is different
-        alt_pattern = rf'(?:sửa đổi|thay thế|bổ sung)[^.]*Điều\s*{article_number}[^:]*:\s*(.*?)(?=(?:sửa đổi|thay thế|bổ sung)[^.]*Điều|\Z)'
-        
-        alt_match = re.search(alt_pattern, amending_text, re.DOTALL | re.IGNORECASE)
-        
-        if alt_match:
-            extracted = alt_match.group(1).strip()
-            if extracted:
-                logger.info(f"Extracted amendment (alt pattern) for {original_title}: {len(extracted)} chars")
-                return extracted
-        
-        logger.warning(f"Could not extract specific section for {original_title}")
-        return None
-
     def close(self):
         """Close Neo4j driver"""
         if self._driver:
@@ -1872,7 +1200,7 @@ def create_neo4j_adapter(
     password: str = "uitchatbot"
 ) -> Neo4jGraphAdapter:
     """
-    Factory function to create Neo4j adapter.
+    Factory function to create Legal Graph adapter.
     
     Example:
         adapter = create_neo4j_adapter()

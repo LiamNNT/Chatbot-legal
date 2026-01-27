@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"  # Neo4j username
     neo4j_password: str = "password"  # Neo4j password
 
+    # --- Redis Configuration (for job state) ---
+    redis_url: str = "redis://localhost:6379/0"  # Redis connection URL
+
     # --- Logging Configuration ---
     log_level: str = "INFO"
 

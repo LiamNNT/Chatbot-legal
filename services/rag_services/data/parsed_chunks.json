@@ -1,0 +1,231 @@
+{
+  "statistics": {
+    "total_lines": 31,
+    "total_chunks": 10,
+    "chapters": 2,
+    "articles": 6,
+    "clauses": 13,
+    "points": 3
+  },
+  "chunks": [
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=I:DIEU=1",
+      "content": "Điều 1. Phạm vi điều chỉnh Luật này quy định về giao dịch điện tử; quyền, nghĩa vụ và trách nhiệm của cơ quan, tổ chức, cá nhân trong giao dịch điện tử; giá trị pháp lý của thông điệp dữ liệu, chữ ký điện tử, chứng thư điện tử; an toàn, an ninh trong giao dịch điện tử; giải quyết tranh chấp và xử lý vi phạm pháp luật trong giao dịch điện tử.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=I",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương I QUY ĐỊNH CHUNG",
+        "parent_id": "LAW=UNKNOWN:CHUONG=I",
+        "next_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=2",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "DIEU"
+        ],
+        "is_definition": false
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=I:DIEU=2",
+      "content": "Điều 2. Đối tượng áp dụng 1. Cơ quan, tổ chức, cá nhân trực tiếp tham gia hoặc có liên quan đến giao dịch điện tử. 2. Cơ quan, tổ chức, cá nhân nước ngoài tham gia giao dịch điện tử tại Việt Nam.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=I",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương I QUY ĐỊNH CHUNG",
+        "parent_id": "LAW=UNKNOWN:CHUONG=I",
+        "prev_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=1",
+        "next_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "DIEU"
+        ],
+        "is_definition": false
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:DEFINITION_ITEM=1",
+      "content": "1. Giao dịch điện tử là giao dịch được thực hiện bằng phương tiện điện tử.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=I | DIEU=3 | KHOAN=1",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương I QUY ĐỊNH CHUNG",
+        "article_id": "Điều 3",
+        "article_title": "Giải thích từ ngữ",
+        "clause_no": "1",
+        "parent_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3",
+        "next_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=2",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "DIEU",
+          "DEFINITION_ITEM"
+        ],
+        "is_definition": true
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:DEFINITION_ITEM=2",
+      "content": "2. Phương tiện điện tử là phương tiện hoạt động dựa trên công nghệ điện, điện tử, kỹ thuật số, từ tính, truyền dẫn không dây, quang học, điện từ hoặc công nghệ tương tự.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=I | DIEU=3 | KHOAN=2",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương I QUY ĐỊNH CHUNG",
+        "article_id": "Điều 3",
+        "article_title": "Giải thích từ ngữ",
+        "clause_no": "2",
+        "parent_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3",
+        "prev_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=1",
+        "next_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=3",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "DIEU",
+          "DEFINITION_ITEM"
+        ],
+        "is_definition": true
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:DEFINITION_ITEM=3",
+      "content": "3. Thông điệp dữ liệu là thông tin được tạo ra, gửi đi, nhận và lưu trữ bằng phương tiện điện tử.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=I | DIEU=3 | KHOAN=3",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương I QUY ĐỊNH CHUNG",
+        "article_id": "Điều 3",
+        "article_title": "Giải thích từ ngữ",
+        "clause_no": "3",
+        "parent_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3",
+        "prev_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=2",
+        "next_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=4",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "DIEU",
+          "DEFINITION_ITEM"
+        ],
+        "is_definition": true
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:DEFINITION_ITEM=4",
+      "content": "4. Chữ ký điện tử là chữ ký được tạo lập dưới dạng từ, chữ, số, ký hiệu, âm thanh hoặc các hình thức khác bằng phương tiện điện tử.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=I | DIEU=3 | KHOAN=4",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương I QUY ĐỊNH CHUNG",
+        "article_id": "Điều 3",
+        "article_title": "Giải thích từ ngữ",
+        "clause_no": "4",
+        "parent_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3",
+        "prev_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=3",
+        "next_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=5",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "DIEU",
+          "DEFINITION_ITEM"
+        ],
+        "is_definition": true
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:DEFINITION_ITEM=5",
+      "content": "5. Chữ ký số là một dạng chữ ký điện tử được tạo ra bằng sự biến đổi một thông điệp dữ liệu sử dụng hệ thống mật mã không đối xứng.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=I | DIEU=3 | KHOAN=5",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương I QUY ĐỊNH CHUNG",
+        "article_id": "Điều 3",
+        "article_title": "Giải thích từ ngữ",
+        "clause_no": "5",
+        "parent_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3",
+        "prev_sibling_id": "LAW=UNKNOWN:CHUONG=I:DIEU=3:KHOAN=4",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "DIEU",
+          "DEFINITION_ITEM"
+        ],
+        "is_definition": true
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=II:MUC=1:DIEU=4",
+      "content": "Điều 4. Giá trị pháp lý của thông điệp dữ liệu 1. Thông điệp dữ liệu không bị phủ nhận giá trị pháp lý chỉ vì đó là thông điệp dữ liệu. 2. Thông điệp dữ liệu có giá trị như văn bản nếu: a) Thông tin chứa trong thông điệp dữ liệu có thể truy cập và sử dụng được để tham chiếu khi cần thiết; b) Nội dung của thông điệp dữ liệu được bảo đảm toàn vẹn kể từ khi được khởi tạo lần đầu dưới dạng thông điệp dữ liệu hoàn chỉnh; c) Thông tin trong thông điệp dữ liệu có thể được lưu trữ và truy cập khi cần thiết.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=II | MUC=1",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương II THÔNG ĐIỆP DỮ LIỆU",
+        "section": "Mục 1 Quy định chung về thông điệp dữ liệu",
+        "parent_id": "LAW=UNKNOWN:CHUONG=II:MUC=1",
+        "next_sibling_id": "LAW=UNKNOWN:CHUONG=II:MUC=1:DIEU=5",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "MUC",
+          "DIEU"
+        ],
+        "is_definition": false
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=II:MUC=1:DIEU=5",
+      "content": "Điều 5. Nguyên bản của thông điệp dữ liệu Thông điệp dữ liệu được coi là nguyên bản khi đáp ứng đủ các điều kiện sau: 1. Nội dung của thông điệp dữ liệu được bảo đảm toàn vẹn kể từ khi được khởi tạo lần đầu dưới dạng một thông điệp dữ liệu hoàn chỉnh. 2. Nội dung của thông điệp dữ liệu có thể được trình bày khi cần thiết để thực hiện quyền và nghĩa vụ của các bên trong giao dịch điện tử.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=II | MUC=1",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương II THÔNG ĐIỆP DỮ LIỆU",
+        "section": "Mục 1 Quy định chung về thông điệp dữ liệu",
+        "parent_id": "LAW=UNKNOWN:CHUONG=II:MUC=1",
+        "prev_sibling_id": "LAW=UNKNOWN:CHUONG=II:MUC=1:DIEU=4",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "MUC",
+          "DIEU"
+        ],
+        "is_definition": false
+      }
+    },
+    {
+      "chunk_id": "LAW=UNKNOWN:CHUONG=II:MUC=2:DIEU=6",
+      "content": "Điều 6. Gửi thông điệp dữ liệu 1. Việc gửi thông điệp dữ liệu hoàn thành khi thông điệp dữ liệu đó được gửi đến hệ thống thông tin nằm ngoài sự kiểm soát của người khởi tạo. 2. Thời điểm gửi thông điệp dữ liệu là thời điểm thông điệp dữ liệu được gửi đến hệ thống thông tin được người nhận chỉ định.",
+      "embedding_prefix": "LAW=UNKNOWN | CHUONG=II | MUC=2",
+      "metadata": {
+        "law_id": "UNKNOWN",
+        "law_name": "GIAO DỊCH ĐIỆN TỬ",
+        "chapter": "Chương II THÔNG ĐIỆP DỮ LIỆU",
+        "section": "Mục 2 Gửi, nhận thông điệp dữ liệu",
+        "parent_id": "LAW=UNKNOWN:CHUONG=II:MUC=2",
+        "source_file": "sample_legal_doc.docx",
+        "lineage": [
+          "LAW",
+          "CHUONG",
+          "MUC",
+          "DIEU"
+        ],
+        "is_definition": false
+      }
+    }
+  ]
+}

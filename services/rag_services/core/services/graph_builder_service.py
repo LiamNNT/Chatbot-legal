@@ -1,17 +1,16 @@
 """
-Graph Builder Service - Core Implementation.
+Legal Graph Builder Service - Core Implementation.
 
-This service handles building and populating the knowledge graph from documents.
+This service handles building and populating the legal knowledge graph from documents.
 It orchestrates entity extraction, deduplication, relationship creation, and
 batch operations for efficient graph population.
 
-Week 2 - Task A1: Graph Builder Core Service
-Priority: P0 (Critical)
+Domain: Pháp luật Quốc gia (National Law)
 
 Architecture:
-    GraphBuilderService
-    ├── EntityProcessor (validates & transforms entities)
-    ├── RelationshipProcessor (creates relationships)
+    LegalGraphBuilderService
+    ├── EntityProcessor (validates & transforms legal entities)
+    ├── RelationshipProcessor (creates legal relationships)
     ├── BatchProcessor (handles large-scale operations)
     └── ConflictResolver (handles duplicates)
 """
@@ -26,14 +25,12 @@ from datetime import datetime
 from core.domain.graph_models import (
     GraphNode,
     GraphRelationship,
-    NodeCategory,
-    RelationshipType,
+    NodeType,
+    EdgeType,
     Entity,
     Relation,
 )
 from core.ports.graph_repository import GraphRepository
-# NOTE: Old indexing module removed - entity extraction now handled differently
-# from indexing.category_guided_entity_extractor import CategoryGuidedEntityExtractor
 from .graph_builder_config import (
     GraphBuilderConfig,
     DeduplicationStrategy,
@@ -45,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GraphBuildResult:
-    """Result of graph building operation"""
+    """Result of legal graph building operation"""
     created_nodes: int = 0
     created_relationships: int = 0
     deduplicated_entities: int = 0
@@ -54,6 +51,12 @@ class GraphBuildResult:
     processing_time_seconds: float = 0.0
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    
+    # Legal-specific stats
+    articles_created: int = 0
+    concepts_created: int = 0
+    prohibited_acts_created: int = 0
+    sanctions_created: int = 0
     
     def success_rate(self) -> float:
         """Calculate success rate for nodes"""
@@ -74,19 +77,29 @@ class GraphBuildResult:
             "success_rate": self.success_rate(),
             "error_count": len(self.errors),
             "warning_count": len(self.warnings),
+            "articles_created": self.articles_created,
+            "concepts_created": self.concepts_created,
+            "prohibited_acts_created": self.prohibited_acts_created,
+            "sanctions_created": self.sanctions_created,
         }
 
 
 @dataclass
-class Document:
-    """Simple document representation"""
+class LegalDocument:
+    """Legal document representation"""
     content: str
     doc_id: str
+    document_number: str = ""
+    title: str = ""
+    document_type: str = "Luật"  # Luật, Nghị định, Thông tư, Quyết định
+    issuing_authority: str = ""
+    issuing_date: str = ""
+    effective_date: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class EntityProcessor:
-    """Validates and transforms entities"""
+    """Validates and transforms legal entities"""
     
     def __init__(self, config: GraphBuilderConfig):
         self.config = config
@@ -106,11 +119,11 @@ class EntityProcessor:
         if not entity.text or not entity.text.strip():
             return False, "Entity text is empty"
         
-        # Check category is valid
+        # Check node type is valid
         try:
-            NodeCategory(entity.type)
+            NodeType(entity.type)
         except ValueError:
-            return False, f"Invalid category: {entity.type}"
+            return False, f"Invalid node type: {entity.type}"
         
         return True, None
     
@@ -118,7 +131,7 @@ class EntityProcessor:
         """
         Normalize entity text and properties.
         
-        For Vietnamese text:
+        For Vietnamese legal text:
         - Remove extra whitespace
         - Standardize diacritics
         - Convert to standard form
@@ -142,11 +155,11 @@ class EntityProcessor:
     
     def entity_to_node(self, entity: Entity) -> GraphNode:
         """
-        Convert Entity to GraphNode.
+        Convert Entity to GraphNode for legal domain.
         
         Maps extracted entities to graph nodes with proper properties.
         """
-        category = NodeCategory(entity.type)
+        node_type = NodeType(entity.type)
         
         # Base properties
         properties = {
@@ -156,29 +169,65 @@ class EntityProcessor:
             "extraction_metadata": entity.metadata,
         }
         
-        # Category-specific properties
-        if category == NodeCategory.MON_HOC:
-            # Try to extract course code from metadata
-            code = entity.metadata.get("code", entity.text)
-            properties["code"] = code
-            properties["credits"] = entity.metadata.get("credits", 0)
+        # Node type-specific properties
+        if node_type == NodeType.DIEU:
+            # Article (Điều)
+            properties["article_number"] = entity.metadata.get("article_number", 0)
+            properties["article_title"] = entity.metadata.get("article_title", entity.text)
+            properties["article_content"] = entity.metadata.get("content", "")
+            properties["content"] = entity.metadata.get("content", "")
         
-        elif category == NodeCategory.QUY_DINH:
-            properties["id"] = entity.metadata.get("id", entity.text)
+        elif node_type == NodeType.KHOAN:
+            # Clause (Khoản)
+            properties["clause_number"] = entity.metadata.get("clause_number", 0)
+            properties["clause_content"] = entity.metadata.get("content", entity.text)
+            properties["content"] = entity.metadata.get("content", entity.text)
+        
+        elif node_type == NodeType.KHAI_NIEM:
+            # Concept (Khái niệm)
+            properties["term"] = entity.metadata.get("term", entity.text)
+            properties["definition"] = entity.metadata.get("definition", "")
+            properties["content"] = entity.metadata.get("definition", "")
+        
+        elif node_type == NodeType.HANH_VI_CAM:
+            # Prohibited Act (Hành vi cấm)
+            properties["prohibited_act"] = entity.text
+            properties["content"] = entity.text
+        
+        elif node_type == NodeType.CHE_TAI:
+            # Sanction (Chế tài)
+            properties["sanction_type"] = entity.metadata.get("sanction_type", "")
+            properties["sanction_content"] = entity.text
+            properties["content"] = entity.text
+        
+        elif node_type == NodeType.QUYEN:
+            # Right (Quyền)
+            properties["right_content"] = entity.text
+            properties["content"] = entity.text
+        
+        elif node_type == NodeType.NGHIA_VU:
+            # Obligation (Nghĩa vụ)
+            properties["obligation_content"] = entity.text
+            properties["content"] = entity.text
+        
+        elif node_type in [NodeType.LUAT, NodeType.NGHI_DINH, NodeType.THONG_TU]:
+            # Legal documents
+            properties["document_number"] = entity.metadata.get("document_number", "")
             properties["title"] = entity.text
-            properties["year"] = entity.metadata.get("year", datetime.now().year)
-        
-        elif category == NodeCategory.KHOA:
-            properties["code"] = entity.metadata.get("code", entity.text)
+            properties["issuing_authority"] = entity.metadata.get("issuing_authority", "")
+            properties["effective_date"] = entity.metadata.get("effective_date", "")
+            properties["status"] = entity.metadata.get("status", "Còn hiệu lực")
         
         return GraphNode(
-            category=category,
-            properties=properties
+            node_type=node_type,
+            properties=properties,
+            name=entity.text,
+            content=properties.get("content", "")
         )
 
 
 class RelationshipProcessor:
-    """Creates and validates relationships"""
+    """Creates and validates legal relationships"""
     
     def __init__(self, config: GraphBuilderConfig):
         self.config = config
@@ -194,9 +243,9 @@ class RelationshipProcessor:
         if relation.confidence < self.config.validation_config.min_confidence_threshold:
             return False, f"Confidence {relation.confidence} below threshold"
         
-        # Check relationship type is valid
+        # Check edge type is valid
         try:
-            RelationshipType(relation.rel_type)
+            EdgeType(relation.rel_type)
         except ValueError:
             return False, f"Invalid relationship type: {relation.rel_type}"
         
@@ -240,7 +289,7 @@ class RelationshipProcessor:
         return GraphRelationship(
             source_id=source_id,
             target_id=target_id,
-            rel_type=RelationshipType(relation.rel_type),
+            edge_type=EdgeType(relation.rel_type),
             properties={
                 "confidence": relation.confidence,
                 **relation.metadata
@@ -310,19 +359,19 @@ class ConflictResolver:
             logger.warning("fuzzywuzzy not installed, falling back to exact match")
             return self._exact_match_dedup(entities)
         
-        # Group by category first
-        by_category: Dict[str, List[Entity]] = defaultdict(list)
+        # Group by type first
+        by_type: Dict[str, List[Entity]] = defaultdict(list)
         for entity in entities:
-            by_category[entity.type].append(entity)
+            by_type[entity.type].append(entity)
         
-        # Deduplicate within each category
+        # Deduplicate within each type
         result = []
         threshold = self.config.deduplication_config.fuzzy_threshold * 100
         
-        for category, cat_entities in by_category.items():
+        for node_type, type_entities in by_type.items():
             deduplicated = []
             
-            for entity in cat_entities:
+            for entity in type_entities:
                 # Find best match in deduplicated list
                 best_match = None
                 best_score = 0
@@ -349,7 +398,7 @@ class ConflictResolver:
         return result
     
     def _embedding_dedup(self, entities: List[Entity]) -> List[Entity]:
-        """Deduplicate using embedding similarity (stub for Week 2)"""
+        """Deduplicate using embedding similarity (stub)"""
         logger.warning("Embedding dedup not yet implemented, using fuzzy match")
         return self._fuzzy_match_dedup(entities)
     
@@ -458,12 +507,12 @@ class BatchProcessor:
         return results
 
 
-class GraphBuilderService:
+class LegalGraphBuilderService:
     """
-    Service for building and populating knowledge graph.
+    Service for building and populating legal knowledge graph.
     
     This is the main service that orchestrates the graph building process:
-    1. Extract entities from documents
+    1. Extract legal entities from documents
     2. Deduplicate and resolve entities
     3. Create nodes in graph (batched)
     4. Extract relationships
@@ -472,32 +521,31 @@ class GraphBuilderService:
     Example:
         ```python
         config = GraphBuilderConfig.high_quality()
-        service = GraphBuilderService(
+        service = LegalGraphBuilderService(
             graph_repo=neo4j_repository,
-            entity_extractor=entity_extractor,
             config=config
         )
         
-        # Build graph from documents
+        # Build graph from legal documents
         result = await service.build_from_documents(documents)
         
         print(f"Created {result.created_nodes} nodes")
-        print(f"Created {result.created_relationships} relationships")
+        print(f"Created {result.articles_created} articles")
         ```
     """
     
     def __init__(
         self,
         graph_repo: GraphRepository,
-        entity_extractor: CategoryGuidedEntityExtractor,
+        entity_extractor: Any = None,  # Optional, can use built-in extraction
         config: Optional[GraphBuilderConfig] = None
     ):
         """
-        Initialize GraphBuilderService.
+        Initialize LegalGraphBuilderService.
         
         Args:
             graph_repo: Graph repository for database operations
-            entity_extractor: Entity extractor for extracting entities from text
+            entity_extractor: Optional entity extractor (uses built-in if not provided)
             config: Configuration (uses default if not provided)
         """
         self.graph_repo = graph_repo
@@ -510,21 +558,21 @@ class GraphBuilderService:
         self.conflict_resolver = ConflictResolver(self.config)
         self.batch_processor = BatchProcessor(self.config)
         
-        logger.info(f"GraphBuilderService initialized with config: {self.config.to_dict()}")
+        logger.info(f"LegalGraphBuilderService initialized with config: {self.config.to_dict()}")
     
     async def build_from_documents(
         self,
-        documents: List[Document],
-        category_hints: Optional[List[NodeCategory]] = None
+        documents: List[LegalDocument],
+        type_hints: Optional[List[NodeType]] = None
     ) -> GraphBuildResult:
         """
-        Build graph from document collection.
+        Build graph from legal document collection.
         
         This is the main entry point for graph building.
         
         Args:
-            documents: List of documents to process
-            category_hints: Optional hints for entity extraction
+            documents: List of legal documents to process
+            type_hints: Optional hints for entity extraction
             
         Returns:
             GraphBuildResult with statistics
@@ -532,12 +580,12 @@ class GraphBuilderService:
         start_time = datetime.now()
         result = GraphBuildResult()
         
-        logger.info(f"Building graph from {len(documents)} documents...")
+        logger.info(f"Building legal graph from {len(documents)} documents...")
         
         try:
             # Phase 1: Extract all entities
             logger.info("Phase 1: Extracting entities...")
-            all_entities = await self._extract_entities(documents, category_hints)
+            all_entities = await self._extract_entities(documents, type_hints)
             logger.info(f"  Extracted {len(all_entities)} entities")
             
             # Phase 2: Deduplicate and resolve entities
@@ -551,6 +599,18 @@ class GraphBuilderService:
             node_ids, entity_to_node_id = await self._batch_create_nodes(resolved_entities)
             result.created_nodes = len(node_ids)
             result.failed_nodes = len(resolved_entities) - len(node_ids)
+            
+            # Count legal-specific stats
+            for entity in resolved_entities:
+                if entity.type == NodeType.DIEU.value:
+                    result.articles_created += 1
+                elif entity.type == NodeType.KHAI_NIEM.value:
+                    result.concepts_created += 1
+                elif entity.type == NodeType.HANH_VI_CAM.value:
+                    result.prohibited_acts_created += 1
+                elif entity.type == NodeType.CHE_TAI.value:
+                    result.sanctions_created += 1
+            
             logger.info(f"  Created {result.created_nodes} nodes")
             
             # Phase 4: Extract and create relationships
@@ -568,7 +628,7 @@ class GraphBuilderService:
             # Calculate processing time
             result.processing_time_seconds = (datetime.now() - start_time).total_seconds()
             
-            logger.info(f"Graph building complete: {result.to_dict()}")
+            logger.info(f"Legal graph building complete: {result.to_dict()}")
             
         except Exception as e:
             logger.error(f"Graph building failed: {e}")
@@ -580,19 +640,23 @@ class GraphBuilderService:
     
     async def _extract_entities(
         self,
-        documents: List[Document],
-        category_hints: Optional[List[NodeCategory]] = None
+        documents: List[LegalDocument],
+        type_hints: Optional[List[NodeType]] = None
     ) -> List[Entity]:
-        """Extract entities from all documents"""
+        """Extract entities from all legal documents"""
         all_entities = []
         
         for doc in documents:
             try:
-                # Extract entities using category-guided extractor
-                entities = self.entity_extractor.extract(
-                    text=doc.content,
-                    categories=[cat.value for cat in category_hints] if category_hints else None
-                )
+                if self.entity_extractor:
+                    # Use provided extractor
+                    entities = self.entity_extractor.extract(
+                        text=doc.content,
+                        types=[t.value for t in type_hints] if type_hints else None
+                    )
+                else:
+                    # Use simple built-in extraction (stub)
+                    entities = self._simple_extract(doc)
                 
                 # Validate and normalize entities
                 for entity in entities:
@@ -607,6 +671,38 @@ class GraphBuilderService:
                 logger.error(f"Entity extraction failed for doc {doc.doc_id}: {e}")
         
         return all_entities
+    
+    def _simple_extract(self, doc: LegalDocument) -> List[Entity]:
+        """Simple built-in extraction for legal documents (stub)"""
+        # This is a placeholder - real implementation would use LLM/NLP
+        import re
+        entities = []
+        
+        # Extract article mentions (Điều X)
+        article_pattern = r'Điều\s+(\d+)'
+        for match in re.finditer(article_pattern, doc.content):
+            entities.append(Entity(
+                text=match.group(0),
+                type=NodeType.DIEU.value,
+                start=match.start(),
+                end=match.end(),
+                confidence=0.9,
+                metadata={"article_number": int(match.group(1))}
+            ))
+        
+        # Extract clause mentions (Khoản X)
+        clause_pattern = r'Khoản\s+(\d+)'
+        for match in re.finditer(clause_pattern, doc.content):
+            entities.append(Entity(
+                text=match.group(0),
+                type=NodeType.KHOAN.value,
+                start=match.start(),
+                end=match.end(),
+                confidence=0.9,
+                metadata={"clause_number": int(match.group(1))}
+            ))
+        
+        return entities
     
     def _resolve_entities(self, entities: List[Entity]) -> List[Entity]:
         """Deduplicate and resolve entity references"""
@@ -663,15 +759,14 @@ class GraphBuilderService:
     
     async def _extract_relationships(
         self,
-        documents: List[Document],
+        documents: List[LegalDocument],
         entity_to_node_id: Dict[str, str]
     ) -> List[GraphRelationship]:
         """
-        Extract relationships from documents.
+        Extract relationships from legal documents.
         
-        Week 2: Stub implementation - will be enhanced with LLM extraction
+        Stub implementation - will be enhanced with LLM extraction.
         """
-        # TODO: Implement LLM-guided relation extraction (Task B1)
         logger.warning("LLM relation extraction not yet implemented")
         return []
     
@@ -703,3 +798,8 @@ class GraphBuilderService:
         """Get current graph statistics"""
         stats = await self.graph_repo.get_graph_stats()
         return stats
+
+
+# Alias for backwards compatibility
+GraphBuilderService = LegalGraphBuilderService
+Document = LegalDocument
