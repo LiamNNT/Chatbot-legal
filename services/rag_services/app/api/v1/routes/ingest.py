@@ -52,21 +52,39 @@ router = APIRouter(prefix="/ingest", tags=["ingestion"])
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "rag_ingest_uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+# Supported file types
+DOCX_EXTENSIONS = {".docx", ".doc"}
+PDF_EXTENSIONS = {".pdf"}
+ALL_EXTENSIONS = DOCX_EXTENSIONS | PDF_EXTENSIONS
 
-def _validate_file(file: UploadFile) -> None:
-    """Validate uploaded file."""
+
+def _validate_file(file: UploadFile, allowed_extensions: set = None) -> str:
+    """
+    Validate uploaded file and return its extension.
+    
+    Args:
+        file: Uploaded file
+        allowed_extensions: Set of allowed extensions (defaults to ALL_EXTENSIONS)
+        
+    Returns:
+        File extension (lowercase)
+    """
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Filename is required"
         )
     
+    allowed = allowed_extensions or ALL_EXTENSIONS
     suffix = Path(file.filename).suffix.lower()
-    if suffix not in [".docx", ".doc"]:
+    
+    if suffix not in allowed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: {suffix}. Only .docx and .doc are allowed."
+            detail=f"Unsupported file type: {suffix}. Allowed: {', '.join(sorted(allowed))}"
         )
+    
+    return suffix
 
 
 async def _save_upload(file: UploadFile) -> Path:
@@ -149,8 +167,8 @@ async def start_ingestion(
     run_vector: bool = Form(True, description="Index to vector database"),
 ):
     """Start ingestion of a legal document."""
-    # Validate file
-    _validate_file(file)
+    # Validate file (DOCX/DOC only for this endpoint)
+    _validate_file(file, DOCX_EXTENSIONS)
     
     # Save file
     file_path = await _save_upload(file)
@@ -184,6 +202,136 @@ async def start_ingestion(
         job_id=job_id,
         status=JobStatus.QUEUED,
         message="Ingestion started. Poll GET /api/v1/ingest/jobs/{job_id} for progress.",
+    )
+
+
+@router.post(
+    "/pdf",
+    response_model=IngestJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start PDF document ingestion with KG extraction",
+    description="""
+    Upload a Vietnamese legal document (PDF) for ingestion with Knowledge Graph extraction.
+    
+    The document will be processed in the background using LlamaParse + PropertyGraphIndex:
+    1. Parse PDF with LlamaParse API (cloud-based, handles complex tables)
+    2. Extract semantic chunks preserving article boundaries
+    3. Extract entities and relations using GPT-4o
+    4. Index chunks to vector database (Weaviate/OpenSearch)
+    5. Build knowledge graph in Neo4j
+    
+    This endpoint uses LlamaIndex-based extraction instead of VLM.
+    Returns a job_id for tracking progress.
+    """,
+)
+async def start_pdf_ingestion(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="PDF file to ingest"),
+    law_name: Optional[str] = Form(None, description="Override law name"),
+    law_id: Optional[str] = Form(None, description="Override law ID"),
+    index_namespace: str = Form("laws_vn", description="Namespace for indexing"),
+    run_kg: bool = Form(True, description="Extract and build knowledge graph in Neo4j"),
+    run_vector: bool = Form(True, description="Index chunks to vector database"),
+):
+    """Start ingestion of a PDF legal document with KG extraction."""
+    # Validate file (PDF only for this endpoint)
+    _validate_file(file, PDF_EXTENSIONS)
+    
+    # Save file
+    file_path = await _save_upload(file)
+    
+    # Create job
+    job_store = get_job_store()
+    job_id = await job_store.create_job(
+        filename=file.filename,
+        law_id=law_id,
+        law_name=law_name,
+        index_namespace=index_namespace,
+        run_kg=run_kg,
+        run_vector=run_vector,
+    )
+    
+    # Start background processing (same handler, auto-detects PDF)
+    background_tasks.add_task(
+        _process_ingestion,
+        job_id=job_id,
+        file_path=file_path,
+        law_id=law_id,
+        law_name=law_name,
+        index_namespace=index_namespace,
+        run_kg=run_kg,
+        run_vector=run_vector,
+    )
+    
+    logger.info(f"Started PDF ingestion job {job_id} for {file.filename}")
+    
+    return IngestJobResponse(
+        job_id=job_id,
+        status=JobStatus.QUEUED,
+        message="PDF ingestion started with KG extraction. Poll GET /api/v1/ingest/jobs/{job_id} for progress.",
+    )
+
+
+@router.post(
+    "/file",
+    response_model=IngestJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start document ingestion (auto-detect format)",
+    description="""
+    Upload any supported legal document (DOCX, DOC, or PDF) for ingestion.
+    
+    The service automatically detects the file format and routes to the appropriate parser:
+    - DOCX/DOC: VietnamLegalDocxParser (hierarchical chunking)
+    - PDF: LlamaIndexExtractionService (LlamaParse + KG extraction)
+    
+    Returns a job_id for tracking progress.
+    """,
+)
+async def start_file_ingestion(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="Document file to ingest (DOCX, DOC, or PDF)"),
+    law_name: Optional[str] = Form(None, description="Override law name"),
+    law_id: Optional[str] = Form(None, description="Override law ID"),
+    index_namespace: str = Form("laws_vn", description="Namespace for indexing"),
+    run_kg: bool = Form(True, description="Build knowledge graph (PDF: extract entities; DOCX: build from structure)"),
+    run_vector: bool = Form(True, description="Index to vector database"),
+):
+    """Start ingestion of any supported document format."""
+    # Validate file (all supported types)
+    suffix = _validate_file(file, ALL_EXTENSIONS)
+    
+    # Save file
+    file_path = await _save_upload(file)
+    
+    # Create job
+    job_store = get_job_store()
+    job_id = await job_store.create_job(
+        filename=file.filename,
+        law_id=law_id,
+        law_name=law_name,
+        index_namespace=index_namespace,
+        run_kg=run_kg,
+        run_vector=run_vector,
+    )
+    
+    # Start background processing
+    background_tasks.add_task(
+        _process_ingestion,
+        job_id=job_id,
+        file_path=file_path,
+        law_id=law_id,
+        law_name=law_name,
+        index_namespace=index_namespace,
+        run_kg=run_kg,
+        run_vector=run_vector,
+    )
+    
+    logger.info(f"Started {suffix} ingestion job {job_id} for {file.filename}")
+    
+    return IngestJobResponse(
+        job_id=job_id,
+        status=JobStatus.QUEUED,
+        message=f"Ingestion started ({suffix} detected). Poll GET /api/v1/ingest/jobs/{{job_id}} for progress.",
     )
 
 

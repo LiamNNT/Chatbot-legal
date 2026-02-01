@@ -2,11 +2,24 @@
 API Routes for Knowledge Graph Extraction Pipeline.
 
 Provides endpoints for:
-- Stage 1: Upload PDF and extract structure (VLM only)
-- Stage 2: Upload Stage 1 JSON and extract semantics (LLM)
-- Full pipeline: Combined VLM + LLM
+- LlamaIndex extraction: Modern PDF extraction using LlamaParse + PropertyGraphIndex (RECOMMENDED)
+- Stage 1: Upload PDF and extract structure (VLM only) - DEPRECATED
+- Stage 2: Upload Stage 1 JSON and extract semantics (LLM) - DEPRECATED
+- Full pipeline: Combined VLM + LLM - DEPRECATED
 - Get extraction status
 - Download extraction results
+
+MIGRATION NOTICE:
+    The VLM-based extraction (Stage 1/Stage 2/Full pipeline) is deprecated.
+    Please use the new LlamaIndex-based extraction endpoint: POST /api/v1/extraction/llamaindex
+    
+    Benefits of LlamaIndex extraction:
+    - Cloud-based LlamaParse (no local GPU needed)
+    - Better table handling across page boundaries
+    - Automatic entity/relation extraction using GPT-4o
+    - Direct Neo4j integration
+    
+    Set USE_LLAMAINDEX_EXTRACTION=true in your environment to enable.
 """
 
 import os
@@ -15,6 +28,7 @@ import asyncio
 import uuid
 import shutil
 import logging
+import warnings
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -28,6 +42,9 @@ logger = logging.getLogger(__name__)
 # Load .env file for Neo4j credentials
 from dotenv import load_dotenv
 load_dotenv()
+
+# Check for LlamaIndex extraction mode
+USE_LLAMAINDEX_EXTRACTION = os.getenv("USE_LLAMAINDEX_EXTRACTION", "true").lower() in ("true", "1", "yes")
 
 router = APIRouter(prefix="/extraction", tags=["Knowledge Graph Extraction"])
 
@@ -51,13 +68,19 @@ class ExtractionRequest(BaseModel):
     push_to_neo4j: bool = False
 
 
+class LlamaIndexExtractionRequest(BaseModel):
+    """Request model for LlamaIndex-based extraction."""
+    push_to_neo4j: bool = False
+    extract_kg: bool = True  # Whether to extract entities/relations
+
+
 class ExtractionStatus(BaseModel):
     """Status of an extraction job."""
     job_id: str
     status: str  # pending, processing, completed, failed
     progress: int  # 0-100
     current_step: str
-    stage: str = "full"  # stage1, stage2, full
+    stage: str = "full"  # stage1, stage2, full, llamaindex
     created_at: str
     completed_at: Optional[str] = None
     result_file: Optional[str] = None
@@ -80,7 +103,220 @@ def get_extraction_status(job_id: str) -> Optional[ExtractionStatus]:
 
 
 # =============================================================================
-# Stage 2: LLM Semantic Extraction (FIXED TABLE MERGE)
+# LlamaIndex Extraction (NEW - RECOMMENDED)
+# =============================================================================
+
+@router.post("/llamaindex", response_model=ExtractionStatus)
+async def start_llamaindex_extraction(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    push_to_neo4j: bool = False,
+    extract_kg: bool = True,
+):
+    """
+    Extract knowledge graph from PDF using LlamaParse + PropertyGraphIndex.
+    
+    This is the RECOMMENDED extraction method that replaces the VLM-based pipeline.
+    
+    Features:
+    - Cloud-based LlamaParse API (no local GPU required)
+    - Handles complex tables across page boundaries
+    - Automatic entity/relation extraction using GPT-4o
+    - Direct Neo4j integration
+    
+    Args:
+        file: PDF file to process
+        push_to_neo4j: Whether to push extracted graph to Neo4j
+        extract_kg: Whether to run entity/relation extraction
+        
+    Returns:
+        ExtractionStatus with job_id for tracking
+    """
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=400, 
+            detail="Only PDF files are supported for LlamaIndex extraction"
+        )
+    
+    # Generate job ID
+    job_id = str(uuid.uuid4())[:8]
+    
+    # Save uploaded file
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = file.filename.replace(" ", "_")
+    file_path = UPLOAD_DIR / f"{timestamp}_{job_id}_{safe_name}"
+    
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+    
+    # Initialize job status
+    extraction_jobs[job_id] = {
+        "job_id": job_id,
+        "status": "pending",
+        "progress": 0,
+        "current_step": "Đã nhận file, đang khởi tạo...",
+        "stage": "llamaindex",
+        "created_at": datetime.now().isoformat(),
+        "completed_at": None,
+        "result_file": None,
+        "error": None,
+        "stats": None,
+    }
+    
+    # Start background extraction
+    background_tasks.add_task(
+        run_llamaindex_pipeline,
+        job_id=job_id,
+        pdf_path=file_path,
+        push_to_neo4j=push_to_neo4j,
+        extract_kg=extract_kg,
+    )
+    
+    return ExtractionStatus(**extraction_jobs[job_id])
+
+
+async def run_llamaindex_pipeline(
+    job_id: str,
+    pdf_path: Path,
+    push_to_neo4j: bool,
+    extract_kg: bool,
+):
+    """
+    Run LlamaIndex-based extraction pipeline.
+    
+    Uses LlamaParse for document parsing and PropertyGraphIndex for KG extraction.
+    """
+    try:
+        extraction_jobs[job_id]["status"] = "processing"
+        extraction_jobs[job_id]["current_step"] = "Đang khởi tạo LlamaIndex..."
+        extraction_jobs[job_id]["progress"] = 10
+        
+        # Import LlamaIndex extraction service
+        from app.core.extraction.llamaindex_extractor import LlamaIndexExtractionService
+        
+        # Initialize service
+        service = LlamaIndexExtractionService.from_env()
+        
+        extraction_jobs[job_id]["current_step"] = "Đang parse PDF với LlamaParse..."
+        extraction_jobs[job_id]["progress"] = 30
+        
+        # Run extraction
+        result = await service.extract_from_pdf(pdf_path, document_id=job_id)
+        
+        extraction_jobs[job_id]["current_step"] = f"Đã extract {len(result.parsed_document.chunks)} chunks"
+        extraction_jobs[job_id]["progress"] = 60
+        
+        # Prepare output
+        output_data = {
+            "job_id": job_id,
+            "document_id": result.document_id,
+            "extraction_method": "llamaindex",
+            "parsed_document": {
+                "content_preview": result.parsed_document.content[:1000] + "..." if len(result.parsed_document.content) > 1000 else result.parsed_document.content,
+                "tables": result.parsed_document.tables,
+                "chunks": result.parsed_document.chunks,
+                "pages": result.parsed_document.pages,
+            },
+            "entities": [
+                {
+                    "id": e.id,
+                    "type": e.type.value if hasattr(e.type, 'value') else str(e.type),
+                    "text": e.text,
+                    "normalized": e.normalized,
+                    "source_chunk": e.source_chunk_id,
+                }
+                for e in result.entities
+            ],
+            "relations": [
+                {
+                    "source_id": r.source_id,
+                    "target_id": r.target_id,
+                    "type": r.type.value if hasattr(r.type, 'value') else str(r.type),
+                    "evidence": r.evidence,
+                }
+                for r in result.relations
+            ],
+            "errors": result.errors,
+            "metadata": result.metadata,
+        }
+        
+        # Save result
+        result_file = RESULTS_DIR / f"{job_id}_llamaindex_result.json"
+        with open(result_file, "w", encoding="utf-8") as f:
+            json.dump(output_data, f, ensure_ascii=False, indent=2)
+        
+        extraction_jobs[job_id]["progress"] = 80
+        
+        # Push to Neo4j if requested
+        if push_to_neo4j and (result.entities or result.relations):
+            extraction_jobs[job_id]["current_step"] = "Đang đẩy dữ liệu lên Neo4j..."
+            
+            try:
+                from adapters.graph.neo4j_adapter import Neo4jGraphAdapter
+                from app.config.settings import settings
+                
+                adapter = Neo4jGraphAdapter(
+                    uri=settings.neo4j_uri,
+                    username=settings.neo4j_user,
+                    password=settings.neo4j_password,
+                )
+                
+                # Convert to graph models
+                nodes, rels = result.to_graph_models()
+                
+                # Store to Neo4j
+                for node in nodes:
+                    await adapter.add_node(node)
+                
+                for rel in rels:
+                    await adapter.add_relationship(rel)
+                
+                adapter.close()
+                
+                logger.info(f"Pushed {len(nodes)} nodes, {len(rels)} relations to Neo4j")
+                
+            except Exception as e:
+                logger.error(f"Neo4j push failed: {e}")
+                result.errors.append(f"Neo4j push failed: {str(e)}")
+        
+        # Complete
+        extraction_jobs[job_id]["status"] = "completed"
+        extraction_jobs[job_id]["progress"] = 100
+        extraction_jobs[job_id]["current_step"] = "Hoàn thành!"
+        extraction_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+        extraction_jobs[job_id]["result_file"] = str(result_file)
+        extraction_jobs[job_id]["stats"] = {
+            "chunks": len(result.parsed_document.chunks),
+            "tables": len(result.parsed_document.tables),
+            "entities": len(result.entities),
+            "relations": len(result.relations),
+            "pages": result.parsed_document.pages,
+            "errors": len(result.errors),
+        }
+        
+        logger.info(
+            f"LlamaIndex extraction completed for job {job_id}: "
+            f"{len(result.entities)} entities, {len(result.relations)} relations"
+        )
+        
+    except Exception as e:
+        logger.exception(f"LlamaIndex extraction failed for job {job_id}")
+        extraction_jobs[job_id]["status"] = "failed"
+        extraction_jobs[job_id]["error"] = str(e)
+        extraction_jobs[job_id]["current_step"] = f"Lỗi: {str(e)}"
+        
+    finally:
+        # Cleanup uploaded file
+        try:
+            if pdf_path.exists():
+                pdf_path.unlink()
+        except Exception:
+            pass
+
+
+# =============================================================================
+# Stage 2: LLM Semantic Extraction (DEPRECATED - FIXED TABLE MERGE)
 # =============================================================================
 
 async def run_stage2_pipeline(
@@ -93,14 +329,21 @@ async def run_stage2_pipeline(
     Run Stage 2: LLM for semantic extraction from Stage 1 results.
     Input: Stage 1 JSON (structure)
     Output: Combined JSON with structure + semantics
+    
+    DEPRECATED: Use LlamaIndex extraction instead.
     """
+    warnings.warn(
+        "Stage 2 pipeline is deprecated. Use /api/v1/extraction/llamaindex instead.",
+        DeprecationWarning
+    )
+    
     try:
         extraction_jobs[job_id]["status"] = "processing"
         extraction_jobs[job_id]["current_step"] = "Đang khởi tạo LLM..."
         extraction_jobs[job_id]["progress"] = 10
         
-        # Import extraction modules
-        from app.core.extraction.hybrid_extractor import SemanticExtractor, LLMConfig
+        # Import extraction modules (deprecated - use LlamaIndex endpoint instead)
+        from app.core.extraction.deprecated.hybrid_extractor import SemanticExtractor, LLMConfig
         
         loop = asyncio.get_event_loop()
         
@@ -344,8 +587,8 @@ async def run_extraction_pipeline(
         extraction_jobs[job_id]["current_step"] = "Đang chuyển PDF sang ảnh..."
         extraction_jobs[job_id]["progress"] = 10
         
-        # Import extraction modules
-        from app.core.extraction.hybrid_extractor import StructureExtractor, SemanticExtractor, VLMConfig, LLMConfig
+        # Import extraction modules (deprecated - use LlamaIndex endpoint instead)
+        from app.core.extraction.deprecated.hybrid_extractor import StructureExtractor, SemanticExtractor, VLMConfig, LLMConfig
         from pdf2image import convert_from_path
         
         # Convert PDF to images
@@ -670,8 +913,8 @@ async def run_hybrid_stage1_pipeline(
         extraction_jobs[job_id]["current_step"] = "Đang khởi tạo LlamaParse + VLM hybrid..."
         extraction_jobs[job_id]["progress"] = 5
         
-        # Import hybrid extractor
-        from app.core.extraction.hybrid_llamaparse_vlm import HybridExtractor
+        # Import hybrid extractor (deprecated - use LlamaIndex endpoint instead)
+        from app.core.extraction.deprecated.hybrid_llamaparse_vlm import HybridExtractor
         
         loop = asyncio.get_event_loop()
         

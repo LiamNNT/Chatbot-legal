@@ -3,12 +3,16 @@
 Document Ingestion Service for Vietnamese Legal Documents.
 
 This service orchestrates the ingestion pipeline:
-1. Parse DOCX -> hierarchical chunks
+1. Parse DOCX/PDF -> hierarchical chunks (+ KG entities for PDF)
 2. Generate embeddings
 3. Index to Vector DB (OpenSearch/Weaviate)
 4. Build Knowledge Graph in Neo4j
 
 The service runs processing in the background and updates job progress.
+
+Supported file types:
+- DOCX/DOC: Uses VietnamLegalDocxParser for hierarchical chunking
+- PDF: Uses LlamaIndexExtractionService for parsing + KG extraction
 """
 
 from __future__ import annotations
@@ -44,12 +48,19 @@ class IngestService:
     Service for ingesting Vietnamese legal documents.
     
     Handles:
-    - File parsing with VietnamLegalDocxParser
+    - File parsing with VietnamLegalDocxParser (DOCX/DOC) or LlamaIndexExtractionService (PDF)
     - Embedding generation
     - Vector DB indexing (Weaviate or OpenSearch)
     - Neo4j Knowledge Graph building
     - Progress tracking
+    
+    File type routing:
+    - .docx, .doc: VietnamLegalDocxParser (hierarchical structure extraction)
+    - .pdf: LlamaIndexExtractionService (LlamaParse + KG extraction)
     """
+    
+    DOCX_EXTENSIONS = {".docx", ".doc"}
+    PDF_EXTENSIONS = {".pdf"}
     
     def __init__(
         self,
@@ -74,6 +85,7 @@ class IngestService:
         
         # Lazy-loaded components
         self._parser: Optional[VietnamLegalDocxParser] = None
+        self._pdf_extractor = None
         self._embedder = None
         self._vector_adapter = None
         self._graph_adapter = None
@@ -86,6 +98,42 @@ class IngestService:
                 token_threshold=self.token_threshold
             )
         return self._parser
+    
+    @property
+    def pdf_extractor(self):
+        """Get or create the PDF extractor (LlamaIndexExtractionService)."""
+        if self._pdf_extractor is None:
+            try:
+                from app.core.extraction.llamaindex_extractor import (
+                    LlamaIndexExtractionService,
+                    ExtractionConfig,
+                )
+                from app.config.settings import settings
+                
+                config = ExtractionConfig(
+                    llama_cloud_api_key=getattr(settings, 'llama_cloud_api_key', None),
+                    llm_api_key=settings.openai_api_key or getattr(settings, 'openrouter_api_key', None),
+                    llm_base_url=settings.openai_base_url or None,
+                    llm_model=settings.llm_model,
+                    neo4j_uri=settings.neo4j_uri,
+                    neo4j_user=settings.neo4j_user,
+                    neo4j_password=settings.neo4j_password,
+                    use_gpt4o_mode=getattr(settings, 'llama_parse_gpt4o_mode', True),
+                )
+                self._pdf_extractor = LlamaIndexExtractionService(config)
+                logger.info("Initialized LlamaIndexExtractionService for PDF parsing")
+            except Exception as e:
+                logger.error(f"Failed to initialize PDF extractor: {e}")
+                raise
+        return self._pdf_extractor
+    
+    def _is_pdf(self, file_path: Path) -> bool:
+        """Check if file is a PDF."""
+        return file_path.suffix.lower() in self.PDF_EXTENSIONS
+    
+    def _is_docx(self, file_path: Path) -> bool:
+        """Check if file is a DOCX/DOC."""
+        return file_path.suffix.lower() in self.DOCX_EXTENSIONS
     
     def _get_embedder(self):
         """Lazy-load the embedding model."""
@@ -165,13 +213,66 @@ class IngestService:
         """
         Start the ingestion process for a document.
         
-        This method runs the full pipeline:
-        1. Parse document
-        2. Generate embeddings
-        3. Index to vector DB
-        4. Build knowledge graph
+        Routes to appropriate handler based on file type:
+        - DOCX/DOC: Uses VietnamLegalDocxParser for hierarchical parsing
+        - PDF: Uses LlamaIndexExtractionService for parsing + KG extraction
         
         Progress is tracked via the job store.
+        
+        Args:
+            job_id: ID of the job to process
+            file_path: Path to the uploaded file
+            law_id: Optional law ID override
+            law_name: Optional law name override
+            index_namespace: Namespace for indexing
+            run_kg: Whether to build knowledge graph
+            run_vector: Whether to index to vector DB
+        """
+        file_path = Path(file_path)
+        
+        # Route based on file type
+        if self._is_pdf(file_path):
+            await self._ingest_pdf(
+                job_id=job_id,
+                file_path=file_path,
+                law_id=law_id,
+                law_name=law_name,
+                index_namespace=index_namespace,
+                run_kg=run_kg,
+                run_vector=run_vector,
+            )
+        elif self._is_docx(file_path):
+            await self._ingest_docx(
+                job_id=job_id,
+                file_path=file_path,
+                law_id=law_id,
+                law_name=law_name,
+                index_namespace=index_namespace,
+                run_kg=run_kg,
+                run_vector=run_vector,
+            )
+        else:
+            error = JobError(
+                code="UNSUPPORTED_FILE",
+                message=f"Unsupported file type: {file_path.suffix}",
+                stage="validation",
+            )
+            await self.job_store.set_failed(job_id, error)
+    
+    async def _ingest_docx(
+        self,
+        job_id: str,
+        file_path: Path,
+        law_id: Optional[str] = None,
+        law_name: Optional[str] = None,
+        index_namespace: str = "laws_vn",
+        run_kg: bool = True,
+        run_vector: bool = True,
+    ) -> None:
+        """
+        Ingest a DOCX/DOC file using VietnamLegalDocxParser.
+        
+        This is the original ingestion flow for Word documents.
         
         Args:
             job_id: ID of the job to process
@@ -419,6 +520,436 @@ class IngestService:
             
             await self.job_store.set_failed(job_id, error)
     
+    async def _ingest_pdf(
+        self,
+        job_id: str,
+        file_path: Path,
+        law_id: Optional[str] = None,
+        law_name: Optional[str] = None,
+        index_namespace: str = "laws_vn",
+        run_kg: bool = True,
+        run_vector: bool = True,
+    ) -> None:
+        """
+        Ingest a PDF file using LlamaIndexExtractionService.
+        
+        This uses LlamaParse + PropertyGraphIndex for:
+        - Document parsing (handles complex tables)
+        - Entity/relation extraction using GPT-4o
+        - Direct Neo4j integration
+        
+        Args:
+            job_id: ID of the job to process
+            file_path: Path to the uploaded file
+            law_id: Optional law ID override
+            law_name: Optional law name override
+            index_namespace: Namespace for indexing
+            run_kg: Whether to extract and build knowledge graph
+            run_vector: Whether to index chunks to vector DB
+        """
+        start_time = time.time()
+        metrics = JobMetrics()
+        
+        try:
+            # Mark job as started
+            await self.job_store.set_started(job_id)
+            
+            # =================================================================
+            # Stage 1: Parse PDF with LlamaParse
+            # =================================================================
+            await self.job_store.update_status(
+                job_id,
+                JobStatus.PARSING,
+                JobProgress(stage="parsing", message="Parsing PDF with LlamaParse...")
+            )
+            
+            parse_start = time.time()
+            
+            # Generate document ID
+            doc_id = law_id or file_path.stem
+            
+            # Extract using LlamaIndexExtractionService
+            extraction_result = await self.pdf_extractor.extract_from_pdf(
+                file_path,
+                document_id=doc_id
+            )
+            
+            parse_time = int((time.time() - parse_start) * 1000)
+            metrics.parse_time_ms = parse_time
+            
+            # Check for errors
+            if extraction_result.errors and not extraction_result.parsed_document.chunks:
+                raise ValueError(f"PDF extraction failed: {extraction_result.errors}")
+            
+            # Update law info
+            final_law_id = law_id or doc_id
+            final_law_name = law_name or file_path.stem
+            await self.job_store.update_law_info(job_id, final_law_id, final_law_name)
+            
+            # Update metrics
+            metrics.chunk_count = len(extraction_result.parsed_document.chunks)
+            
+            logger.info(
+                f"Job {job_id}: PDF parsed - {metrics.chunk_count} chunks, "
+                f"{len(extraction_result.entities)} entities, "
+                f"{len(extraction_result.relations)} relations"
+            )
+            
+            # =================================================================
+            # Stage 2: Convert to ChunkInfo
+            # =================================================================
+            await self.job_store.update_status(
+                job_id,
+                JobStatus.CHUNKING,
+                JobProgress(
+                    stage="chunking",
+                    current=len(extraction_result.parsed_document.chunks),
+                    total=len(extraction_result.parsed_document.chunks),
+                    percentage=100.0,
+                    message=f"Created {len(extraction_result.parsed_document.chunks)} chunks from PDF"
+                )
+            )
+            
+            # Convert PDF chunks to ChunkInfo
+            chunk_infos = []
+            for chunk in extraction_result.parsed_document.chunks:
+                # Build embedding prefix
+                prefix_parts = []
+                if final_law_id:
+                    prefix_parts.append(f"LAW={final_law_id}")
+                if chunk.get("chapter"):
+                    prefix_parts.append(f"CHUONG={chunk['chapter']}")
+                if chunk.get("article_number"):
+                    prefix_parts.append(f"DIEU={chunk['article_number']}")
+                
+                embedding_prefix = " | ".join(prefix_parts) if prefix_parts else f"PDF={file_path.stem}"
+                
+                chunk_info = ChunkInfo(
+                    chunk_id=chunk.get("id", f"pdf_chunk_{len(chunk_infos)}"),
+                    content=chunk.get("content", ""),
+                    embedding_prefix=embedding_prefix,
+                    metadata={
+                        "law_id": final_law_id,
+                        "law_name": final_law_name,
+                        "source_type": "pdf",
+                        "is_article": chunk.get("is_article", False),
+                        "chapter": chunk.get("chapter"),
+                        "article_number": chunk.get("article_number"),
+                        "type": chunk.get("type"),
+                    },
+                    indexed_vector=False,
+                    indexed_graph=False,
+                )
+                chunk_infos.append(chunk_info)
+            
+            # Store chunks in job store
+            await self.job_store.store_chunks(job_id, chunk_infos)
+            
+            # =================================================================
+            # Stage 3: Generate Embeddings (if vector indexing)
+            # =================================================================
+            embeddings: List[List[float]] = []
+            
+            if run_vector and chunk_infos:
+                await self.job_store.update_status(
+                    job_id,
+                    JobStatus.EMBEDDING,
+                    JobProgress(
+                        stage="embedding",
+                        current=0,
+                        total=len(chunk_infos),
+                        message="Generating embeddings..."
+                    )
+                )
+                
+                embed_start = time.time()
+                embedder = self._get_embedder()
+                
+                # Generate embeddings in batches
+                batch_size = 32
+                texts = [
+                    f"{chunk.embedding_prefix}\n{chunk.content}"
+                    for chunk in chunk_infos
+                ]
+                
+                for i in range(0, len(texts), batch_size):
+                    batch = texts[i:i + batch_size]
+                    batch_embeddings = embedder.encode(batch).tolist()
+                    embeddings.extend(batch_embeddings)
+                    
+                    # Update progress
+                    progress = min(i + batch_size, len(texts))
+                    await self.job_store.update_status(
+                        job_id,
+                        JobStatus.EMBEDDING,
+                        JobProgress(
+                            stage="embedding",
+                            current=progress,
+                            total=len(texts),
+                            percentage=(progress / len(texts)) * 100,
+                            message=f"Generated {progress}/{len(texts)} embeddings"
+                        )
+                    )
+                
+                embed_time = int((time.time() - embed_start) * 1000)
+                metrics.embed_time_ms = embed_time
+                
+                logger.info(f"Job {job_id}: Generated {len(embeddings)} embeddings in {embed_time}ms")
+            
+            # =================================================================
+            # Stage 4: Index to Vector DB
+            # =================================================================
+            if run_vector and chunk_infos and embeddings:
+                await self.job_store.update_status(
+                    job_id,
+                    JobStatus.INDEXING_VECTOR,
+                    JobProgress(
+                        stage="indexing_vector",
+                        current=0,
+                        total=len(chunk_infos),
+                        message="Indexing to vector database..."
+                    )
+                )
+                
+                vector_start = time.time()
+                
+                try:
+                    # Index PDF chunks to vector DB
+                    indexed_count = await self._index_pdf_chunks_to_vector_db(
+                        job_id,
+                        chunk_infos,
+                        embeddings,
+                        index_namespace,
+                    )
+                    
+                    # Update chunk_infos to mark as indexed
+                    for info in chunk_infos:
+                        info.indexed_vector = True
+                    await self.job_store.store_chunks(job_id, chunk_infos)
+                    
+                except Exception as e:
+                    logger.error(f"Vector indexing failed: {e}")
+                    # Continue with graph indexing
+                
+                vector_time = int((time.time() - vector_start) * 1000)
+                metrics.vector_index_time_ms = vector_time
+                
+                logger.info(f"Job {job_id}: Vector indexing completed in {vector_time}ms")
+            
+            # =================================================================
+            # Stage 5: Index Entities/Relations to Neo4j (PDF-specific KG)
+            # =================================================================
+            if run_kg and (extraction_result.entities or extraction_result.relations):
+                await self.job_store.update_status(
+                    job_id,
+                    JobStatus.INDEXING_GRAPH,
+                    JobProgress(
+                        stage="indexing_graph",
+                        current=0,
+                        total=len(extraction_result.entities) + len(extraction_result.relations),
+                        message="Building knowledge graph from extracted entities..."
+                    )
+                )
+                
+                graph_start = time.time()
+                
+                try:
+                    nodes_created, rels_created = await self._index_pdf_kg_to_neo4j(
+                        job_id,
+                        extraction_result.entities,
+                        extraction_result.relations,
+                    )
+                    
+                    metrics.nodes_created = nodes_created
+                    metrics.relationships_created = rels_created
+                    
+                    # Update chunk_infos to mark as indexed
+                    for info in chunk_infos:
+                        info.indexed_graph = True
+                    await self.job_store.store_chunks(job_id, chunk_infos)
+                    
+                except Exception as e:
+                    logger.error(f"Knowledge graph building failed: {e}")
+                
+                graph_time = int((time.time() - graph_start) * 1000)
+                metrics.graph_index_time_ms = graph_time
+                
+                logger.info(
+                    f"Job {job_id}: Knowledge graph built in {graph_time}ms - "
+                    f"{metrics.nodes_created} nodes, {metrics.relationships_created} relations"
+                )
+            
+            # =================================================================
+            # Complete
+            # =================================================================
+            total_time = int((time.time() - start_time) * 1000)
+            metrics.total_time_ms = total_time
+            
+            await self.job_store.set_completed(job_id, metrics)
+            
+            logger.info(
+                f"Job {job_id}: PDF ingestion completed in {total_time}ms - "
+                f"{metrics.chunk_count} chunks, "
+                f"{metrics.nodes_created or 0} nodes, "
+                f"{metrics.relationships_created or 0} relationships"
+            )
+            
+        except Exception as e:
+            logger.exception(f"Job {job_id} (PDF) failed: {e}")
+            
+            error = JobError(
+                code="PDF_INGEST_ERROR",
+                message=str(e),
+                stage=None,
+                traceback=traceback.format_exc(),
+            )
+            
+            await self.job_store.set_failed(job_id, error)
+    
+    async def _index_pdf_chunks_to_vector_db(
+        self,
+        job_id: str,
+        chunk_infos: List[ChunkInfo],
+        embeddings: List[List[float]],
+        namespace: str,
+    ) -> int:
+        """Index PDF chunks to vector database."""
+        from core.domain.models import DocumentChunk, DocumentMetadata, DocumentLanguage
+        
+        adapter = self._get_vector_adapter()
+        
+        doc_chunks = []
+        for i, (chunk, embedding) in enumerate(zip(chunk_infos, embeddings)):
+            metadata = DocumentMetadata(
+                doc_id=chunk.metadata.get("law_id", "unknown"),
+                chunk_id=chunk.chunk_id,
+                title=chunk.metadata.get("article_number", ""),
+                doc_type="legal_pdf",
+                language=DocumentLanguage.VIETNAMESE,
+                extra={
+                    "law_name": chunk.metadata.get("law_name"),
+                    "source_type": "pdf",
+                    "is_article": chunk.metadata.get("is_article"),
+                    "chapter": chunk.metadata.get("chapter"),
+                    "embedding_prefix": chunk.embedding_prefix,
+                }
+            )
+            
+            doc_chunk = DocumentChunk(
+                text=chunk.content,
+                metadata=metadata,
+                chunk_index=i,
+                embedding=embedding,
+            )
+            doc_chunks.append(doc_chunk)
+            
+            # Update progress periodically
+            if (i + 1) % 50 == 0:
+                await self.job_store.update_status(
+                    job_id,
+                    JobStatus.INDEXING_VECTOR,
+                    JobProgress(
+                        stage="indexing_vector",
+                        current=i + 1,
+                        total=len(chunk_infos),
+                        percentage=((i + 1) / len(chunk_infos)) * 100,
+                        message=f"Indexing {i + 1}/{len(chunk_infos)} chunks"
+                    )
+                )
+        
+        # Bulk index
+        success = await adapter.index_documents(doc_chunks)
+        
+        if not success:
+            raise RuntimeError("Vector indexing failed")
+        
+        return len(doc_chunks)
+    
+    async def _index_pdf_kg_to_neo4j(
+        self,
+        job_id: str,
+        entities: List,
+        relations: List,
+    ) -> Tuple[int, int]:
+        """Index PDF-extracted entities and relations to Neo4j."""
+        from core.domain.graph_models import GraphNode, GraphRelationship, NodeCategory, RelationshipType
+        
+        adapter = self._get_graph_adapter()
+        if not adapter:
+            logger.warning("Neo4j adapter not available, skipping graph building")
+            return (0, 0)
+        
+        nodes_created = 0
+        relationships_created = 0
+        
+        # Convert entities to GraphNodes
+        for entity in entities:
+            try:
+                # Map entity type to NodeCategory
+                try:
+                    category = NodeCategory[entity.type.value if hasattr(entity.type, 'value') else str(entity.type)]
+                except KeyError:
+                    category = NodeCategory.DIEU_KIEN
+                
+                node = GraphNode(
+                    id=entity.id,
+                    category=category,
+                    properties={
+                        "text": entity.text,
+                        "normalized": entity.normalized,
+                        "source_chunk": entity.source_chunk_id,
+                        "confidence": entity.confidence,
+                        **entity.properties,
+                    }
+                )
+                
+                await adapter.add_node(node)
+                nodes_created += 1
+                
+            except Exception as e:
+                logger.debug(f"Entity node creation skipped: {e}")
+        
+        # Convert relations to GraphRelationships
+        for rel in relations:
+            try:
+                # Map relation type
+                try:
+                    rel_type = RelationshipType[rel.type.value if hasattr(rel.type, 'value') else str(rel.type)]
+                except KeyError:
+                    rel_type = RelationshipType.LIEN_QUAN_NOI_DUNG
+                
+                relationship = GraphRelationship(
+                    source_id=rel.source_id,
+                    target_id=rel.target_id,
+                    rel_type=rel_type,
+                    properties={
+                        "evidence": rel.evidence,
+                        "confidence": rel.confidence,
+                        **rel.properties,
+                    }
+                )
+                
+                await adapter.add_relationship(relationship)
+                relationships_created += 1
+                
+            except Exception as e:
+                logger.debug(f"Relationship creation skipped: {e}")
+            
+            # Update progress
+            if (nodes_created + relationships_created) % 20 == 0:
+                await self.job_store.update_status(
+                    job_id,
+                    JobStatus.INDEXING_GRAPH,
+                    JobProgress(
+                        stage="indexing_graph",
+                        current=nodes_created + relationships_created,
+                        total=len(entities) + len(relations),
+                        message=f"Created {nodes_created} nodes, {relationships_created} relationships"
+                    )
+                )
+        
+        return (nodes_created, relationships_created)
+
     async def _index_to_vector_db(
         self,
         job_id: str,

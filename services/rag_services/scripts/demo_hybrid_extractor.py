@@ -22,8 +22,8 @@ RAG_SERVICES_ROOT = Path(__file__).parent.parent
 if str(RAG_SERVICES_ROOT) not in sys.path:
     sys.path.insert(0, str(RAG_SERVICES_ROOT))
 
-# Import from new app.core location
-from app.core.extraction.hybrid_extractor import (
+# Import from deprecated location (use LlamaIndexExtractionService for new code)
+from app.core.extraction.deprecated.hybrid_extractor import (
     StructureExtractor,
     SemanticExtractor,
     VLMConfig,
@@ -137,7 +137,7 @@ def demo_graph_conversion():
     print("=" * 60)
     
     # Create mock hybrid result
-    from app.core.extraction.hybrid_extractor import (
+    from app.core.extraction.deprecated.hybrid_extractor import (
         SemanticNode,
         SemanticRelation,
     )

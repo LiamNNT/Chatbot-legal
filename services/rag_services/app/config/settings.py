@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     # --- Redis Configuration (for job state) ---
     redis_url: str = "redis://localhost:6379/0"  # Redis connection URL
 
+    # --- LlamaIndex Extraction Configuration ---
+    use_llamaindex_extraction: bool = True  # Use LlamaIndex instead of VLM (DEFAULT: true)
+    llama_cloud_api_key: str = ""  # LlamaParse API key (from cloud.llamaindex.ai)
+    llama_parse_gpt4o_mode: bool = True  # Use GPT-4o for complex documents
+    llama_parse_result_type: str = "markdown"  # Output format: markdown, text, json
+    
     # --- Logging Configuration ---
     log_level: str = "INFO"
 

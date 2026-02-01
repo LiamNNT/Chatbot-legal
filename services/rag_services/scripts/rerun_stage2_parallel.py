@@ -16,8 +16,8 @@ RAG_SERVICES_ROOT = Path(__file__).parent.parent
 if str(RAG_SERVICES_ROOT) not in sys.path:
     sys.path.insert(0, str(RAG_SERVICES_ROOT))
 
-# Import from new app.core location
-from app.core.extraction.hybrid_extractor import ParallelSemanticExtractor, LLMConfig
+# Import from deprecated location (use LlamaIndexExtractionService for new code)
+from app.core.extraction.deprecated.hybrid_extractor import ParallelSemanticExtractor, LLMConfig
 
 
 def main():
