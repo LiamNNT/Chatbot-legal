@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const RAG_SERVICE_URL = import.meta.env.VITE_RAG_SERVICE_URL || 'http://localhost:8002';
+const RAG_SERVICE_URL = import.meta.env.VITE_RAG_SERVICE_URL || 'http://localhost:8000';
 
 /**
  * Knowledge Graph Extraction Component

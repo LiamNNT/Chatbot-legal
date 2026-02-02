@@ -1142,5 +1142,9 @@ def main():
         traceback.print_exc()
 
 
+# Alias for backward compatibility
+Neo4jGraphBuilder = LegalGraphBuilder
+
+
 if __name__ == "__main__":
     main()

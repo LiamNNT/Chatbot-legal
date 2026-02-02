@@ -7,3 +7,6 @@ export { default as SettingsModal } from './SettingsModal';
 export { default as SystemInfoModal } from './SystemInfoModal';
 export { default as KGExtractionPanel } from './KGExtractionPanel';
 export { default as DataBrowserPanel } from './DataBrowserPanel';
+export { default as LegalDocExtractionPage } from './LegalDocExtractionPage';
+export { default as KnowledgeGraphViewer } from './KnowledgeGraphViewer';
+export { default as DocumentStructureTree } from './DocumentStructureTree';

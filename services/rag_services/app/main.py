@@ -23,6 +23,7 @@ from app.api.v1.routes.opensearch import router as opensearch_router
 from app.api.v1.routes.extraction import router as extraction_router  # KG Extraction Pipeline
 from app.api.v1.routes.ingest import router as ingest_router  # Document Ingestion Pipeline
 from app.api.v1.routes.retrieval import router as retrieval_router  # Legal Retrieval Pipeline
+from app.api.v1.routes.kg import router as kg_router  # Knowledge Graph Query API
 from app.api.endpoints.health import router as health_v2_router  # Week 2 comprehensive health checks
 
 app = FastAPI(title="RAG Service", version="0.1.0")
@@ -49,6 +50,7 @@ app.include_router(opensearch_router, prefix="/v1")
 app.include_router(extraction_router, prefix="/v1")  # KG Extraction Pipeline
 app.include_router(ingest_router, prefix="/v1")  # Document Ingestion Pipeline
 app.include_router(retrieval_router, prefix="/v1")  # Legal Retrieval Pipeline
+app.include_router(kg_router, prefix="/v1")  # Knowledge Graph Query API
 
 # Week 2: Comprehensive health checks for all dependencies
 app.include_router(health_v2_router, prefix="/v2")

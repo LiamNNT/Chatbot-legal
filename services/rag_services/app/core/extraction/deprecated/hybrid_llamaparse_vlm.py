@@ -41,7 +41,7 @@ class HybridConfig:
     """Configuration for hybrid LlamaParse + VLM extraction."""
     
     # LlamaParse settings
-    llama_cloud_api_key: str = ""
+    llama_cloud_api_key: str = "llx-hA9tHV3v481rmzAjnyTk14iOxjpG7lCjSO4R4s9dxPhCF10k"
     llama_parse_result_type: str = "markdown"
     llama_parse_language: str = "vi"
     

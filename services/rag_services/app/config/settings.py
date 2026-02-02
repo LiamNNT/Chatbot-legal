@@ -28,9 +28,12 @@ class Settings(BaseSettings):
     # Weaviate settings
     weaviate_url: str = "http://localhost:8090"  # Weaviate server URL (mapped to 8090 in docker)
     weaviate_api_key: str = ""  # Optional API key for authentication
-    weaviate_class_name: str = "ChatbotUit"  # Weaviate class name (PascalCase)
+    weaviate_class_name: str = "VietnameseDocumentV3"  # Weaviate collection name (default for compatibility)
     weaviate_use_cloud: bool = False  # true = cloud, false = local
     weaviate_grpc_port: int = 50051  # gRPC port for Weaviate
+    
+    # Dual-write mode: index to both Weaviate (vector) and OpenSearch (keyword) simultaneously
+    enable_dual_index: bool = False  # Set to True to enable dual-write to Weaviate + OpenSearch
 
     # --- AI Model Configuration ---
     emb_model: str = "intfloat/multilingual-e5-base" # The embedding model to use
@@ -81,14 +84,14 @@ class Settings(BaseSettings):
     # --- Neo4j Graph Database ---
     neo4j_uri: str = "bolt://localhost:7687"  # Neo4j connection URI
     neo4j_user: str = "neo4j"  # Neo4j username
-    neo4j_password: str = "password"  # Neo4j password
+    neo4j_password: str = "uitchatbot"  # Neo4j password (default: uitchatbot)
 
     # --- Redis Configuration (for job state) ---
     redis_url: str = "redis://localhost:6379/0"  # Redis connection URL
 
     # --- LlamaIndex Extraction Configuration ---
     use_llamaindex_extraction: bool = True  # Use LlamaIndex instead of VLM (DEFAULT: true)
-    llama_cloud_api_key: str = ""  # LlamaParse API key (from cloud.llamaindex.ai)
+    llama_cloud_api_key: str = "llx-hA9tHV3v481rmzAjnyTk14iOxjpG7lCjSO4R4s9dxPhCF10k"  # LlamaParse API key (from cloud.llamaindex.ai)
     llama_parse_gpt4o_mode: bool = True  # Use GPT-4o for complex documents
     llama_parse_result_type: str = "markdown"  # Output format: markdown, text, json
     

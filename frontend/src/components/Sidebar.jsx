@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Plus, Trash2, Settings, Info, FileUp, Sparkles } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, Settings, Info, FileUp, Sparkles, Scale, Bot } from 'lucide-react';
 
 const Sidebar = ({ 
   sessions = [], 
@@ -9,7 +9,7 @@ const Sidebar = ({
   onDeleteSession,
   onShowSettings,
   onShowInfo,
-  onShowKGExtraction,
+  onShowExtraction,
   onShowJsonCleaner
 }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -93,11 +93,11 @@ const Sidebar = ({
         {/* Footer */}
         <div className="border-t border-gray-800 p-4 space-y-2">
           <button
-            onClick={onShowKGExtraction}
+            onClick={onShowExtraction}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-gray-800 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30"
           >
-            <FileUp className="h-4 w-4 text-purple-400" />
-            <span className="text-purple-300">Trích xuất KG</span>
+            <Scale className="h-4 w-4 text-purple-400" />
+            <span className="text-purple-300">Trích xuất VB Pháp luật</span>
           </button>
           <button
             onClick={onShowJsonCleaner}
@@ -133,8 +133,5 @@ const Sidebar = ({
     </>
   );
 };
-
-// Fix missing Bot import
-import { Bot } from 'lucide-react';
 
 export default Sidebar;

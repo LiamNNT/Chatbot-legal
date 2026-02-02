@@ -17,7 +17,8 @@ from core.domain.models import DocumentChunk, SearchQuery, SearchResult, Documen
 from infrastructure.store.vector.weaviate_store import (
     get_weaviate_client,
     ensure_collection_exists,
-    DOCUMENT_COLLECTION
+    get_collection_name,
+    DOCUMENT_COLLECTION  # Kept for backward compatibility
 )
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ class WeaviateVectorAdapter(VectorSearchRepository):
         self.api_key = api_key
         self._client = None
         self._collection = None
+        self._collection_name = None
         self._initialize_client()
     
     def _initialize_client(self):
@@ -67,15 +69,19 @@ class WeaviateVectorAdapter(VectorSearchRepository):
                 api_key=self.api_key
             )
             
+            # Get collection name from settings
+            self._collection_name = get_collection_name()
+            logger.info(f"Using Weaviate collection: {self._collection_name}")
+            
             # Ensure collection exists
-            if ensure_collection_exists(self._client):
-                self._collection = self._client.collections.get(DOCUMENT_COLLECTION)
-                logger.info(f"Initialized Weaviate adapter with collection '{DOCUMENT_COLLECTION}'")
+            if ensure_collection_exists(self._client, self._collection_name):
+                self._collection = self._client.collections.get(self._collection_name)
+                logger.info(f"Initialized Weaviate adapter with collection '{self._collection_name}'")
             else:
-                raise RuntimeError(f"Failed to create collection '{DOCUMENT_COLLECTION}'")
+                raise RuntimeError(f"Failed to create collection '{self._collection_name}'")
                 
         except Exception as e:
-            logger.error(f"Failed to initialize Weaviate client: {e}")
+            logger.error(f"Failed to initialize Weaviate client: {e}", exc_info=True)
             raise
     
     def _embed_text(self, text: str) -> List[float]:
@@ -218,7 +224,7 @@ class WeaviateVectorAdapter(VectorSearchRepository):
         Index document chunks for vector search.
         
         Args:
-            chunks: List of document chunks to index
+            chunks: List of document chunks to index (with pre-computed embeddings)
             
         Returns:
             True if successful
@@ -228,17 +234,27 @@ class WeaviateVectorAdapter(VectorSearchRepository):
                 logger.warning("No chunks to index")
                 return True
             
+            logger.info(f"[WEAVIATE_INDEX] Starting batch insert for {len(chunks)} chunks")
+            
+            # Track article IDs being indexed
+            article_ids_indexed = []
+            chunks_with_embedding = 0
+            chunks_without_embedding = 0
+            
             # Batch insert for efficiency
             with self._collection.batch.dynamic() as batch:
                 for chunk in chunks:
-                    # Generate embedding
-                    vector = self._embed_text(chunk.text)
+                    # Use pre-computed embedding if available, otherwise generate
+                    if chunk.embedding is not None:
+                        vector = chunk.embedding
+                        chunks_with_embedding += 1
+                    else:
+                        vector = self._embed_text(chunk.text)
+                        chunks_without_embedding += 1
                     
-                    # DEBUG: Log vector info before adding to batch
-                    logger.info(f"DEBUG: About to add chunk {chunk.chunk_index}")
-                    logger.info(f"DEBUG: Vector type: {type(vector)}, length: {len(vector) if hasattr(vector, '__len__') else 'N/A'}")
-                    if isinstance(vector, list) and len(vector) > 0:
-                        logger.info(f"DEBUG: First 5 values: {vector[:5]}")
+                    # Track article ID
+                    if chunk.metadata.extra and chunk.metadata.extra.get("article_id"):
+                        article_ids_indexed.append(chunk.metadata.extra.get("article_id"))
                     
                     # Convert to Weaviate format
                     obj = self._chunk_to_weaviate_object(chunk, vector)
@@ -249,12 +265,58 @@ class WeaviateVectorAdapter(VectorSearchRepository):
                         vector=vector
                     )
             
-            logger.info(f"Successfully indexed {len(chunks)} chunks to Weaviate")
+            logger.info(f"[WEAVIATE_INDEX] Batch complete: {chunks_with_embedding} with pre-computed embedding, {chunks_without_embedding} embedded on-the-fly")
+            logger.info(f"[WEAVIATE_INDEX] Article IDs indexed: {sorted(set(article_ids_indexed))[:20]}...")
+            logger.info(f"[WEAVIATE_INDEX] Successfully indexed {len(chunks)} chunks to Weaviate collection '{self._collection_name}'")
+            
+            # Verify data was actually written
+            try:
+                count = self._collection.aggregate.over_all(total_count=True).total_count
+                logger.info(f"[WEAVIATE_INDEX] Verification: Collection '{self._collection_name}' now has {count} total objects")
+            except Exception as ve:
+                logger.warning(f"[WEAVIATE_INDEX] Could not verify count: {ve}")
+            
             return True
             
         except Exception as e:
-            logger.error(f"Error indexing documents: {e}")
+            logger.error(f"[WEAVIATE_INDEX] Error indexing documents: {e}", exc_info=True)
             return False
+    
+    def check_connection(self) -> dict:
+        """
+        Check Weaviate connection and collection status.
+        
+        Returns:
+            Dict with connection status, collection info, and document count
+        """
+        result = {
+            "connected": False,
+            "url": self.weaviate_url,
+            "collection_name": self._collection_name,
+            "collection_exists": False,
+            "document_count": 0,
+            "error": None
+        }
+        
+        try:
+            if self._client and self._client.is_ready():
+                result["connected"] = True
+            else:
+                result["error"] = "Client not connected or not ready"
+                return result
+            
+            if self._client.collections.exists(self._collection_name):
+                result["collection_exists"] = True
+                count = self._collection.aggregate.over_all(total_count=True).total_count
+                result["document_count"] = count
+            else:
+                result["error"] = f"Collection '{self._collection_name}' does not exist"
+                
+        except Exception as e:
+            result["error"] = str(e)
+            logger.error(f"[WEAVIATE] Connection check failed: {e}")
+        
+        return result
     
     async def search(self, query: SearchQuery) -> List[SearchResult]:
         """

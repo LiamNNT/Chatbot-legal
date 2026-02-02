@@ -80,50 +80,53 @@ class NodeType(str, Enum):
 class EdgeType(str, Enum):
     """
     Các loại quan hệ (Edge) trong đồ thị tri thức pháp luật.
+    
+    IMPORTANT: Values are UPPER_SNAKE_CASE ASCII for Neo4j compatibility.
+    Neo4j queries use these values as relationship types (e.g., [:THUOC_VE]).
     """
     # --- Quan hệ cấu trúc văn bản ---
-    THUOC_VE = "thuộc về"                   # Điều thuộc về Chương
-    CHUA = "chứa"                           # Chương chứa các Điều
-    KE_TIEP = "kế tiếp"                     # Điều 2 kế tiếp Điều 1
+    THUOC_VE = "THUOC_VE"                   # Điều thuộc về Chương (belongs to)
+    CHUA = "CHUA"                           # Chương chứa các Điều (contains)
+    KE_TIEP = "KE_TIEP"                     # Điều 2 kế tiếp Điều 1 (next)
     
     # --- Quan hệ tham chiếu ---
-    THAM_CHIEU = "tham chiếu"               # Điều A tham chiếu Điều B
-    DAN_CHIEU = "dẫn chiếu"                 # Dẫn chiếu đến văn bản khác
-    VIEN_DAN = "viện dẫn"                   # Viện dẫn căn cứ
+    THAM_CHIEU = "THAM_CHIEU"               # Điều A tham chiếu Điều B
+    DAN_CHIEU = "DAN_CHIEU"                 # Dẫn chiếu đến văn bản khác
+    VIEN_DAN = "VIEN_DAN"                   # Viện dẫn căn cứ
     
     # --- Quan hệ thời gian/hiệu lực ---
-    THAY_THE = "thay thế"                   # Luật mới thay thế luật cũ
-    SUA_DOI = "sửa đổi"                     # Sửa đổi điều khoản
-    BO_SUNG = "bổ sung"                     # Bổ sung điều khoản
-    BAI_BO = "bãi bỏ"                       # Bãi bỏ điều khoản
+    THAY_THE = "THAY_THE"                   # Luật mới thay thế luật cũ
+    SUA_DOI = "SUA_DOI"                     # Sửa đổi điều khoản
+    BO_SUNG = "BO_SUNG"                     # Bổ sung điều khoản
+    BAI_BO = "BAI_BO"                       # Bãi bỏ điều khoản
     
     # --- Quan hệ ngữ nghĩa ---
-    DINH_NGHIA = "định nghĩa"               # Định nghĩa khái niệm
-    LA_LOAI = "là loại"                     # Quan hệ phân loại (is-a)
-    BAO_GOM = "bao gồm"                     # Bao gồm (has-part)
-    LIEN_QUAN = "liên quan"                 # Liên quan đến
-    DONG_NGHIA = "đồng nghĩa"               # Đồng nghĩa/tương đương
+    DINH_NGHIA = "DINH_NGHIA"               # Định nghĩa khái niệm
+    LA_LOAI = "LA_LOAI"                     # Quan hệ phân loại (is-a)
+    BAO_GOM = "BAO_GOM"                     # Bao gồm (has-part)
+    LIEN_QUAN = "LIEN_QUAN"                 # Liên quan đến
+    DONG_NGHIA = "DONG_NGHIA"               # Đồng nghĩa/tương đương
     
     # --- Quan hệ pháp lý ---
-    QUY_DINH = "quy định"                   # Quy định về
-    AP_DUNG = "áp dụng"                     # Áp dụng cho
-    DIEU_CHINH = "điều chỉnh"               # Điều chỉnh đối tượng
-    RANG_BUOC = "ràng buộc"                 # Ràng buộc pháp lý
+    QUY_DINH = "QUY_DINH"                   # Quy định về
+    AP_DUNG = "AP_DUNG"                     # Áp dụng cho
+    DIEU_CHINH = "DIEU_CHINH"               # Điều chỉnh đối tượng
+    RANG_BUOC = "RANG_BUOC"                 # Ràng buộc pháp lý
     
     # --- Quan hệ chủ thể ---
-    CO_QUYEN = "có quyền"                   # Chủ thể có quyền
-    CO_NGHIA_VU = "có nghĩa vụ"             # Chủ thể có nghĩa vụ
-    CHIU_TRACH_NHIEM = "chịu trách nhiệm"   # Chịu trách nhiệm
-    QUAN_LY = "quản lý"                     # Cơ quan quản lý
-    THUOC_THAM_QUYEN = "thuộc thẩm quyền"   # Thuộc thẩm quyền
+    CO_QUYEN = "CO_QUYEN"                   # Chủ thể có quyền
+    CO_NGHIA_VU = "CO_NGHIA_VU"             # Chủ thể có nghĩa vụ
+    CHIU_TRACH_NHIEM = "CHIU_TRACH_NHIEM"   # Chịu trách nhiệm
+    QUAN_LY = "QUAN_LY"                     # Cơ quan quản lý
+    THUOC_THAM_QUYEN = "THUOC_THAM_QUYEN"   # Thuộc thẩm quyền
     
     # --- Quan hệ hành vi - chế tài ---
-    DAN_DEN = "dẫn đến"                     # Hành vi dẫn đến hậu quả
-    BI_XU_LY = "bị xử lý"                   # Hành vi bị xử lý
+    DAN_DEN = "DAN_DEN"                     # Hành vi dẫn đến hậu quả
+    BI_XU_LY = "BI_XU_LY"                   # Hành vi bị xử lý
     
     # --- Quan hệ điều kiện ---
-    YEU_CAU = "yêu cầu"                     # Yêu cầu điều kiện
-    NGOAI_TRU = "ngoại trừ"                 # Ngoại trừ trường hợp
+    YEU_CAU = "YEU_CAU"                     # Yêu cầu điều kiện
+    NGOAI_TRU = "NGOAI_TRU"                 # Ngoại trừ trường hợp
 
 
 class LegalStatus(str, Enum):

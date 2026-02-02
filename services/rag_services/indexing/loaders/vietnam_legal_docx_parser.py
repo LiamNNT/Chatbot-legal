@@ -163,27 +163,42 @@ class LegalNode:
             node = node.parent
         return list(reversed(lineage))
     
-    def get_ancestors(self) -> Dict[str, str]:
-        """Get all ancestors as a dict for metadata."""
+    def get_ancestors(self, include_self: bool = True) -> Dict[str, str]:
+        """
+        Get all ancestors as a dict for metadata.
+        
+        Args:
+            include_self: If True, include the current node in ancestors.
+                          This is important when creating chunks at ARTICLE level
+                          to ensure article_id and article_title are included.
+        """
         ancestors = {}
-        node = self.parent
+        # Start from self if include_self=True, otherwise start from parent
+        node = self if include_self else self.parent
         while node is not None:
             if node.node_type == LegalNodeType.LAW:
                 ancestors["law_id"] = node.identifier
                 ancestors["law_name"] = node.title or ""
             elif node.node_type == LegalNodeType.CHAPTER:
                 ancestors["chapter"] = f"Chương {node.identifier}"
+                ancestors["chapter_id"] = node.identifier
                 if node.title:
                     ancestors["chapter"] += f" {node.title}"
+                    ancestors["chapter_title"] = node.title
             elif node.node_type == LegalNodeType.SECTION:
                 ancestors["section"] = f"Mục {node.identifier}"
+                ancestors["section_id"] = node.identifier
                 if node.title:
                     ancestors["section"] += f" {node.title}"
+                    ancestors["section_title"] = node.title
             elif node.node_type == LegalNodeType.ARTICLE:
                 ancestors["article_id"] = f"Điều {node.identifier}"
+                ancestors["article_number"] = node.identifier
                 ancestors["article_title"] = node.title or ""
             elif node.node_type == LegalNodeType.CLAUSE:
                 ancestors["clause_no"] = node.identifier
+            elif node.node_type == LegalNodeType.POINT:
+                ancestors["point_no"] = node.identifier
             node = node.parent
         return ancestors
 
@@ -218,6 +233,7 @@ class ParseResult:
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     statistics: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)  # Added for doc_kind, document_number, etc.
 
 
 # =============================================================================
@@ -303,7 +319,7 @@ class VietnamLegalDocxParser:
             law_name: Override law name (auto-extracted if None)
             
         Returns:
-            ParseResult with chunks, tree structure, and statistics
+            ParseResult with chunks, tree structure, statistics, and metadata
         """
         file_path = Path(file_path)
         result = ParseResult(success=False)
@@ -346,14 +362,22 @@ class VietnamLegalDocxParser:
             if law_id is None:
                 law_id = self._extract_law_id(file_path.name, normalized_lines)
             if law_name is None:
-                law_name = self._extract_law_name(normalized_lines)
+                law_name = self._extract_document_title(normalized_lines)
+            
+            # Detect document kind (LAW, DECREE, CIRCULAR)
+            doc_kind, confidence, evidence = self.detect_doc_kind(
+                law_id, normalized_lines, file_path.name
+            )
+            
+            # Detect issuer
+            issuer = self._detect_issuer(normalized_lines)
             
             # Build document tree
             tree = self._build_tree(normalized_lines, law_id, law_name, file_path.name)
             result.tree = tree
             
-            # Generate chunks from tree
-            chunks = self._generate_chunks(tree, file_path.name)
+            # Generate chunks from tree with doc_kind metadata
+            chunks = self._generate_chunks(tree, file_path.name, doc_kind=doc_kind)
             result.chunks = chunks
             
             # Calculate statistics
@@ -364,6 +388,16 @@ class VietnamLegalDocxParser:
                 "articles": self._count_nodes(tree, LegalNodeType.ARTICLE),
                 "clauses": self._count_nodes(tree, LegalNodeType.CLAUSE),
                 "points": self._count_nodes(tree, LegalNodeType.POINT),
+            }
+            
+            # Populate metadata for downstream use
+            result.metadata = {
+                "doc_kind": doc_kind,
+                "document_number": law_id,
+                "title": law_name,
+                "issuer": issuer,
+                "detection_confidence": confidence,
+                "detection_evidence": evidence,
             }
             
             result.success = True
@@ -430,12 +464,20 @@ class VietnamLegalDocxParser:
     
     def _extract_paragraphs(self, docx_path: Path) -> List[str]:
         """
-        Extract paragraphs from a DOCX file.
+        Extract paragraphs from a DOCX file in document order.
+        Handles both regular paragraphs and text within tables.
         Excludes headers and footers.
+        
+        IMPORTANT: This method iterates through the document body in order,
+        ensuring that table content appears in the correct position relative
+        to surrounding paragraphs.
         """
         try:
             from docx import Document
             from docx.opc.exceptions import PackageNotFoundError
+            from docx.table import Table
+            from docx.text.paragraph import Paragraph
+            from docx.oxml.ns import qn
         except ImportError:
             raise ImportError(
                 "python-docx is required. Install with: pip install python-docx"
@@ -448,20 +490,93 @@ class VietnamLegalDocxParser:
         
         paragraphs = []
         
-        # Extract main body paragraphs (this excludes headers/footers by default)
-        for para in doc.paragraphs:
-            text = para.text.strip()
-            if text:
-                paragraphs.append(text)
+        # DEBUG: Track what we find
+        debug_dieu_found = set()
         
-        # Also extract from tables if present
-        for table in doc.tables:
+        def check_and_log_dieu(text: str, source: str):
+            """Helper to track Điều patterns found."""
+            if re.match(r'^\s*Điều\s+\d+', text, re.IGNORECASE):
+                dieu_match = re.match(r'^\s*Điều\s+(\d+)', text, re.IGNORECASE)
+                if dieu_match:
+                    dieu_num = int(dieu_match.group(1))
+                    debug_dieu_found.add(dieu_num)
+                    logger.debug(f"[{source}] Found Điều {dieu_num}: {text[:60]}...")
+        
+        def iter_block_items(parent):
+            """
+            Generate a reference to each paragraph and table child within parent,
+            in document order. Each returned value is an instance of either 
+            Paragraph or Table.
+            
+            parent can be Document or _Cell
+            """
+            from docx.document import Document as DocxDocument
+            from docx.table import _Cell, Table
+            from docx.oxml.table import CT_Tbl
+            from docx.oxml.text.paragraph import CT_P
+            
+            if isinstance(parent, DocxDocument):
+                parent_elm = parent.element.body
+            elif isinstance(parent, _Cell):
+                parent_elm = parent._tc
+            else:
+                raise ValueError(f"Unsupported parent type: {type(parent)}")
+            
+            for child in parent_elm.iterchildren():
+                if isinstance(child, CT_P):
+                    yield Paragraph(child, parent)
+                elif isinstance(child, CT_Tbl):
+                    yield Table(child, parent)
+        
+        def extract_from_table(table: Table) -> List[str]:
+            """Extract text from table cells in reading order."""
+            texts = []
             for row in table.rows:
                 for cell in row.cells:
-                    for para in cell.paragraphs:
-                        text = para.text.strip()
-                        if text:
-                            paragraphs.append(text)
+                    # Recursively process cell content (may contain nested tables)
+                    for block in iter_block_items(cell):
+                        if isinstance(block, Paragraph):
+                            text = block.text.strip()
+                            if text:
+                                texts.append(text)
+                                check_and_log_dieu(text, "TABLE")
+                        elif isinstance(block, Table):
+                            # Nested table
+                            texts.extend(extract_from_table(block))
+            return texts
+        
+        # Process document body in order
+        for block in iter_block_items(doc):
+            if isinstance(block, Paragraph):
+                text = block.text.strip()
+                if text:
+                    paragraphs.append(text)
+                    check_and_log_dieu(text, "PARA")
+            elif isinstance(block, Table):
+                table_texts = extract_from_table(block)
+                paragraphs.extend(table_texts)
+        
+        # DEBUG: Print summary of found articles
+        if debug_dieu_found:
+            sorted_dieu = sorted(debug_dieu_found)
+            logger.info(f"[DEBUG] Found Điều numbers: {sorted_dieu}")
+            logger.info(f"[DEBUG] Total unique Điều found: {len(sorted_dieu)}")
+            
+            # Check for gaps
+            if sorted_dieu:
+                expected = set(range(sorted_dieu[0], sorted_dieu[-1] + 1))
+                missing = expected - debug_dieu_found
+                if missing:
+                    logger.warning(f"[DEBUG] MISSING Điều numbers: {sorted(missing)}")
+                else:
+                    logger.info(f"[DEBUG] No missing Điều in range {sorted_dieu[0]}-{sorted_dieu[-1]}")
+        else:
+            logger.warning("[DEBUG] No 'Điều' patterns found in document!")
+        
+        # Also print first few paragraphs for debugging
+        logger.debug(f"[DEBUG] First 10 paragraphs:")
+        for idx, p in enumerate(paragraphs[:10]):
+            logger.debug(f"  [{idx}] {p[:80]}...")
         
         return paragraphs
     
@@ -512,21 +627,127 @@ class VietnamLegalDocxParser:
         # Fallback
         return "UNKNOWN"
     
-    def _extract_law_name(self, lines: List[str]) -> str:
-        """Extract law name from content."""
-        # Look for "LUẬT" followed by the name
-        for i, line in enumerate(lines[:30]):
-            if re.match(r"^\s*LUẬT\s*$", line, re.IGNORECASE):
-                # Next non-empty line might be the name
-                for j in range(i + 1, min(i + 5, len(lines))):
-                    if lines[j] and not re.match(r"^\s*Số:", lines[j]):
-                        return lines[j]
-            elif re.match(r"^\s*LUẬT\s+(.+)$", line, re.IGNORECASE):
-                match = re.match(r"^\s*LUẬT\s+(.+)$", line, re.IGNORECASE)
-                if match:
-                    return f"Luật {match.group(1)}"
+    def _extract_document_title(self, lines: List[str]) -> str:
+        """
+        Extract document title from content.
+        Supports LUẬT, NGHỊ ĐỊNH, THÔNG TƯ.
+        """
+        # Patterns for different document types
+        doc_type_patterns = [
+            (r"^\s*LUẬT\s*$", "LUẬT"),
+            (r"^\s*NGHỊ\s*ĐỊNH\s*$", "NGHỊ ĐỊNH"),
+            (r"^\s*THÔNG\s*TƯ\s*$", "THÔNG TƯ"),
+        ]
         
-        return "Unknown Law"
+        inline_patterns = [
+            (r"^\s*LUẬT\s+(.+)$", "Luật"),
+            (r"^\s*NGHỊ\s*ĐỊNH\s+(.+)$", "Nghị định"),
+            (r"^\s*THÔNG\s*TƯ\s+(.+)$", "Thông tư"),
+        ]
+        
+        for i, line in enumerate(lines[:40]):
+            # Check standalone document type headers
+            for pattern, doc_type in doc_type_patterns:
+                if re.match(pattern, line, re.IGNORECASE):
+                    # Next non-empty line might be the title
+                    for j in range(i + 1, min(i + 5, len(lines))):
+                        next_line = lines[j].strip()
+                        if next_line and not re.match(r"^\s*Số:", next_line, re.IGNORECASE):
+                            return next_line
+            
+            # Check inline patterns (e.g., "LUẬT BẢO VỆ MÔI TRƯỜNG")
+            for pattern, prefix in inline_patterns:
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    return f"{prefix} {match.group(1)}"
+        
+        return "Unknown Document"
+    
+    def _extract_law_name(self, lines: List[str]) -> str:
+        """
+        Extract law name from content.
+        Deprecated: Use _extract_document_title instead.
+        """
+        return self._extract_document_title(lines)
+    
+    def detect_doc_kind(
+        self,
+        law_id: str,
+        raw_lines: List[str],
+        filename: str
+    ) -> Tuple[str, float, str]:
+        """
+        Detect document kind (LUẬT, NGHỊ ĐỊNH, THÔNG TƯ).
+        
+        Args:
+            law_id: Extracted law ID (e.g., "20/2023/QH15")
+            raw_lines: Normalized lines from the document
+            filename: Original filename
+            
+        Returns:
+            Tuple of (kind, confidence, evidence_text)
+            kind: "LAW", "DECREE", "CIRCULAR"
+            confidence: 0.0-1.0
+            evidence_text: Text that led to the detection
+        """
+        # Priority 1: Check law_id patterns
+        law_id_upper = law_id.upper() if law_id else ""
+        
+        if "QH" in law_id_upper:
+            return ("LAW", 0.95, f"law_id contains 'QH': {law_id}")
+        if "NĐ-CP" in law_id_upper or "ND-CP" in law_id_upper or "NĐ CP" in law_id_upper:
+            return ("DECREE", 0.95, f"law_id contains 'NĐ-CP': {law_id}")
+        if "TT-" in law_id_upper:
+            return ("CIRCULAR", 0.95, f"law_id contains 'TT-': {law_id}")
+        
+        # Priority 2: Check raw header lines for document type keywords
+        for i, line in enumerate(raw_lines[:30]):
+            line_upper = line.upper().strip()
+            
+            if re.match(r"^\s*LUẬT\s*$", line_upper) or re.match(r"^\s*LUẬT\s+", line_upper):
+                return ("LAW", 0.90, f"Header line {i}: '{line}'")
+            if re.match(r"^\s*NGHỊ\s*ĐỊNH\s*$", line_upper) or re.match(r"^\s*NGHỊ\s*ĐỊNH\s+", line_upper):
+                return ("DECREE", 0.90, f"Header line {i}: '{line}'")
+            if re.match(r"^\s*THÔNG\s*TƯ\s*$", line_upper) or re.match(r"^\s*THÔNG\s*TƯ\s+", line_upper):
+                return ("CIRCULAR", 0.90, f"Header line {i}: '{line}'")
+        
+        # Priority 3: Check filename heuristics
+        filename_lower = filename.lower() if filename else ""
+        
+        if filename_lower.startswith("luật") or filename_lower.startswith("luat"):
+            return ("LAW", 0.80, f"Filename starts with 'Luật': {filename}")
+        if filename_lower.startswith("nghị-định") or filename_lower.startswith("nghi-dinh"):
+            return ("DECREE", 0.80, f"Filename starts with 'Nghị-định': {filename}")
+        if filename_lower.startswith("thông-tư") or filename_lower.startswith("thong-tu"):
+            return ("CIRCULAR", 0.80, f"Filename starts with 'Thông-tư': {filename}")
+        
+        # Fallback: Unknown, default to LAW
+        return ("LAW", 0.50, "No clear evidence, defaulting to LAW")
+    
+    def _detect_issuer(self, raw_lines: List[str]) -> Optional[str]:
+        """
+        Detect the issuing authority from document content.
+        
+        Returns:
+            Issuer name or None
+        """
+        issuer_patterns = [
+            (r"QUỐC\s*HỘI", "QUỐC HỘI"),
+            (r"CHÍNH\s*PHỦ", "CHÍNH PHỦ"),
+            (r"THỦ\s*TƯỚNG\s*CHÍNH\s*PHỦ", "THỦ TƯỚNG CHÍNH PHỦ"),
+            (r"BỘ\s+(\w+)", "BỘ"),
+        ]
+        
+        for i, line in enumerate(raw_lines[:20]):
+            line_upper = line.upper().strip()
+            for pattern, issuer in issuer_patterns:
+                if re.search(pattern, line_upper, re.IGNORECASE):
+                    if issuer == "BỘ":
+                        match = re.search(pattern, line_upper, re.IGNORECASE)
+                        if match:
+                            return f"BỘ {match.group(1)}"
+                    return issuer
+        return None
     
     def _build_tree(
         self,
@@ -537,6 +758,11 @@ class VietnamLegalDocxParser:
     ) -> LegalNode:
         """
         Build a hierarchical tree structure from the document lines.
+        
+        Hierarchy: LAW > CHAPTER > SECTION > ARTICLE > CLAUSE > POINT
+        
+        Note: When a Section (Mục) is encountered, articles under it belong to
+        that section until a new section or chapter is found.
         """
         # Create root node (Law)
         root = LegalNode(
@@ -558,6 +784,9 @@ class VietnamLegalDocxParser:
         last_clause: Optional[LegalNode] = None
         last_point: Optional[LegalNode] = None
         
+        # DEBUG: Track articles found during tree building
+        debug_articles_found = []
+        
         i = 0
         while i < len(lines):
             line = lines[i]
@@ -566,6 +795,7 @@ class VietnamLegalDocxParser:
             match = CHUONG_PATTERN.match(line)
             if match:
                 chapter_id, chapter_title = match.groups()
+                logger.debug(f"[TREE] Found Chương {chapter_id}: {chapter_title}")
                 chapter = LegalNode(
                     node_type=LegalNodeType.CHAPTER,
                     identifier=chapter_id.upper(),
@@ -582,6 +812,7 @@ class VietnamLegalDocxParser:
                 last_chapter = chapter
                 
                 current_chapter = chapter
+                # Reset section when new chapter starts
                 current_section = None
                 current_article = None
                 last_section = None
@@ -595,6 +826,7 @@ class VietnamLegalDocxParser:
             match = MUC_PATTERN.match(line)
             if match:
                 section_id, section_title = match.groups()
+                logger.debug(f"[TREE] Found Mục {section_id}: {section_title} (in Chương {current_chapter.identifier if current_chapter else 'ROOT'})")
                 parent = current_chapter if current_chapter else root
                 section = LegalNode(
                     node_type=LegalNodeType.SECTION,
@@ -612,6 +844,7 @@ class VietnamLegalDocxParser:
                 last_section = section
                 
                 current_section = section
+                # DO NOT reset current_article here - articles under section should be preserved
                 current_article = None
                 last_article = None
                 last_clause = None
@@ -623,7 +856,11 @@ class VietnamLegalDocxParser:
             match = DIEU_PATTERN.match(line)
             if match:
                 article_id, article_title = match.groups()
+                # Determine parent: prefer section > chapter > root
                 parent = current_section if current_section else (current_chapter if current_chapter else root)
+                
+                logger.debug(f"[TREE] Found Điều {article_id}: {article_title[:30] if article_title else 'N/A'}... (parent: {parent.node_type.value} {parent.identifier})")
+                debug_articles_found.append(int(article_id) if article_id.isdigit() else article_id)
                 
                 article = LegalNode(
                     node_type=LegalNodeType.ARTICLE,
@@ -721,6 +958,24 @@ class VietnamLegalDocxParser:
             
             i += 1
         
+        # DEBUG: Summary of tree building
+        if debug_articles_found:
+            numeric_articles = [a for a in debug_articles_found if isinstance(a, int)]
+            if numeric_articles:
+                sorted_articles = sorted(numeric_articles)
+                logger.info(f"[TREE DEBUG] Articles found during tree building: {sorted_articles}")
+                logger.info(f"[TREE DEBUG] Total articles: {len(sorted_articles)}")
+                
+                # Check for gaps
+                if sorted_articles:
+                    expected = set(range(sorted_articles[0], sorted_articles[-1] + 1))
+                    found = set(sorted_articles)
+                    missing = expected - found
+                    if missing:
+                        logger.warning(f"[TREE DEBUG] MISSING articles in tree: {sorted(missing)}")
+                    else:
+                        logger.info(f"[TREE DEBUG] No missing articles in range {sorted_articles[0]}-{sorted_articles[-1]}")
+        
         # Clean up content
         self._clean_node_content(root)
         
@@ -732,21 +987,36 @@ class VietnamLegalDocxParser:
         for child in node.children:
             self._clean_node_content(child)
     
-    def _generate_chunks(self, tree: LegalNode, source_file: str) -> List[LegalChunk]:
+    def _generate_chunks(
+        self,
+        tree: LegalNode,
+        source_file: str,
+        doc_kind: str = "LAW"
+    ) -> List[LegalChunk]:
         """
         Generate chunks from the document tree.
         Applies token-based splitting as needed.
+        
+        Args:
+            tree: Document tree root
+            source_file: Source filename
+            doc_kind: Document kind (LAW, DECREE, CIRCULAR) for metadata
         """
         chunks: List[LegalChunk] = []
         
         # Process all articles
         for article in self._find_all_nodes(tree, LegalNodeType.ARTICLE):
-            article_chunks = self._chunk_article(article, source_file)
+            article_chunks = self._chunk_article(article, source_file, doc_kind)
             chunks.extend(article_chunks)
         
         return chunks
     
-    def _chunk_article(self, article: LegalNode, source_file: str) -> List[LegalChunk]:
+    def _chunk_article(
+        self,
+        article: LegalNode,
+        source_file: str,
+        doc_kind: str = "LAW"
+    ) -> List[LegalChunk]:
         """
         Generate chunks for a single article.
         Applies splitting strategy based on token count and article type.
@@ -759,20 +1029,20 @@ class VietnamLegalDocxParser:
         
         # Special handling for definition articles
         if article.is_definition_article:
-            definition_chunks = self._chunk_definition_article(article, source_file)
+            definition_chunks = self._chunk_definition_article(article, source_file, doc_kind)
             if definition_chunks:
                 return definition_chunks
         
         # If article fits within threshold, create single chunk
         if article_tokens <= self.token_threshold:
-            chunk = self._create_chunk(article, article_content, source_file)
+            chunk = self._create_chunk(article, article_content, source_file, doc_kind)
             return [chunk]
         
         # Article is too large, split by clauses
         if article.children:
             for clause in article.children:
                 if clause.node_type == LegalNodeType.CLAUSE:
-                    clause_chunks = self._chunk_clause(clause, article, source_file)
+                    clause_chunks = self._chunk_clause(clause, article, source_file, doc_kind)
                     chunks.extend(clause_chunks)
         else:
             # No clauses, create single chunk anyway (with warning)
@@ -780,7 +1050,7 @@ class VietnamLegalDocxParser:
                 f"Article {article.identifier} exceeds token threshold "
                 f"({article_tokens} > {self.token_threshold}) but has no clauses to split"
             )
-            chunk = self._create_chunk(article, article_content, source_file)
+            chunk = self._create_chunk(article, article_content, source_file, doc_kind)
             chunks.append(chunk)
         
         return chunks
@@ -790,6 +1060,7 @@ class VietnamLegalDocxParser:
         clause: LegalNode,
         article: LegalNode,
         source_file: str,
+        doc_kind: str = "LAW",
     ) -> List[LegalChunk]:
         """Generate chunks for a clause, splitting by points if needed."""
         chunks: List[LegalChunk] = []
@@ -799,7 +1070,7 @@ class VietnamLegalDocxParser:
         
         # If clause fits within threshold, create single chunk
         if clause_tokens <= self.token_threshold:
-            chunk = self._create_chunk(clause, clause_content, source_file)
+            chunk = self._create_chunk(clause, clause_content, source_file, doc_kind)
             return [chunk]
         
         # Clause is too large, split by points
@@ -807,7 +1078,7 @@ class VietnamLegalDocxParser:
             for point in clause.children:
                 if point.node_type == LegalNodeType.POINT:
                     point_content = self._get_node_full_content(point)
-                    chunk = self._create_chunk(point, point_content, source_file)
+                    chunk = self._create_chunk(point, point_content, source_file, doc_kind)
                     chunks.append(chunk)
         else:
             # No points, create single chunk anyway
@@ -816,7 +1087,7 @@ class VietnamLegalDocxParser:
                 f"exceeds token threshold ({clause_tokens} > {self.token_threshold}) "
                 f"but has no points to split"
             )
-            chunk = self._create_chunk(clause, clause_content, source_file)
+            chunk = self._create_chunk(clause, clause_content, source_file, doc_kind)
             chunks.append(chunk)
         
         return chunks
@@ -825,6 +1096,7 @@ class VietnamLegalDocxParser:
         self,
         article: LegalNode,
         source_file: str,
+        doc_kind: str = "LAW",
     ) -> List[LegalChunk]:
         """
         Special handling for definition articles.
@@ -846,7 +1118,7 @@ class VietnamLegalDocxParser:
                 )
                 
                 content = self._get_node_full_content(clause)
-                chunk = self._create_chunk(def_item, content, source_file)
+                chunk = self._create_chunk(def_item, content, source_file, doc_kind)
                 chunks.append(chunk)
         
         return chunks
@@ -856,6 +1128,7 @@ class VietnamLegalDocxParser:
         node: LegalNode,
         content: str,
         source_file: str,
+        doc_kind: str = "LAW",
     ) -> LegalChunk:
         """Create a LegalChunk from a node."""
         # Build chunk_id
@@ -865,7 +1138,7 @@ class VietnamLegalDocxParser:
         embedding_parts = []
         ancestors = node.get_ancestors()
         if ancestors.get("law_id"):
-            embedding_parts.append(f"LAW={ancestors['law_id']}")
+            embedding_parts.append(f"DOC={ancestors['law_id']}")
         if ancestors.get("chapter"):
             # Extract just the chapter number
             chapter_match = re.search(r"Chương\s+([IVXLCDM]+)", ancestors["chapter"])
@@ -890,18 +1163,31 @@ class VietnamLegalDocxParser:
         
         embedding_prefix = " | ".join(embedding_parts)
         
-        # Build metadata
+        # Build metadata - include_self=True ensures article_id is captured when node is ARTICLE
         metadata = {
+            "doc_kind": doc_kind,
+            "document_number": ancestors.get("law_id", ""),
             "law_id": ancestors.get("law_id", ""),
             "law_name": ancestors.get("law_name", ""),
+            # Chapter metadata
             "chapter": ancestors.get("chapter"),
+            "chapter_id": ancestors.get("chapter_id"),
+            "chapter_title": ancestors.get("chapter_title"),
+            # Section metadata  
             "section": ancestors.get("section"),
+            "section_id": ancestors.get("section_id"),
+            "section_title": ancestors.get("section_title"),
+            # Article metadata - now correctly populated for ARTICLE nodes
             "article_id": ancestors.get("article_id"),
+            "article_number": ancestors.get("article_number"),
             "article_title": ancestors.get("article_title"),
+            # Clause/Point metadata
             "clause_no": ancestors.get("clause_no") or (
                 node.identifier if node.node_type in (LegalNodeType.CLAUSE, LegalNodeType.DEFINITION_ITEM) else None
             ),
-            "point_no": node.identifier if node.node_type == LegalNodeType.POINT else None,
+            "point_no": ancestors.get("point_no") or (
+                node.identifier if node.node_type == LegalNodeType.POINT else None
+            ),
             "parent_id": node.parent.get_full_id() if node.parent else None,
             "prev_sibling_id": node.prev_sibling.get_full_id() if node.prev_sibling else None,
             "next_sibling_id": node.next_sibling.get_full_id() if node.next_sibling else None,

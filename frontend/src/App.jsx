@@ -3,12 +3,15 @@ import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import SettingsModal from './components/SettingsModal';
 import SystemInfoModal from './components/SystemInfoModal';
-import KGExtractionPanel from './components/KGExtractionPanel';
 import JsonCleanerModal from './components/JsonCleanerModal';
+import LegalDocExtractionPage from './components/LegalDocExtractionPage';
 import { useChat } from './hooks/useChat';
 import { saveToStorage, loadFromStorage } from './utils/helpers';
 
 function App() {
+  // Page navigation
+  const [currentPage, setCurrentPage] = useState('chat'); // 'chat' | 'extraction'
+
   // Chat management
   const {
     sessionId,
@@ -31,7 +34,6 @@ function App() {
   // UI state
   const [showSettings, setShowSettings] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  const [showKGExtraction, setShowKGExtraction] = useState(false);
   const [showJsonCleaner, setShowJsonCleaner] = useState(false);
   const [sessions, setSessions] = useState(() => 
     loadFromStorage('chatbot-sessions', [])
@@ -91,6 +93,15 @@ function App() {
     setSettings(newSettings);
   };
 
+  // Navigate to Legal Document Extraction Page
+  if (currentPage === 'extraction') {
+    return (
+      <LegalDocExtractionPage
+        onNavigateToChat={() => setCurrentPage('chat')}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
@@ -102,7 +113,7 @@ function App() {
         onDeleteSession={handleDeleteSession}
         onShowSettings={() => setShowSettings(true)}
         onShowInfo={() => setShowInfo(true)}
-        onShowKGExtraction={() => setShowKGExtraction(true)}
+        onShowExtraction={() => setCurrentPage('extraction')}
         onShowJsonCleaner={() => setShowJsonCleaner(true)}
       />
 
@@ -130,11 +141,6 @@ function App() {
         isOpen={showInfo}
         onClose={() => setShowInfo(false)}
       />
-
-      {/* KG Extraction Panel */}
-      {showKGExtraction && (
-        <KGExtractionPanel onClose={() => setShowKGExtraction(false)} />
-      )}
 
       {/* JSON Cleaner Modal */}
       <JsonCleanerModal

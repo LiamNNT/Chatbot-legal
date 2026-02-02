@@ -86,6 +86,11 @@ class IngestJobDetail(BaseModel):
     law_name: Optional[str] = None
     index_namespace: str = "laws_vn"
     
+    # Document metadata (PHASE 2 additions)
+    doc_kind: Optional[str] = Field(None, description="Document kind: LAW, DECREE, CIRCULAR")
+    document_number: Optional[str] = Field(None, description="Document number (e.g., 20/2023/QH15)")
+    issuer: Optional[str] = Field(None, description="Issuing authority")
+    
     # Timestamps
     created_at: datetime
     started_at: Optional[datetime] = None

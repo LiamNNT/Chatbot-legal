@@ -507,10 +507,10 @@ class TestChunking:
         chunks = parser._generate_chunks(tree, "test.docx")
         
         for chunk in chunks:
-            # Embedding prefix should have LAW identifier
-            assert "LAW=" in chunk.embedding_prefix
+            # Embedding prefix should have DOC identifier (document number)
+            assert "DOC=" in chunk.embedding_prefix
             # Should use | separator
-            assert " | " in chunk.embedding_prefix or "LAW=" in chunk.embedding_prefix
+            assert " | " in chunk.embedding_prefix or "DOC=" in chunk.embedding_prefix
     
     def test_chunk_metadata_completeness(self, parser, sample_legal_text_lines):
         """Test that chunk metadata contains required fields."""

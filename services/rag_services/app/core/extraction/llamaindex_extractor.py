@@ -206,23 +206,53 @@ class ExtractionResult:
     def to_graph_models(self) -> Tuple[List["GraphNode"], List["GraphRelationship"]]:
         """
         Convert to GraphNode/GraphRelationship models compatible with existing code.
+        
+        Maps extracted entities to NodeType.THUAT_NGU (generic term node) and
+        relations to EdgeType enum values where possible, with fallback to LIEN_QUAN.
         """
-        from core.domain.graph_models import GraphNode, GraphRelationship, NodeCategory, RelationshipType
+        from core.domain.graph_models import GraphNode, GraphRelationship, NodeType, EdgeType
         
         graph_nodes = []
         graph_rels = []
         
+        # Map relation type string to EdgeType
+        relation_type_map = {
+            "THUOC_VE": EdgeType.THUOC_VE,
+            "SUA_DOI": EdgeType.SUA_DOI,
+            "BO_SUNG": EdgeType.BO_SUNG,
+            "THAY_THE": EdgeType.THAY_THE,
+            "BAI_BO": EdgeType.BAI_BO,
+            "THAM_CHIEU": EdgeType.THAM_CHIEU,
+            "VIEN_DAN": EdgeType.VIEN_DAN,
+            "DINH_NGHIA": EdgeType.DINH_NGHIA,
+            "YEU_CAU": EdgeType.YEU_CAU,
+            "AP_DUNG": EdgeType.AP_DUNG,
+            "LIEN_QUAN": EdgeType.LIEN_QUAN,
+            # Map academic relation types
+            "LIEN_QUAN_NOI_DUNG": EdgeType.LIEN_QUAN,
+            "QUY_DINH_DIEU_KIEN": EdgeType.QUY_DINH,
+            "AP_DUNG_CHO": EdgeType.AP_DUNG,
+            "DAT_DIEM": EdgeType.LIEN_QUAN,
+            "TUONG_DUONG": EdgeType.DONG_NGHIA,
+            "MIEN_GIAM": EdgeType.LIEN_QUAN,
+            "GIOI_HAN": EdgeType.RANG_BUOC,
+            "DIEU_KIEN_TIEN_QUYET": EdgeType.YEU_CAU,
+            "THUOC_KHOA": EdgeType.THUOC_VE,
+            "CUA_NGANH": EdgeType.THUOC_VE,
+            "THUOC_CHUONG_TRINH": EdgeType.THUOC_VE,
+        }
+        
         # Convert entities to GraphNode
         for entity in self.entities:
-            try:
-                category = NodeCategory[entity.type.value]
-            except KeyError:
-                category = NodeCategory.DIEU_KIEN  # fallback
-                
+            # Use NodeType.THUAT_NGU as generic node type for extracted entities
+            # Store original type in properties
             node = GraphNode(
                 id=entity.id,
-                category=category,
+                node_type=NodeType.THUAT_NGU,
+                name=entity.text[:200] if entity.text else "",
+                content=entity.text or "",
                 properties={
+                    "raw_type": entity.type.value if hasattr(entity.type, 'value') else str(entity.type),
                     "text": entity.text,
                     "normalized": entity.normalized,
                     "source_chunk": entity.source_chunk_id,
@@ -233,16 +263,18 @@ class ExtractionResult:
         
         # Convert relations to GraphRelationship
         for rel in self.relations:
-            try:
-                rel_type = RelationshipType[rel.type.value]
-            except KeyError:
-                rel_type = RelationshipType.LIEN_QUAN_NOI_DUNG  # fallback
+            # Get relation type string
+            rel_type_str = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
+            
+            # Map to EdgeType, fallback to LIEN_QUAN
+            edge_type = relation_type_map.get(rel_type_str, EdgeType.LIEN_QUAN)
                 
             relationship = GraphRelationship(
                 source_id=rel.source_id,
                 target_id=rel.target_id,
-                rel_type=rel_type,
+                edge_type=edge_type,
                 properties={
+                    "raw_type": rel_type_str,
                     "evidence": rel.evidence,
                     **rel.properties
                 }

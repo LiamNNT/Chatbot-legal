@@ -129,6 +129,18 @@ class JobStore(ABC):
         pass
     
     @abstractmethod
+    async def update_doc_metadata(
+        self,
+        job_id: str,
+        doc_kind: str,
+        document_number: str,
+        issuer: Optional[str] = None,
+        title: Optional[str] = None,
+    ) -> bool:
+        """Update document metadata after parsing (doc_kind, document_number, etc.)."""
+        pass
+    
+    @abstractmethod
     async def update_metrics(
         self,
         job_id: str,
@@ -190,6 +202,10 @@ class InMemoryJobStore(JobStore):
             "error": None,
             "run_kg": run_kg,
             "run_vector": run_vector,
+            # PHASE 2 additions
+            "doc_kind": None,
+            "document_number": None,
+            "issuer": None,
         }
         self._job_order.append(job_id)
         self._cleanup_old_jobs()
@@ -217,6 +233,10 @@ class InMemoryJobStore(JobStore):
             error=job_data["error"],
             run_kg=job_data["run_kg"],
             run_vector=job_data["run_vector"],
+            # PHASE 2 additions
+            doc_kind=job_data.get("doc_kind"),
+            document_number=job_data.get("document_number"),
+            issuer=job_data.get("issuer"),
         )
     
     async def update_status(
@@ -357,6 +377,26 @@ class InMemoryJobStore(JobStore):
         self._jobs[job_id]["law_name"] = law_name
         return True
     
+    async def update_doc_metadata(
+        self,
+        job_id: str,
+        doc_kind: str,
+        document_number: str,
+        issuer: Optional[str] = None,
+        title: Optional[str] = None,
+    ) -> bool:
+        """Update document metadata after parsing."""
+        if job_id not in self._jobs:
+            return False
+        
+        self._jobs[job_id]["doc_kind"] = doc_kind
+        self._jobs[job_id]["document_number"] = document_number
+        if issuer is not None:
+            self._jobs[job_id]["issuer"] = issuer
+        if title is not None:
+            self._jobs[job_id]["law_name"] = title
+        return True
+    
     async def update_metrics(
         self,
         job_id: str,
@@ -474,6 +514,10 @@ class RedisJobStore(JobStore):
             "error": None,
             "run_kg": run_kg,
             "run_vector": run_vector,
+            # PHASE 2 additions
+            "doc_kind": None,
+            "document_number": None,
+            "issuer": None,
         }
         
         # Store job
@@ -672,6 +716,34 @@ class RedisJobStore(JobStore):
         job_data = job.model_dump()
         job_data["law_id"] = law_id
         job_data["law_name"] = law_name
+        
+        self._redis.setex(
+            self._job_key(job_id),
+            self.JOB_TTL,
+            self._serialize_job(job_data)
+        )
+        return True
+    
+    async def update_doc_metadata(
+        self,
+        job_id: str,
+        doc_kind: str,
+        document_number: str,
+        issuer: Optional[str] = None,
+        title: Optional[str] = None,
+    ) -> bool:
+        """Update document metadata after parsing."""
+        job = await self.get_job(job_id)
+        if not job:
+            return False
+        
+        job_data = job.model_dump()
+        job_data["doc_kind"] = doc_kind
+        job_data["document_number"] = document_number
+        if issuer is not None:
+            job_data["issuer"] = issuer
+        if title is not None:
+            job_data["law_name"] = title
         
         self._redis.setex(
             self._job_key(job_id),

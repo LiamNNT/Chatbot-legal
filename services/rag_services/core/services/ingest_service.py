@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 import traceback
 from pathlib import Path
@@ -32,12 +33,16 @@ from app.api.schemas.ingest import (
     ChunkInfo,
 )
 from core.services.job_store import JobStore, get_job_store
-from indexing.loaders.vietnam_legal_docx_parser import (
-    VietnamLegalDocxParser,
+from indexing.loaders.llamaindex_legal_parser import (
+    LlamaIndexLegalParser,
+    ParserConfig,
     LegalChunk,
+    ParseResult,
+)
+# Legacy imports for compatibility (LegalNode, LegalNodeType may still be used elsewhere)
+from indexing.loaders.vietnam_legal_docx_parser import (
     LegalNode,
     LegalNodeType,
-    ParseResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +72,7 @@ class IngestService:
         job_store: Optional[JobStore] = None,
         vector_backend: str = "weaviate",
         embedding_model: Optional[str] = None,
-        token_threshold: int = 800,
+        token_threshold: int = 1500,
     ):
         """
         Initialize the ingestion service.
@@ -76,7 +81,7 @@ class IngestService:
             job_store: Job state storage (defaults to singleton)
             vector_backend: "weaviate" or "opensearch"
             embedding_model: Embedding model name
-            token_threshold: Token threshold for chunk splitting
+            token_threshold: Token threshold for chunk splitting (default 1500 to match legacy)
         """
         self.job_store = job_store or get_job_store()
         self.vector_backend = vector_backend
@@ -84,19 +89,21 @@ class IngestService:
         self.token_threshold = token_threshold
         
         # Lazy-loaded components
-        self._parser: Optional[VietnamLegalDocxParser] = None
+        self._parser: Optional[LlamaIndexLegalParser] = None
         self._pdf_extractor = None
         self._embedder = None
         self._vector_adapter = None
         self._graph_adapter = None
     
     @property
-    def parser(self) -> VietnamLegalDocxParser:
-        """Get or create the legal document parser."""
+    def parser(self) -> LlamaIndexLegalParser:
+        """Get or create the legal document parser (LlamaIndex-based)."""
         if self._parser is None:
-            self._parser = VietnamLegalDocxParser(
-                token_threshold=self.token_threshold
+            config = ParserConfig(
+                llama_cloud_api_key=None,  # Use fallback docx parser
+                chunk_size=self.token_threshold,
             )
+            self._parser = LlamaIndexLegalParser(config)
         return self._parser
     
     @property
@@ -300,7 +307,7 @@ class IngestService:
             )
             
             parse_start = time.time()
-            parse_result = self.parser.parse(
+            parse_result = await self.parser.parse(
                 file_path,
                 law_id=law_id,
                 law_name=law_name,
@@ -311,15 +318,32 @@ class IngestService:
             if not parse_result.success:
                 raise ValueError(f"Parse failed: {parse_result.errors}")
             
-            # Update law info from parsed result
-            if parse_result.tree:
-                extracted_law_id = parse_result.tree.identifier
-                extracted_law_name = parse_result.tree.title or ""
+            # Extract doc_kind from parse_result metadata
+            doc_kind = parse_result.metadata.get("doc_kind", "LAW")
+            document_number = parse_result.metadata.get("document_number", "")
+            doc_title = parse_result.metadata.get("title", "")
+            issuer = parse_result.metadata.get("issuer")
+            
+            # Extract law info from metadata (LlamaIndexLegalParser stores in metadata)
+            extracted_law_id = document_number or ""
+            extracted_law_name = doc_title or ""
+            
+            # Update law info
+            if extracted_law_id or law_id:
                 await self.job_store.update_law_info(
                     job_id,
                     law_id or extracted_law_id,
                     law_name or extracted_law_name,
                 )
+            
+            # Update document metadata (PHASE 2)
+            await self.job_store.update_doc_metadata(
+                job_id,
+                doc_kind=doc_kind,
+                document_number=document_number or law_id or "",
+                issuer=issuer,
+                title=doc_title or law_name or None,
+            )
             
             # Update metrics from parse
             metrics.chapters_count = parse_result.statistics.get("chapters", 0)
@@ -328,7 +352,8 @@ class IngestService:
             
             logger.info(
                 f"Job {job_id}: Parsed {len(parse_result.chunks)} chunks, "
-                f"{metrics.chapters_count} chapters, {metrics.articles_count} articles"
+                f"{metrics.chapters_count} chapters, {metrics.articles_count} articles, "
+                f"doc_kind={doc_kind}"
             )
             
             # =================================================================
@@ -416,6 +441,7 @@ class IngestService:
             # =================================================================
             # Stage 4: Index to Vector DB
             # =================================================================
+            vector_indexed_successfully = False
             if run_vector:
                 await self.job_store.update_status(
                     job_id,
@@ -431,6 +457,15 @@ class IngestService:
                 vector_start = time.time()
                 
                 try:
+                    # Log target database info
+                    from app.config.settings import settings
+                    logger.info(f"[VECTOR_INDEX] Job {job_id}: Target backend={self.vector_backend}")
+                    if self.vector_backend == "weaviate":
+                        from infrastructure.store.vector.weaviate_store import get_collection_name
+                        logger.info(f"[VECTOR_INDEX] Job {job_id}: Weaviate URL={settings.weaviate_url}, Collection={get_collection_name()}")
+                    else:
+                        logger.info(f"[VECTOR_INDEX] Job {job_id}: OpenSearch host={settings.opensearch_host}:{settings.opensearch_port}, Index={settings.opensearch_index}")
+                    
                     indexed_count = await self._index_to_vector_db(
                         job_id,
                         parse_result.chunks,
@@ -438,19 +473,22 @@ class IngestService:
                         index_namespace,
                     )
                     
+                    logger.info(f"[VECTOR_INDEX] Job {job_id}: Successfully indexed {indexed_count} chunks")
+                    vector_indexed_successfully = True
+                    
                     # Update chunk_infos to mark as indexed
                     for info in chunk_infos:
                         info.indexed_vector = True
                     await self.job_store.store_chunks(job_id, chunk_infos)
                     
                 except Exception as e:
-                    logger.error(f"Vector indexing failed: {e}")
-                    # Continue with graph indexing even if vector fails
+                    logger.error(f"[VECTOR_INDEX] Job {job_id}: FAILED - {e}", exc_info=True)
+                    # Log warning and continue with graph indexing
                 
                 vector_time = int((time.time() - vector_start) * 1000)
                 metrics.vector_index_time_ms = vector_time
                 
-                logger.info(f"Job {job_id}: Vector indexing completed in {vector_time}ms")
+                logger.info(f"Job {job_id}: Vector indexing completed in {vector_time}ms (success={vector_indexed_successfully})")
             
             # =================================================================
             # Stage 5: Build Knowledge Graph
@@ -470,11 +508,20 @@ class IngestService:
                 graph_start = time.time()
                 
                 try:
-                    nodes_created, rels_created = await self._build_knowledge_graph(
-                        job_id,
-                        parse_result.tree,
-                        parse_result.chunks,
-                    )
+                    # Check if tree is available (LlamaIndexLegalParser doesn't create tree)
+                    if parse_result.tree is None:
+                        logger.warning(
+                            f"Job {job_id}: Skipping KG building - no tree structure available. "
+                            "LlamaIndexLegalParser creates chunks without tree hierarchy."
+                        )
+                        nodes_created, rels_created = 0, 0
+                    else:
+                        nodes_created, rels_created = await self._build_knowledge_graph(
+                            job_id,
+                            parse_result.tree,
+                            parse_result.chunks,
+                            doc_kind=doc_kind,
+                        )
                     
                     metrics.nodes_created = nodes_created
                     metrics.relationships_created = rels_created
@@ -871,8 +918,13 @@ class IngestService:
         entities: List,
         relations: List,
     ) -> Tuple[int, int]:
-        """Index PDF-extracted entities and relations to Neo4j."""
-        from core.domain.graph_models import GraphNode, GraphRelationship, NodeCategory, RelationshipType
+        """
+        Index PDF-extracted entities and relations to Neo4j.
+        
+        Maps extracted entities to NodeType.THUAT_NGU (generic term node) and
+        relations to EdgeType enum values where possible, with fallback to LIEN_QUAN.
+        """
+        from core.domain.graph_models import GraphNode, GraphRelationship, NodeType, EdgeType
         
         adapter = self._get_graph_adapter()
         if not adapter:
@@ -882,24 +934,53 @@ class IngestService:
         nodes_created = 0
         relationships_created = 0
         
+        # Map relation type string to EdgeType
+        relation_type_map = {
+            "THUOC_VE": EdgeType.THUOC_VE,
+            "SUA_DOI": EdgeType.SUA_DOI,
+            "BO_SUNG": EdgeType.BO_SUNG,
+            "THAY_THE": EdgeType.THAY_THE,
+            "BAI_BO": EdgeType.BAI_BO,
+            "THAM_CHIEU": EdgeType.THAM_CHIEU,
+            "VIEN_DAN": EdgeType.VIEN_DAN,
+            "DINH_NGHIA": EdgeType.DINH_NGHIA,
+            "YEU_CAU": EdgeType.YEU_CAU,
+            "AP_DUNG": EdgeType.AP_DUNG,
+            "LIEN_QUAN": EdgeType.LIEN_QUAN,
+            # Map academic relation types
+            "LIEN_QUAN_NOI_DUNG": EdgeType.LIEN_QUAN,
+            "QUY_DINH_DIEU_KIEN": EdgeType.QUY_DINH,
+            "AP_DUNG_CHO": EdgeType.AP_DUNG,
+            "DAT_DIEM": EdgeType.LIEN_QUAN,
+            "TUONG_DUONG": EdgeType.DONG_NGHIA,
+            "MIEN_GIAM": EdgeType.LIEN_QUAN,
+            "GIOI_HAN": EdgeType.RANG_BUOC,
+            "DIEU_KIEN_TIEN_QUYET": EdgeType.YEU_CAU,
+            "THUOC_KHOA": EdgeType.THUOC_VE,
+            "CUA_NGANH": EdgeType.THUOC_VE,
+            "THUOC_CHUONG_TRINH": EdgeType.THUOC_VE,
+        }
+        
         # Convert entities to GraphNodes
         for entity in entities:
             try:
-                # Map entity type to NodeCategory
-                try:
-                    category = NodeCategory[entity.type.value if hasattr(entity.type, 'value') else str(entity.type)]
-                except KeyError:
-                    category = NodeCategory.DIEU_KIEN
+                # Get entity type string
+                entity_type_str = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
                 
+                # Use NodeType.THUAT_NGU as generic node type for extracted entities
+                # Store original type in properties
                 node = GraphNode(
                     id=entity.id,
-                    category=category,
+                    node_type=NodeType.THUAT_NGU,
+                    name=entity.text[:200] if entity.text else "",
+                    content=entity.text or "",
                     properties={
+                        "raw_type": entity_type_str,
                         "text": entity.text,
-                        "normalized": entity.normalized,
-                        "source_chunk": entity.source_chunk_id,
-                        "confidence": entity.confidence,
-                        **entity.properties,
+                        "normalized": getattr(entity, 'normalized', None),
+                        "source_chunk": getattr(entity, 'source_chunk_id', None),
+                        "confidence": getattr(entity, 'confidence', 0.9),
+                        **getattr(entity, 'properties', {}),
                     }
                 )
                 
@@ -912,20 +993,21 @@ class IngestService:
         # Convert relations to GraphRelationships
         for rel in relations:
             try:
-                # Map relation type
-                try:
-                    rel_type = RelationshipType[rel.type.value if hasattr(rel.type, 'value') else str(rel.type)]
-                except KeyError:
-                    rel_type = RelationshipType.LIEN_QUAN_NOI_DUNG
+                # Get relation type string
+                rel_type_str = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
+                
+                # Map to EdgeType, fallback to LIEN_QUAN
+                edge_type = relation_type_map.get(rel_type_str, EdgeType.LIEN_QUAN)
                 
                 relationship = GraphRelationship(
                     source_id=rel.source_id,
                     target_id=rel.target_id,
-                    rel_type=rel_type,
+                    edge_type=edge_type,
                     properties={
-                        "evidence": rel.evidence,
-                        "confidence": rel.confidence,
-                        **rel.properties,
+                        "raw_type": rel_type_str,
+                        "evidence": getattr(rel, 'evidence', ''),
+                        "confidence": getattr(rel, 'confidence', 0.9),
+                        **getattr(rel, 'properties', {}),
                     }
                 )
                 
@@ -964,6 +1046,17 @@ class IngestService:
             Number of chunks indexed
         """
         from core.domain.models import DocumentChunk, DocumentMetadata, DocumentLanguage
+        
+        # DEBUG: Log chunks received
+        logger.info(f"[VECTOR_INDEX] Job {job_id}: Received {len(chunks)} chunks and {len(embeddings)} embeddings")
+        
+        # DEBUG: Check for specific articles
+        article_ids_found = []
+        for chunk in chunks:
+            article_id = chunk.metadata.get("article_id", "")
+            if article_id:
+                article_ids_found.append(article_id)
+        logger.info(f"[VECTOR_INDEX] Article IDs in chunks: {sorted(set(article_ids_found))[:20]}...")
         
         adapter = self._get_vector_adapter()
         
@@ -1010,8 +1103,16 @@ class IngestService:
                     )
                 )
         
+        # DEBUG: Log before indexing
+        logger.info(f"[VECTOR_INDEX] Job {job_id}: About to index {len(doc_chunks)} doc_chunks to adapter")
+        
         # Bulk index
-        success = await adapter.index_documents(doc_chunks)
+        try:
+            success = await adapter.index_documents(doc_chunks)
+            logger.info(f"[VECTOR_INDEX] Job {job_id}: index_documents returned success={success}")
+        except Exception as e:
+            logger.error(f"[VECTOR_INDEX] Job {job_id}: index_documents EXCEPTION: {e}", exc_info=True)
+            raise
         
         if not success:
             raise RuntimeError("Vector indexing failed")
@@ -1023,23 +1124,31 @@ class IngestService:
         job_id: str,
         tree: LegalNode,
         chunks: List[LegalChunk],
+        doc_kind: str = "LAW",
     ) -> Tuple[int, int]:
         """
         Build knowledge graph in Neo4j from the document tree.
         
         Creates:
-        - Law node
-        - Chapter nodes
-        - Section nodes
-        - Article nodes
-        - Clause nodes
+        - Document node (Luật/Nghị định/Thông tư based on doc_kind)
+        - Chapter nodes (Chương)
+        - Section nodes (Mục)
+        - Article nodes (Điều)
+        - Clause nodes (Khoản)
+        - Point nodes (Điểm)
         - THUOC_VE (belongs to) relationships
-        - THAM_CHIEU (references) relationships (if detected)
+        - KE_TIEP (next) relationships for siblings
+        
+        Args:
+            job_id: ID of the job
+            tree: Parsed legal document tree
+            chunks: List of chunks (for potential future use)
+            doc_kind: Document kind ("LAW", "DECREE", "CIRCULAR")
         
         Returns:
             Tuple of (nodes_created, relationships_created)
         """
-        from core.domain.graph_models import GraphNode, NodeType, EdgeType
+        from core.domain.graph_models import GraphNode, GraphRelationship, NodeType, EdgeType
         
         adapter = self._get_graph_adapter()
         if not adapter:
@@ -1049,109 +1158,192 @@ class IngestService:
         nodes_created = 0
         relationships_created = 0
         
-        # Helper to create node ID
-        def make_node_id(node: LegalNode) -> str:
-            return node.get_full_id().replace(":", "_").replace("/", "_")
+        # Collect nodes and relationships for batch operations
+        nodes_to_create: List[GraphNode] = []
+        rels_to_create: List[GraphRelationship] = []
         
-        # Create law (root) node
-        law_node = GraphNode(
-            id=make_node_id(tree),
-            node_type=NodeType.DOCUMENT,
-            name=f"Luật {tree.title}" if tree.title else f"Luật {tree.identifier}",
+        # Helper to create stable node ID
+        def make_node_id(node: LegalNode) -> str:
+            """Create a stable, unique node ID from the node's full hierarchical ID."""
+            full_id = node.get_full_id()
+            # Sanitize: replace problematic characters
+            sanitized = full_id.replace(":", "_").replace("/", "_").replace(" ", "_")
+            return sanitized if sanitized else f"node_{id(node)}"
+        
+        def sanitize_id(raw_id: str) -> str:
+            """Sanitize an ID string for Neo4j compatibility."""
+            return raw_id.replace(":", "_").replace("/", "_").replace(" ", "_")
+        
+        # Map doc_kind to NodeType
+        doc_node_type_map = {
+            "LAW": NodeType.LUAT,
+            "DECREE": NodeType.NGHI_DINH,
+            "CIRCULAR": NodeType.THONG_TU,
+        }
+        doc_node_type = doc_node_type_map.get(doc_kind, NodeType.LUAT)
+        
+        # Create document (root) node
+        document_number = tree.identifier
+        doc_id = sanitize_id(f"DOC={document_number}")
+        doc_title = tree.title or document_number
+        
+        doc_node = GraphNode(
+            id=doc_id,
+            node_type=doc_node_type,
+            name=doc_title,
             content=tree.content[:500] if tree.content else "",
             properties={
-                "law_id": tree.identifier,
-                "law_name": tree.title or "",
-                "node_type": "LAW",
+                "document_number": document_number,
+                "title": doc_title,
+                "doc_kind": doc_kind,
+                "identifier": tree.identifier,
             }
         )
+        nodes_to_create.append(doc_node)
         
-        try:
-            await adapter.add_node(law_node)
-            nodes_created += 1
-        except Exception as e:
-            logger.warning(f"Failed to create law node: {e}")
-        
-        # Recursive function to create nodes and relationships
-        async def process_node(node: LegalNode, parent_id: Optional[str] = None):
-            nonlocal nodes_created, relationships_created
-            
+        # Recursive function to process nodes
+        def collect_nodes_and_rels(
+            node: LegalNode,
+            parent_id: str,
+            prev_sibling_id: Optional[str] = None
+        ) -> Optional[str]:
+            """
+            Recursively collect nodes and relationships.
+            Returns the node ID for sibling linking.
+            """
             node_id = make_node_id(node)
             
-            # Determine node type
-            if node.node_type == LegalNodeType.CHAPTER:
-                node_type = NodeType.SECTION
-                name = f"Chương {node.identifier}"
-            elif node.node_type == LegalNodeType.SECTION:
-                node_type = NodeType.SUBSECTION
-                name = f"Mục {node.identifier}"
-            elif node.node_type == LegalNodeType.ARTICLE:
-                node_type = NodeType.CLAUSE
-                name = f"Điều {node.identifier}"
-            elif node.node_type == LegalNodeType.CLAUSE:
-                node_type = NodeType.POINT
-                name = f"Khoản {node.identifier}"
-            elif node.node_type == LegalNodeType.POINT:
-                node_type = NodeType.POINT
-                name = f"Điểm {node.identifier}"
-            else:
-                return  # Skip unknown types
+            # Map LegalNodeType to NodeType and set properties
+            node_type: Optional[NodeType] = None
+            name = ""
+            props = {
+                "identifier": node.identifier,
+                "title": node.title or "",
+            }
             
-            # Create node
+            if node.node_type == LegalNodeType.CHAPTER:
+                node_type = NodeType.CHUONG
+                name = f"Chương {node.identifier}"
+                props["chapter_number"] = node.identifier
+                props["chapter_title"] = node.title or ""
+            elif node.node_type == LegalNodeType.SECTION:
+                node_type = NodeType.MUC
+                name = f"Mục {node.identifier}"
+                # Try to parse section number as int
+                try:
+                    props["section_number"] = int(node.identifier)
+                except (ValueError, TypeError):
+                    props["section_number"] = node.identifier
+                props["section_title"] = node.title or ""
+            elif node.node_type == LegalNodeType.ARTICLE:
+                node_type = NodeType.DIEU
+                name = f"Điều {node.identifier}"
+                # Parse article number as int if possible
+                try:
+                    # Handle cases like "1a", "10b" - extract the numeric part
+                    num_match = re.match(r'^(\d+)', str(node.identifier))
+                    props["article_number"] = int(num_match.group(1)) if num_match else node.identifier
+                except (ValueError, TypeError):
+                    props["article_number"] = node.identifier
+                props["article_title"] = node.title or ""
+                props["content"] = node.content[:2000] if node.content else ""
+                props["is_definition_article"] = node.is_definition_article
+            elif node.node_type == LegalNodeType.CLAUSE:
+                node_type = NodeType.KHOAN
+                name = f"Khoản {node.identifier}"
+                try:
+                    props["clause_number"] = int(node.identifier)
+                except (ValueError, TypeError):
+                    props["clause_number"] = node.identifier
+                props["content"] = node.content[:2000] if node.content else ""
+            elif node.node_type == LegalNodeType.POINT:
+                node_type = NodeType.DIEM
+                name = f"Điểm {node.identifier}"
+                props["point_label"] = node.identifier
+                props["content"] = node.content[:2000] if node.content else ""
+            elif node.node_type == LegalNodeType.DEFINITION_ITEM:
+                node_type = NodeType.KHAI_NIEM
+                name = node.title or f"Định nghĩa {node.identifier}"
+                props["term"] = node.title or node.identifier
+                props["definition"] = node.content[:2000] if node.content else ""
+            else:
+                # Skip unknown types
+                return None
+            
+            if node.title:
+                name = f"{name}. {node.title}"
+            
+            # Create the node
             graph_node = GraphNode(
                 id=node_id,
                 node_type=node_type,
-                name=name + (f". {node.title}" if node.title else ""),
+                name=name,
                 content=node.content[:1000] if node.content else "",
-                properties={
-                    "identifier": node.identifier,
-                    "title": node.title or "",
-                    "legal_type": node.node_type.value,
-                }
+                properties=props
             )
+            nodes_to_create.append(graph_node)
             
+            # Create THUOC_VE relationship to parent
+            thuoc_ve_rel = GraphRelationship(
+                source_id=node_id,
+                target_id=parent_id,
+                edge_type=EdgeType.THUOC_VE,
+                properties={"relationship_type": "structural"}
+            )
+            rels_to_create.append(thuoc_ve_rel)
+            
+            # Create KE_TIEP relationship to previous sibling
+            if prev_sibling_id:
+                ke_tiep_rel = GraphRelationship(
+                    source_id=prev_sibling_id,
+                    target_id=node_id,
+                    edge_type=EdgeType.KE_TIEP,
+                    properties={"relationship_type": "sequential"}
+                )
+                rels_to_create.append(ke_tiep_rel)
+            
+            # Process children
+            child_prev_sibling_id = None
+            for child in node.children:
+                child_prev_sibling_id = collect_nodes_and_rels(
+                    child, node_id, child_prev_sibling_id
+                )
+            
+            return node_id
+        
+        # Process all children of the document node
+        prev_sibling_id = None
+        for child in tree.children:
+            prev_sibling_id = collect_nodes_and_rels(child, doc_id, prev_sibling_id)
+        
+        # Batch insert nodes
+        for node in nodes_to_create:
             try:
-                await adapter.add_node(graph_node)
+                await adapter.add_node(node)
                 nodes_created += 1
             except Exception as e:
                 logger.debug(f"Node creation skipped (may exist): {e}")
-            
-            # Create relationship to parent
-            if parent_id:
-                try:
-                    from core.domain.graph_models import GraphRelationship
-                    
-                    rel = GraphRelationship(
-                        source_id=node_id,
-                        target_id=parent_id,
-                        edge_type=EdgeType.BELONGS_TO,
-                        properties={"relationship": "THUOC_VE"}
-                    )
-                    await adapter.add_relationship(rel)
-                    relationships_created += 1
-                except Exception as e:
-                    logger.debug(f"Relationship creation skipped: {e}")
-            
-            # Process children
-            for child in node.children:
-                await process_node(child, node_id)
-            
-            # Update progress
-            await self.job_store.update_status(
-                job_id,
-                JobStatus.INDEXING_GRAPH,
-                JobProgress(
-                    stage="indexing_graph",
-                    current=nodes_created,
-                    total=nodes_created + 10,  # Estimate
-                    message=f"Created {nodes_created} nodes, {relationships_created} relationships"
-                )
-            )
         
-        # Process all children of the law node
-        law_node_id = make_node_id(tree)
-        for child in tree.children:
-            await process_node(child, law_node_id)
+        # Batch insert relationships
+        for rel in rels_to_create:
+            try:
+                await adapter.add_relationship(rel)
+                relationships_created += 1
+            except Exception as e:
+                logger.debug(f"Relationship creation skipped: {e}")
+        
+        # Update progress
+        await self.job_store.update_status(
+            job_id,
+            JobStatus.INDEXING_GRAPH,
+            JobProgress(
+                stage="indexing_graph",
+                current=nodes_created + relationships_created,
+                total=len(nodes_to_create) + len(rels_to_create),
+                percentage=100.0,
+                message=f"Created {nodes_created} nodes, {relationships_created} relationships"
+            )
+        )
         
         logger.info(
             f"Knowledge graph built: {nodes_created} nodes, "

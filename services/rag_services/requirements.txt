@@ -45,6 +45,9 @@ python-Levenshtein==0.25.0  # For faster fuzzy matching
 openai>=1.0.0  # OpenAI GPT-4
 google-generativeai>=0.3.0  # Google Gemini
 
+# Tokenization (for accurate token counting)
+tiktoken>=0.5.0
+
 # LlamaIndex for RAG pipeline
 # Core LlamaIndex framework for retrieval orchestration
 llama-index-core>=0.12.0

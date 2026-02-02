@@ -126,3 +126,4 @@ class DocumentChunk:
     metadata: DocumentMetadata
     chunk_index: int
     char_spans: Optional[List[CharacterSpan]] = None
+    embedding: Optional[List[float]] = None  # Pre-computed embedding vector
