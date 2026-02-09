@@ -1,25 +1,3 @@
-"""
-Graph Reasoning Agent - Advanced Graph-based RAG with Dynamic Reasoning
-
-This agent extends beyond simple graph lookup to provide:
-1. LOCAL: Pattern-based 1-hop queries (existing)
-2. GLOBAL: Community-based summaries for comparative/overview questions
-3. MULTI-HOP: Dynamic path exploration with LLM-guided reasoning
-
-Addresses the gap between:
-- "Graph Lookup" (tra cứu theo mẫu cứng)
-- "Graph Reasoning" (suy luận động)
-
-Key improvements:
-- From Static patterns to Dynamic traversal
-- From Local (single node) to Global (community summaries)
-- From 1-hop to Multi-hop reasoning chains
-
-ReAct Framework (Reasoning + Acting):
-- Tools: Graph operations that LLM can call
-- Loop: Thought → Action → Observation → Repeat until done
-"""
-
 import json
 import logging
 import re

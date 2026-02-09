@@ -74,14 +74,6 @@ class RAGServiceAdapter(RAGServicePort):
         timeout: int = 30,
         max_retries: int = 3
     ):
-        """
-        Initialize the RAG service adapter.
-        
-        Args:
-            rag_service_url: Base URL for the RAG service
-            timeout: Request timeout in seconds
-            max_retries: Maximum number of retry attempts
-        """
         self.rag_service_url = rag_service_url.rstrip('/')
         self.timeout = timeout
         self.max_retries = max_retries
@@ -106,21 +98,6 @@ class RAGServiceAdapter(RAGServicePort):
         need_citation: bool = True,
         include_char_spans: bool = True
     ) -> Dict[str, Any]:
-        """
-        Retrieve relevant context for a query using the RAG system.
-        
-        Args:
-            query: The user query to search for relevant documents
-            top_k: Number of top relevant documents to retrieve
-            filters: Optional RAGFilters object with doc_types, faculties, years, subjects
-            search_mode: Search mode - "vector", "bm25", or "hybrid" (default)
-            use_rerank: Whether to use reranking (default True)
-            need_citation: Whether to include citation info (default True)
-            include_char_spans: Whether to include character spans for precise citation
-            
-        Returns:
-            Dictionary containing retrieved documents with metadata and citations
-        """
         session = await self._get_session()
         
         # OPTIMIZATION: Limit reranking to top 5 documents for performance
@@ -243,12 +220,6 @@ class RAGServiceAdapter(RAGServicePort):
         raise Exception("Max retries exceeded for RAG service")
     
     async def health_check(self) -> bool:
-        """
-        Check if the RAG service is healthy and available.
-        
-        Returns:
-            True if the service is healthy, False otherwise
-        """
         try:
             session = await self._get_session()
             
@@ -261,14 +232,5 @@ class RAGServiceAdapter(RAGServicePort):
             return False
     
     async def close(self) -> None:
-        """Close the HTTP session."""
         if self._session and not self._session.closed:
             await self._session.close()
-    
-    async def __aenter__(self):
-        """Async context manager entry."""
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.close()

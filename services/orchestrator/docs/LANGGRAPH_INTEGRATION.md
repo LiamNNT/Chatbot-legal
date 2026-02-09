@@ -25,14 +25,7 @@ LangGraph là một framework trong hệ sinh thái LangChain, được thiết 
          │
     ┌────▼────┐
     │RETRIEVE │ ← RAG + Knowledge Graph (parallel)
-    └────┬────┘
-         │
-    ┌────▼────┐
-    │ REASON  │ ← Chain-of-Thought reasoning step
-    └────┬────┘
-         │
-    ┌────▼────┐
-    │CONTINUE?│ ← Conditional: check confidence, max iterations
+4
     └────┬────┘
         /│\
        / │ \

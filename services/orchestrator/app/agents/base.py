@@ -1,16 +1,10 @@
-"""
-Base classes and interfaces for specialized agents.
-
-This module defines the base agent interface and common functionality
-for all specialized agents in the multi-agent system.
-"""
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ..core.domain import AgentRequest, AgentResponse
+from ..core.domain.domain import AgentRequest, AgentResponse
 from ..ports.agent_ports import AgentPort
 
 
@@ -113,7 +107,7 @@ class SpecializedAgent(ABC):
             Agent response
         """
         # Import ConversationContext here to avoid circular dependency
-        from ..core.domain import ConversationContext
+        from ..core.domain.domain import ConversationContext
         import logging
         import os
         

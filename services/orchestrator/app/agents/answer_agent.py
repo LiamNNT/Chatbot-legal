@@ -1,40 +1,10 @@
-"""
-Answer Agent implementation.
-
-This agent generates comprehensive answers based on retrieved context and user queries.
-Uses Qwen3 Coder model for structured reasoning and answer generation.
-
-Enhanced with:
-- Detailed source citations with char_spans
-- Document metadata (doc_type, faculty, year, subject)
-- Streaming support for real-time response generation
-"""
-
 import json
 from typing import Dict, Any, List, AsyncGenerator
 from ..agents.base import SpecializedAgent, AgentConfig, AgentType, AnswerResult, DetailedSource
 
 
 class AnswerAgent(SpecializedAgent):
-    """
-    Answer Agent responsible for generating comprehensive answers from context.
-    
-    This agent:
-    1. Analyzes retrieved documents and context
-    2. Synthesizes information from multiple sources
-    3. Generates structured, comprehensive answers
-    4. Provides reasoning steps and source citations
-    5. Handles Vietnamese academic language appropriately
-    """
-    
     def __init__(self, config: AgentConfig, agent_port):
-        """
-        Initialize the Answer Agent.
-        
-        Args:
-            config: Agent configuration containing model settings and parameters
-            agent_port: Port for communicating with the underlying LLM
-        """
         super().__init__(config, agent_port)
         
         # Extract agent-specific parameters from config
@@ -48,20 +18,6 @@ class AnswerAgent(SpecializedAgent):
         })
     
     async def process(self, input_data: Dict[str, Any]) -> AnswerResult:
-        """
-        Generate comprehensive answer from context and query.
-        
-        Args:
-            input_data: Dictionary containing:
-                - query: str - User query
-                - context_documents: List[Dict] - Retrieved documents
-                - rewritten_queries: Optional[List[str]] - Alternative queries
-                - previous_context: Optional[str] - Conversation context
-                - previous_feedback: Optional[str] - Feedback from ResponseFormatter for retry
-        
-        Returns:
-            AnswerResult containing the generated answer and metadata
-        """
         query = input_data.get("query", "")
         context_documents = input_data.get("context_documents", [])
         rewritten_queries = input_data.get("rewritten_queries", [])
@@ -85,23 +41,6 @@ class AnswerAgent(SpecializedAgent):
             return self._create_fallback_answer(query, response.content, context_documents)
     
     async def stream_process(self, input_data: Dict[str, Any]) -> AsyncGenerator[str, None]:
-        """
-        Stream comprehensive answer generation from context and query.
-        
-        This method yields answer text chunks in real-time as they are generated,
-        providing better user experience for long-running queries.
-        
-        Args:
-            input_data: Dictionary containing:
-                - query: str - User query
-                - context_documents: List[Dict] - Retrieved documents
-                - rewritten_queries: Optional[List[str]] - Alternative queries
-                - previous_context: Optional[str] - Conversation context
-                - previous_feedback: Optional[str] - Feedback from ResponseFormatter for retry
-        
-        Yields:
-            String chunks of the generated answer as they become available
-        """
         query = input_data.get("query", "")
         context_documents = input_data.get("context_documents", [])
         rewritten_queries = input_data.get("rewritten_queries", [])
@@ -118,16 +57,7 @@ class AnswerAgent(SpecializedAgent):
             yield chunk
     
     async def _stream_agent_request(self, prompt: str) -> AsyncGenerator[str, None]:
-        """
-        Stream a request to the underlying agent.
-        
-        Args:
-            prompt: The prompt to send to the agent
-            
-        Yields:
-            String chunks from the agent response
-        """
-        from ..core.domain import ConversationContext, AgentRequest
+        from ..core.domain.domain import ConversationContext, AgentRequest
         import logging
         import os
         
@@ -171,19 +101,6 @@ class AnswerAgent(SpecializedAgent):
         self,
         context_documents: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """
-        Filter documents to prioritize amended content and remove duplicates.
-        
-        When the same article appears multiple times (old and new versions),
-        this method keeps only the newest version (marked with is_amended=True
-        or from amendment documents).
-        
-        Args:
-            context_documents: List of retrieved documents
-            
-        Returns:
-            Filtered list with duplicates removed, prioritizing amended content
-        """
         import re
         
         # Guard: return empty if no documents
@@ -255,16 +172,6 @@ class AnswerAgent(SpecializedAgent):
         previous_context: str,
         previous_feedback: str = ""
     ) -> str:
-        """
-        Build the comprehensive answer generation prompt.
-        
-        Args:
-            query: User's original query
-            context_documents: Retrieved documents with content
-            rewritten_queries: Alternative query formulations
-            previous_context: Conversation context
-            previous_feedback: Feedback from ResponseFormatter for improving answer (retry scenario)
-        """
         prompt_parts = []
         
         # IMPORTANT: Add feedback section at the top if this is a retry

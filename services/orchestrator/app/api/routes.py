@@ -1,10 +1,3 @@
-"""
-FastAPI routes for orchestrator service.
-
-This module defines the API endpoints for the orchestrator service,
-providing REST API access to the orchestration functionality.
-"""
-
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from datetime import datetime
@@ -13,9 +6,9 @@ import asyncio
 import logging
 from typing import AsyncGenerator
 
-from ..core.container import get_orchestration_service, get_multi_agent_orchestrator
-from ..core.domain import OrchestrationRequest
-from ..core.exceptions import OrchestrationDomainException
+from ..core.DI.container import get_orchestration_service, get_multi_agent_orchestrator
+from ..core.domain.domain import OrchestrationRequest
+from ..core.domain.exceptions import OrchestrationDomainException
 from ..agents.base import AgentType
 from ..schemas.api_schemas import (
     ChatRequest, 
@@ -63,7 +56,6 @@ async def chat(request: ChatRequest):
     Returns:
         StreamingResponse (if stream=True) or ChatResponse (if stream=False)
     """
-    # If streaming is requested, use the streaming endpoint
     if request.stream:
         return await chat_stream_multi_agent(request)
     
@@ -216,7 +208,7 @@ async def chat_stream_multi_agent(request: ChatRequest):
                         top_k=request.rag_top_k
                     )
                     
-                    from ..core.domain import RAGContext
+                    from ..core.domain.domain import RAGContext
                     rag_context = RAGContext(
                         query=queries_to_use[0],
                         retrieved_documents=rag_data.get("retrieved_documents", []),
@@ -427,7 +419,7 @@ async def chat_stream(request: ChatRequest):
                         top_k=request.rag_top_k
                     )
                     # Prepare rag_context but don't need full transformation for streaming
-                    from ..core.domain import RAGContext
+                    from ..core.domain.domain import RAGContext
                     rag_context = RAGContext(
                         query=request.query,
                         retrieved_documents=rag_data.get("retrieved_documents", []),
@@ -518,7 +510,7 @@ async def health_check() -> HealthResponse:
 async def debug_graph_adapter():
     """Debug endpoint to check Graph Adapter initialization."""
     import os
-    from ..core.container import get_container
+    from ..core.DI.container import get_container
     
     try:
         container = get_container()
@@ -553,7 +545,7 @@ async def list_conversations() -> ConversationsResponse:
         List of active conversations with basic information
     """
     try:
-        from ..core.container import get_container
+        from ..core.DI.container import get_container
         container = get_container()
         conversation_manager = container.get_conversation_manager()
         
@@ -605,7 +597,7 @@ async def delete_conversation(session_id: str) -> dict:
         Success confirmation
     """
     try:
-        from ..core.container import get_container
+        from ..core.DI.container import get_container
         container = get_container()
         conversation_manager = container.get_conversation_manager()
         
@@ -648,7 +640,7 @@ async def cleanup_conversations(
         Number of conversations cleaned up
     """
     try:
-        from ..core.container import get_container
+        from ..core.DI.container import get_container
         container = get_container()
         conversation_manager = container.get_conversation_manager()
         

@@ -29,13 +29,14 @@ from ..agents.smart_planner_agent import SmartPlannerAgent, SmartPlanResult, Ext
 # Import kept for backward compatibility with deprecated methods
 from ..agents.response_formatter_agent import ResponseFormatterAgent, FormattedResponseResult
 from ..agents.graph_reasoning_agent import GraphReasoningAgent, GraphQueryType, GraphReasoningResult
+from ..agents.symbolic_reasoning_agent import SymbolicReasoningAgent, SymbolicReasoningResult, SymbolicQueryType
 from ..adapters.rag_adapter import RAGFilters
 from ..adapters.conversation_manager import InMemoryConversationManagerAdapter
 from ..ports.agent_ports import AgentPort, RAGServicePort
-from ..core.domain import OrchestrationRequest, OrchestrationResponse, RAGContext
-from ..core.ircot_config import IRCoTConfig, IRCoTMode, IRCoTResult
-from ..core.ircot_service import IRCoTReasoningService
-from ..core.context_domain_service import ContextDomainService
+from ..core.domain.domain import OrchestrationRequest, OrchestrationResponse, RAGContext
+from ..core.config.ircot_config import IRCoTConfig, IRCoTMode, IRCoTResult
+from ..core.services.ircot_service import IRCoTReasoningService
+from ..core.services.context_domain_service import ContextDomainService
 
 logger = logging.getLogger(__name__)
 
@@ -48,30 +49,6 @@ MAX_RETRY_ATTEMPTS = 2   # Maximum number of answer regeneration attempts
 
 
 class OptimizedMultiAgentOrchestrator:
-    """
-    Optimized Multi-Agent Orchestrator that uses 2 agents instead of 5.
-    
-    Pipeline comparison:
-    
-    ORIGINAL (5 agents, 5 LLM calls):
-        Planner → Query Rewriter → Answer Agent → Verifier → Response Agent
-    
-    OPTIMIZED V1 (3 agents, 3 LLM calls):
-        Smart Planner → Answer Agent → Response Formatter
-    
-    OPTIMIZED V2 (2 agents, 2 LLM calls) ⭐ CURRENT:
-        Smart Planner → Answer Agent (with built-in formatting)
-    
-    Enhanced with IRCoT for complex queries:
-        Smart Planner (complexity=complex) → [IRCoT Loop: Retrieve → Reason → Retrieve...] → Answer Agent
-    
-    Savings vs Original:
-    - 60% fewer LLM API calls (2 vs 5)
-    - 37.5% fewer tokens
-    - 40% faster response time
-    - 33% lower latency (removed formatting step)
-    """
-    
     def __init__(
         self,
         agent_port: AgentPort,
@@ -83,19 +60,6 @@ class OptimizedMultiAgentOrchestrator:
         ircot_config: Optional[IRCoTConfig] = None,  # Optional IRCoT configuration
         react_model: Optional[str] = None  # Optional model for Graph ReAct reasoning
     ):
-        """
-        Initialize the optimized multi-agent orchestrator.
-        
-        Args:
-            agent_port: Port for communicating with LLM services
-            rag_port: Port for RAG service communication
-            agent_factory: Factory for creating configured agents
-            enable_verification: [DEPRECATED] Formatting now built into AnswerAgent
-            enable_planning: Whether to use planning step
-            graph_adapter: Optional Neo4j adapter for Graph Reasoning (local/global/multi_hop)
-            ircot_config: Optional IRCoT configuration for complex multi-hop queries
-            react_model: Optional model for Graph ReAct reasoning (overrides default)
-        """
         self.agent_port = agent_port
         self.rag_port = rag_port
         self.enable_planning = enable_planning
@@ -136,8 +100,17 @@ class OptimizedMultiAgentOrchestrator:
             )
             model_info = f" with model: {self.react_model}" if self.react_model else ""
             logger.info(f"✓ Graph Reasoning Agent initialized (local/global/multi_hop support){model_info}")
+            
+            # Initialize Symbolic Reasoning Agent (enhanced with R001-R008 rules)
+            self.symbolic_reasoning_agent = SymbolicReasoningAgent(
+                graph_adapter=graph_adapter,
+                llm_port=agent_port,
+                react_model=self.react_model
+            )
+            logger.info("✓ Symbolic Reasoning Agent initialized (R001-R008 rules)")
         else:
             self.graph_reasoning_agent = None
+            self.symbolic_reasoning_agent = None
             logger.info("⚠ Graph Reasoning Agent not initialized (no graph_adapter provided)")
         
         # Feedback loop configuration
@@ -164,22 +137,6 @@ class OptimizedMultiAgentOrchestrator:
         logger.info("=" * 60)
     
     async def process_request(self, request: OrchestrationRequest) -> OrchestrationResponse:
-        """
-        Process a request through the optimized 2-agent pipeline.
-        
-        Pipeline:
-        1. Smart Planner: Analyze query + rewrite queries (1 LLM call)
-        2. RAG Retrieval: Get context (no LLM)
-        3. Answer Agent: Generate formatted answer (1 LLM call - includes built-in formatting)
-        
-        Total: 2 LLM calls (down from 3 in v1, 5 in original)
-        
-        Args:
-            request: The orchestration request
-            
-        Returns:
-            OrchestrationResponse with comprehensive results
-        """
         start_time = time.time()
         processing_stats = {
             "pipeline": "optimized_2_agents_direct",
@@ -549,20 +506,34 @@ Chúc bạn học tập tốt! Khi nào cần hỗ trợ thì quay lại hỏi �
                 except ValueError:
                     graph_query_type = GraphQueryType.LOCAL
                 
-                logger.info(f"🔗 Graph Reasoning: type={graph_query_type.value}")
+                # Check if symbolic reasoning should be used
+                use_symbolic = os.getenv("USE_SYMBOLIC_REASONING", "true").lower() == "true"
+                
+                logger.info(f"🔗 Graph Reasoning: type={graph_query_type.value}, symbolic={use_symbolic}")
                 
                 # ⚡ OPTIMIZATION: Run Graph + Vector search in PARALLEL
                 graph_start = time.time()
                 
                 # Create tasks for parallel execution
-                graph_task = self.graph_reasoning_agent.reason(
-                    query=request.user_query,
-                    query_type=graph_query_type,
-                    context={
-                        "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
-                        "search_terms": plan_result.search_terms if plan_result else []
-                    }
-                )
+                # Use Symbolic Reasoning Agent if available and enabled
+                if use_symbolic and self.symbolic_reasoning_agent is not None:
+                    logger.info("🧠 Using Symbolic Reasoning Agent (R001-R008 rules)")
+                    graph_task = self.symbolic_reasoning_agent.reason(
+                        query=request.user_query,
+                        context={
+                            "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
+                            "search_terms": plan_result.search_terms if plan_result else []
+                        }
+                    )
+                else:
+                    graph_task = self.graph_reasoning_agent.reason(
+                        query=request.user_query,
+                        query_type=graph_query_type,
+                        context={
+                            "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
+                            "search_terms": plan_result.search_terms if plan_result else []
+                        }
+                    )
                 vector_task = self._perform_rag_retrieval(
                     search_queries, 
                     top_k,
@@ -579,10 +550,15 @@ Chúc bạn học tập tốt! Khi nào cần hỗ trợ thì quay lại hỏi �
                 processing_stats["graph_reasoning_time"] = graph_reasoning_time
                 processing_stats["graph_query_type"] = graph_query_type.value
                 processing_stats["graph_nodes_found"] = len(graph_result.nodes)
-                processing_stats["graph_paths_found"] = len(graph_result.paths)
+                processing_stats["graph_paths_found"] = len(getattr(graph_result, 'paths', []))
                 processing_stats["graph_confidence"] = graph_result.confidence
                 
-                graph_context = graph_result.synthesized_context
+                # Add symbolic reasoning stats if available
+                if hasattr(graph_result, 'rules_applied') and graph_result.rules_applied:
+                    processing_stats["symbolic_rules_applied"] = graph_result.rules_applied
+                    processing_stats["use_symbolic_reasoning"] = True
+                
+                graph_context = graph_result.synthesized_context if hasattr(graph_result, 'synthesized_context') else graph_result.to_context_string()
                 
                 logger.info(f"✅ Parallel execution completed in {graph_reasoning_time:.2f}s")
                 logger.info(f"📊 Graph: {len(graph_result.nodes)} nodes, {len(graph_result.paths)} paths, confidence={graph_result.confidence}")
@@ -761,15 +737,29 @@ Chúc bạn học tập tốt! Khi nào cần hỗ trợ thì quay lại hỏi �
                 
                 logger.info(f"⚡ PARALLEL EXECUTION: Graph Reasoning ({graph_query_type.value}) + IRCoT (max_iter={ircot_max_iterations}, complexity={complexity_score})")
                 
+                # Check if symbolic reasoning should be used
+                use_symbolic = os.getenv("USE_SYMBOLIC_REASONING", "true").lower() == "true"
+                
                 # Create parallel tasks
-                graph_task = self.graph_reasoning_agent.reason(
-                    query=request.user_query,
-                    query_type=graph_query_type,
-                    context={
-                        "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
-                        "search_terms": plan_result.search_terms if plan_result else []
-                    }
-                )
+                # Use Symbolic Reasoning Agent if available and enabled
+                if use_symbolic and self.symbolic_reasoning_agent is not None:
+                    logger.info("🧠 Using Symbolic Reasoning Agent in IRCoT (R001-R008 rules)")
+                    graph_task = self.symbolic_reasoning_agent.reason(
+                        query=request.user_query,
+                        context={
+                            "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
+                            "search_terms": plan_result.search_terms if plan_result else []
+                        }
+                    )
+                else:
+                    graph_task = self.graph_reasoning_agent.reason(
+                        query=request.user_query,
+                        query_type=graph_query_type,
+                        context={
+                            "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
+                            "search_terms": plan_result.search_terms if plan_result else []
+                        }
+                    )
                 ircot_task = self.ircot_service.reason_with_retrieval(
                     query=request.user_query,
                     initial_context=None,

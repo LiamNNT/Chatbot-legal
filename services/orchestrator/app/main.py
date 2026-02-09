@@ -1,9 +1,3 @@
-"""
-Main FastAPI application for orchestrator service.
-
-This module sets up the FastAPI application with all routes and middleware.
-"""
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -17,7 +11,7 @@ env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path, override=True)  # Override existing env vars
 
 from .api.routes import router as api_router
-from .core.container import cleanup_container, get_container
+from .core.DI.container import cleanup_container, get_container
 
 # Configure logging
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
@@ -33,11 +27,6 @@ logger.info(f"Logging level set to: {log_level}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager.
-    
-    Handles startup and shutdown events for the FastAPI application.
-    """
     # Startup
     logger.info("Starting orchestrator service...")
     
@@ -71,12 +60,6 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    """
-    Create and configure the FastAPI application.
-    
-    Returns:
-        Configured FastAPI application instance
-    """
     app = FastAPI(
         title="Chatbot-UIT Orchestrator Service",
         description="Orchestration service that coordinates RAG retrieval and agent generation",
@@ -84,22 +67,18 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
     
-    # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure appropriately for production
+        allow_origins=["*"], 
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     
-    # Include API routes
     app.include_router(api_router, prefix="/api/v1")
     
-    # Root endpoint
     @app.get("/", tags=["Root"])
     async def root():
-        """Root endpoint with service information."""
         return {
             "service": "Chatbot-UIT Orchestrator",
             "version": "1.0.0",
@@ -112,7 +91,6 @@ def create_app() -> FastAPI:
                 "docs": "/docs"
             }
         }
-    
     return app
 
 
