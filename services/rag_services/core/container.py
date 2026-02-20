@@ -10,7 +10,7 @@
 # and has been moved to the appropriate location.
 
 import warnings
-from infrastructure.container import (
+from app.shared.container.container import (
     DIContainer,
     get_container,
     get_search_service,

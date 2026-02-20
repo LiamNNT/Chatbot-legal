@@ -7,7 +7,7 @@ from pathlib import Path
 # Add current directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from infrastructure.store.opensearch.client import OpenSearchClient
+from app.ingest.store.opensearch.client import OpenSearchClient
 
 def main():
     print("Connecting to OpenSearch...")

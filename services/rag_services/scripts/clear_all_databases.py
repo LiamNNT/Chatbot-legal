@@ -17,7 +17,7 @@ def clear_weaviate():
     print("="*60)
     
     try:
-        from infrastructure.store.vector.weaviate_store import get_weaviate_client, DOCUMENT_COLLECTION
+        from app.ingest.store.vector.weaviate_store import get_weaviate_client, DOCUMENT_COLLECTION
         from weaviate.classes.query import Filter
         
         client = get_weaviate_client("http://localhost:8090")
@@ -98,7 +98,7 @@ def clear_opensearch():
     print("="*60)
     
     try:
-        from infrastructure.store.opensearch.client import OpenSearchClient
+        from app.ingest.store.opensearch.client import OpenSearchClient
         
         client = OpenSearchClient()
         

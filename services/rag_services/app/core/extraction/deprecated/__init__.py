@@ -15,18 +15,18 @@ Migration Guide:
 ================
 
 Old approach (VLM - requires GPU):
-    from app.core.extraction import StructureExtractor, run_pipeline
+    from app.extraction import StructureExtractor, run_pipeline
     result, nodes, rels = run_pipeline(pdf_path=pdf_path)
 
 New approach (LlamaIndex - cloud-based):
     # For PDF files
-    from app.core.extraction import LlamaIndexExtractionService
+    from app.extraction import LlamaIndexExtractionService
     service = LlamaIndexExtractionService.from_env()
     result = await service.extract_from_pdf(pdf_path)
     nodes, rels = result.to_graph_models()
     
     # For DOCX/DOC files
-    from indexing.loaders.vietnam_legal_docx_parser import VietnamLegalDocxParser
+    from app.ingest.loaders.vietnam_legal_docx_parser import VietnamLegalDocxParser
     parser = VietnamLegalDocxParser()
     result = parser.parse(docx_path)
     chunks = result.chunks  # List[LegalChunk]

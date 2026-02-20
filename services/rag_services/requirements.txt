@@ -4,6 +4,9 @@ uvicorn==0.37.0
 pydantic==2.11.9
 pydantic-settings==2.11.0
 
+# Shared domain models & ports (install in editable mode: pip install -e ../shared)
+-e ../shared
+
 # OpenSearch and BM25 dependencies
 opensearch-py==2.4.2
 rank-bm25==0.2.2

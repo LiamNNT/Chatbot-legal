@@ -18,7 +18,7 @@ Benefits:
 - Preserves accurate chapter/article boundaries (VLM strength)
 
 Usage:
-    from app.core.extraction.hybrid_llamaparse_vlm import HybridExtractor
+    from app.extraction.hybrid_llamaparse_vlm import HybridExtractor
     
     extractor = HybridExtractor.from_env()
     result = await extractor.extract_from_pdf(pdf_path, category="Quy chế Đào tạo")

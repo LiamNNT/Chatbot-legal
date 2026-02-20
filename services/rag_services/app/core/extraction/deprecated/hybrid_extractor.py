@@ -39,11 +39,11 @@ RAG_SERVICES_ROOT = Path(__file__).parent.parent.parent.parent
 if str(RAG_SERVICES_ROOT) not in sys.path:
     sys.path.insert(0, str(RAG_SERVICES_ROOT))
 
-from app.core.utils.json_utils import clean_and_parse_json
-from app.core.extraction.page_merger import merge_nodes_into_dict
+from app.shared.utils.json_utils import clean_and_parse_json
+from app.extraction.page_merger import merge_nodes_into_dict
 
 # Import updated schemas
-from app.core.extraction.schemas import (
+from app.extraction.schemas import (
     StructureNodeType, VLMProvider, StructureNode, StructureRelation, 
     StructureExtractionResult, SemanticNode, SemanticRelation, Modification,
     SemanticExtractionResult, HybridExtractionResult, PageContext, 
@@ -52,7 +52,7 @@ from app.core.extraction.schemas import (
     SEMANTIC_EXTRACTION_PROMPT
 )
 
-from core.domain.graph_models import (
+from app.knowledge_graph.domain.graph_models import (
     GraphNode, GraphRelationship, NodeCategory, RelationshipType
 )
 

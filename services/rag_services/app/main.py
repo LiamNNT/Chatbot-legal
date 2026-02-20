@@ -14,17 +14,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import application-specific settings and routers
-from app.config.settings import settings
-from app.api.v1.routes.health import router as health_router
-from app.api.v1.routes.embed import router as embed_router
-from app.api.v1.routes.search import router as search_router
-from app.api.v1.routes.admin import router as admin_router
-from app.api.v1.routes.opensearch import router as opensearch_router
-from app.api.v1.routes.extraction import router as extraction_router  # KG Extraction Pipeline
-from app.api.v1.routes.ingest import router as ingest_router  # Document Ingestion Pipeline
-from app.api.v1.routes.retrieval import router as retrieval_router  # Legal Retrieval Pipeline
-from app.api.v1.routes.kg import router as kg_router  # Knowledge Graph Query API
-from app.api.endpoints.health import router as health_v2_router  # Week 2 comprehensive health checks
+from app.shared.config.settings import settings
+from app.health.routes import router as health_router
+from app.embedding.routes import router as embed_router
+from app.search.routes import router as search_router
+from app.admin.routes import router as admin_router
+from app.ingest.opensearch_routes import router as opensearch_router
+from app.extraction.routes import router as extraction_router  # KG Extraction Pipeline
+from app.ingest.routes import router as ingest_router  # Document Ingestion Pipeline
+from app.search.retrieval_routes import router as retrieval_router  # Legal Retrieval Pipeline
+from app.knowledge_graph.routes import router as kg_router  # Knowledge Graph Query API
+from app.health.health_v2 import router as health_v2_router  # Week 2 comprehensive health checks
 
 app = FastAPI(title="RAG Service", version="0.1.0")
 

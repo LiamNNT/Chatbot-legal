@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Check OpenSearch search for English regulations"""
-from infrastructure.store.opensearch.client import OpenSearchClient
+from app.ingest.store.opensearch.client import OpenSearchClient
 
 client = OpenSearchClient()
 

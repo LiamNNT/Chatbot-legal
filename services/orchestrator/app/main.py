@@ -10,8 +10,10 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path, override=True)  # Override existing env vars
 
-from .api.routes import router as api_router
-from .core.DI.container import cleanup_container, get_container
+from .chat.routes import router as chat_router
+from .conversation.routes import router as conversation_router
+from .admin.routes import router as admin_router
+from .shared.container.container import cleanup_container, get_container
 
 # Configure logging
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
@@ -75,7 +77,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     
-    app.include_router(api_router, prefix="/api/v1")
+    app.include_router(chat_router, prefix="/api/v1")
+    app.include_router(conversation_router, prefix="/api/v1")
+    app.include_router(admin_router, prefix="/api/v1")
     
     @app.get("/", tags=["Root"])
     async def root():

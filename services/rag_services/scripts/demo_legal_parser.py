@@ -22,7 +22,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from indexing.loaders.vietnam_legal_docx_parser import (
+from app.ingest.loaders.vietnam_legal_docx_parser import (
     VietnamLegalDocxParser,
     LegalNodeType,
     parse_vietnam_legal_docx,

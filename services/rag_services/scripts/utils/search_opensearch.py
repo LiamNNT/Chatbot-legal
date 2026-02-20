@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from infrastructure.store.opensearch.client import OpenSearchClient
+from app.ingest.store.opensearch.client import OpenSearchClient
 
 def search_content(query: str, size: int = 5):
     client = OpenSearchClient()

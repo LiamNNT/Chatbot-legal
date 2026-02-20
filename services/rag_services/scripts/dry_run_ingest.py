@@ -19,14 +19,14 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.config.settings import settings
-from infrastructure.store.vector.weaviate_store import (
+from app.shared.config.settings import settings
+from app.ingest.store.vector.weaviate_store import (
     get_weaviate_client, 
     get_collection_name,
     ensure_collection_exists
 )
-from infrastructure.store.opensearch.client import get_opensearch_client
-from indexing.loaders.vietnam_legal_docx_parser import VietnamLegalDocxParser
+from app.ingest.store.opensearch.client import get_opensearch_client
+from app.ingest.loaders.vietnam_legal_docx_parser import VietnamLegalDocxParser
 
 
 def check_weaviate_connection() -> dict:

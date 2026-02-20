@@ -1,0 +1,1 @@
+"""KG domain models."""

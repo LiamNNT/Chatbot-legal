@@ -1,14 +1,5 @@
-from abc import ABC, abstractmethod
-from typing import List, Optional
+"""
+Re-export canonical RerankerPort from the shared package.
+"""
 
-from ..domain.rag_models import SearchResult
-
-
-class RerankerPort(ABC):
-    @abstractmethod
-    async def rerank(self, query: str, results: List[SearchResult], top_k: Optional[int] = None,) -> List[SearchResult]:
-        ...
-
-    @abstractmethod
-    def is_available(self) -> bool:
-        ...
+from shared.ports.reranker_port import RerankerPort  # noqa: F401

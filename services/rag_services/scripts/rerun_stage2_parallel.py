@@ -17,7 +17,7 @@ if str(RAG_SERVICES_ROOT) not in sys.path:
     sys.path.insert(0, str(RAG_SERVICES_ROOT))
 
 # Import from deprecated location (use LlamaIndexExtractionService for new code)
-from app.core.extraction.deprecated.hybrid_extractor import ParallelSemanticExtractor, LLMConfig
+from app.extraction.deprecated.hybrid_extractor import ParallelSemanticExtractor, LLMConfig
 
 
 def main():

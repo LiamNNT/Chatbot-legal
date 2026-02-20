@@ -1,12 +1,5 @@
-from abc import ABC, abstractmethod
-from typing import List
+"""
+Re-export canonical EmbeddingPort from the shared package.
+"""
 
-
-class EmbeddingPort(ABC):
-    @abstractmethod
-    def embed_text(self, text: str) -> List[float]:
-        ...
-
-    @abstractmethod
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        ...
+from shared.ports.embedding_port import EmbeddingPort  # noqa: F401

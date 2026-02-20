@@ -50,7 +50,7 @@ print(f"API Key: ...{api_key[-8:]}")
 print(f"Base URL: {os.getenv('OPENAI_BASE_URL')}")
 
 # Import pipeline from deprecated location (use LlamaIndexExtractionService for new code)
-from app.core.extraction.deprecated.hybrid_extractor import (
+from app.extraction.deprecated.hybrid_extractor import (
     VLMConfig, VLMProvider, StructureExtractor,
     LLMConfig, SemanticExtractor,
     StructureExtractionResult, SemanticExtractionResult,

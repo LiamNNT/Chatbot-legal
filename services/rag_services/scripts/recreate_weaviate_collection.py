@@ -9,7 +9,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from infrastructure.store.vector.weaviate_store import (
+from app.ingest.store.vector.weaviate_store import (
     get_weaviate_client,
     delete_document_collection,
     create_document_collection,
