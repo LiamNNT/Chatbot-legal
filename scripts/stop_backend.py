@@ -27,7 +27,7 @@ def kill_port(port: int):
 def stop_docker_services(project_root: Path):
     """Stop Docker services"""
     print_info("Stopping Docker services...")
-    docker_dir = project_root / "services" / "rag_services" / "docker"
+    docker_dir = project_root / "infrastructure"
     
     subprocess.run(
         ["docker-compose", "-f", "docker-compose.weaviate.yml", "down"],
@@ -37,6 +37,12 @@ def stop_docker_services(project_root: Path):
     )
     subprocess.run(
         ["docker-compose", "-f", "docker-compose.opensearch.yml", "down"],
+        cwd=docker_dir,
+        check=False,
+        capture_output=True
+    )
+    subprocess.run(
+        ["docker-compose", "-f", "docker-compose.neo4j.yml", "down"],
         cwd=docker_dir,
         check=False,
         capture_output=True

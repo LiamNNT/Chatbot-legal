@@ -258,7 +258,7 @@ def start_docker_services(project_root: Path):
 def start_rag_service(project_root: Path):
     print_step(2, 3, "Starting RAG Service (port 8000)")
     
-    rag_dir = project_root / "services" / "rag_services"
+    rag_dir = project_root / "backend" / "rag"
     
     if not rag_dir.exists():
         print_error(f"RAG services directory not found: {rag_dir}")
@@ -336,7 +336,7 @@ def start_rag_service(project_root: Path):
 def start_orchestrator_service(project_root: Path):
     print_step(3, 3, "Starting Orchestrator Service (port 8001)")
     
-    orchestrator_dir = project_root / "services" / "orchestrator"
+    orchestrator_dir = project_root / "backend" / "orchestrator"
     
     if not orchestrator_dir.exists():
         print_error(f"Orchestrator directory not found: {orchestrator_dir}")
@@ -363,7 +363,7 @@ def start_orchestrator_service(project_root: Path):
                     key, value = line.split('=', 1)
                     env[key.strip()] = value.strip()
     
-    rag_services_path = str(project_root / "services" / "rag_services")
+    rag_services_path = str(project_root / "backend" / "rag")
     existing_pythonpath = env.get('PYTHONPATH', '')
     if existing_pythonpath:
         env['PYTHONPATH'] = f"{orchestrator_dir}:{rag_services_path}:{existing_pythonpath}"

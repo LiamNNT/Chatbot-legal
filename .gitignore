@@ -29,6 +29,7 @@ env/
 # Dành riêng cho service RAG, chứa các file index và vector store
 # được sinh ra tự động.
 services/rag_services/storage/
+backend/rag/storage/
 
 # 5. Cấu hình của IDE và Trình soạn thảo
 # -------------------------------------------------------------------
@@ -53,3 +54,12 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# 9. Log files
+# -------------------------------------------------------------------
+*.log
+
+# 10. Data files (managed separately)
+# -------------------------------------------------------------------
+data/uploads/
+data/exports/

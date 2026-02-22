@@ -81,41 +81,52 @@ Chatbot-UIT là hệ thống chatbot thông minh được xây dựng để hỗ
 
 ```
 Chatbot-UIT/
-├── frontend/                 # React Frontend
-│   ├── src/
-│   │   ├── components/      # UI Components
-│   │   ├── hooks/           # Custom React Hooks
-│   │   ├── services/        # API Services
-│   │   └── utils/           # Utilities
-│   └── package.json
-│
-├── services/
-│   ├── orchestrator/        # Orchestrator Service
+├── backend/
+│   ├── rag/                     # RAG Service (FastAPI - Port 8000)
 │   │   ├── app/
-│   │   │   ├── agents/      # AI Agents (ReAct, IRCoT, Graph)
-│   │   │   ├── adapters/    # External Service Adapters
-│   │   │   ├── api/         # API Routes
-│   │   │   └── core/        # Business Logic
+│   │   │   ├── search/          # Hybrid Search (BM25 + Vector + Reranking)
+│   │   │   ├── knowledge_graph/ # Knowledge Graph (Neo4j)
+│   │   │   │   ├── models.py        # Domain models
+│   │   │   │   ├── builders/         # Graph construction strategies
+│   │   │   │   └── stores/           # Graph storage adapters
+│   │   │   ├── embedding/       # Embedding service
+│   │   │   ├── ingest/          # Document ingestion pipeline
+│   │   │   ├── extraction/      # Rule extraction
+│   │   │   ├── llm/             # LLM client adapters
+│   │   │   └── shared/          # Config, DI container
 │   │   └── requirements.txt
 │   │
-│   └── rag_services/        # RAG Service
-│       ├── app/
-│       │   ├── api/         # API Routes
-│       │   └── core/        # Search Logic
-│       ├── adapters/        # Database Adapters
-│       └── requirements.txt
+│   ├── orchestrator/            # Orchestrator Service (FastAPI - Port 8001)
+│   │   ├── app/
+│   │   │   ├── chat/            # Chat agents & LangGraph workflow
+│   │   │   ├── reasoning/       # Graph reasoning & symbolic engine
+│   │   │   ├── conversation/    # Conversation management
+│   │   │   ├── admin/           # Admin routes
+│   │   │   └── shared/          # Config, DI container, ports
+│   │   ├── config/              # Agent YAML configs
+│   │   └── requirements.txt
+│   │
+│   └── shared/                  # Shared domain models (pip-installable)
+│       └── src/shared/
+│           ├── domain/          # Entities, Value Objects, Exceptions
+│           └── ports/           # Abstract port interfaces
 │
-├── infrastructure/          # Docker Compose Files
+├── frontend/                    # Streamlit Frontend
+│   ├── app.py
+│   └── api_client.py
+│
+├── infrastructure/              # Docker Compose files
 │   ├── docker-compose.yml
 │   ├── docker-compose.opensearch.yml
 │   ├── docker-compose.weaviate.yml
 │   └── docker-compose.neo4j.yml
 │
-├── scripts/                 # Utility Scripts
-│   ├── start_backend.py     # Start all backend services
-│   └── stop_backend.py      # Stop all services
+├── scripts/                     # Utility scripts
+│   ├── start_backend.py         # Start all backend services
+│   └── stop_backend.py          # Stop all services
 │
-└── docs/                    # Documentation
+├── data/                        # Data files (uploads, exports, docs)
+└── docs/                        # Project documentation
 ```
 
 ---
@@ -150,26 +161,30 @@ conda activate chatbot-UIT
 
 ```bash
 # Backend - RAG Services
-cd services/rag_services
+cd backend/rag
 pip install -r requirements.txt
 
 # Backend - Orchestrator
 cd ../orchestrator
 pip install -r requirements.txt
 
+# Backend - Shared package
+cd ../shared
+pip install -e .
+
 # Frontend
 cd ../../frontend
-npm install
+pip install -r requirements.txt
 ```
 
 ### 4. Cấu hình Environment Variables
 
 ```bash
 # RAG Services
-cp services/rag_services/.env.example services/rag_services/.env
+cp backend/rag/.env.example backend/rag/.env
 
 # Orchestrator (cần OPENROUTER_API_KEY)
-cp services/orchestrator/.env.example services/orchestrator/.env
+cp backend/orchestrator/.env.example backend/orchestrator/.env
 # Chỉnh sửa file .env và thêm API key
 ```
 
@@ -221,11 +236,11 @@ docker compose -f docker-compose.weaviate.yml up -d
 docker compose -f docker-compose.neo4j.yml up -d
 
 # 2. RAG Service
-cd services/rag_services
+cd backend/rag
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # 3. Orchestrator Service
-cd services/orchestrator
+cd backend/orchestrator
 uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
@@ -289,11 +304,11 @@ GET /v1/health
 
 ```bash
 # RAG Services tests
-cd services/rag_services
+cd backend/rag
 pytest tests/
 
 # Orchestrator tests
-cd services/orchestrator
+cd backend/orchestrator
 pytest tests/
 ```
 
@@ -301,8 +316,8 @@ pytest tests/
 
 ## 📁 Tài liệu bổ sung
 
-- [RAG Services Documentation](services/rag_services/README.md)
-- [Orchestrator Documentation](services/orchestrator/README.md)
+- [RAG Services Documentation](backend/rag/README.md)
+- [Orchestrator Documentation](backend/orchestrator/README.md)
 - [Frontend Documentation](frontend/README.md)
 - [Streaming Implementation](docs/STREAMING_CHANGES_SUMMARY.md)
 - [Quick Start Guide](docs/QUICK_START_GUIDE.md)
