@@ -1,306 +1,313 @@
-# Chatbot-UIT Orchestrator Service
+# 🎯 Orchestrator Service
 
-## Tổng quan
+> FastAPI microservice điều phối multi-agent pipeline cho Chatbot-UIT.
+> Nhận câu hỏi từ frontend → lên kế hoạch → gọi RAG Service lấy context → sinh câu trả lời bằng LLM.
 
-Orchestrator Service là thành phần trung tâm của hệ thống Chatbot-UIT, chịu trách nhiệm điều phối giữa việc truy xuất thông tin (RAG) và sinh phản hồi từ AI agent. Service này được thiết kế theo kiến trúc **Ports & Adapters** để đảm bảo tính linh hoạt và khả năng mở rộng.
+| Thông tin | Giá trị |
+|-----------|---------|
+| **Port** | `8001` (Docker) / `8002` (local dev) |
+| **Framework** | FastAPI + LangGraph |
+| **LLM Provider** | OpenRouter (GPT-4o-mini, GPT-5.1-chat, …) |
+| **Phụ thuộc runtime** | RAG Service (port 8000), Neo4j (port 7687, optional) |
 
-## Kiến trúc
+---
+
+## 📁 Cấu trúc thư mục
 
 ```
 orchestrator/
 ├── app/
-│   ├── core/                          # Domain layer
-│   │   ├── domain.py                  # Domain models
-│   │   ├── orchestration_service.py   # Core business logic
-│   │   └── container.py              # Dependency injection
-│   ├── ports/                        # Port interfaces
-│   │   └── agent_ports.py            # Service contracts
-│   ├── adapters/                     # Infrastructure layer
-│   │   ├── openrouter_adapter.py     # OpenRouter API integration
-│   │   ├── rag_adapter.py            # RAG service integration
-│   │   └── conversation_manager.py   # Conversation management
-│   ├── api/                          # API layer
-│   │   └── routes.py                 # FastAPI endpoints
-│   ├── schemas/                      # API schemas
-│   │   └── api_schemas.py            # Request/response models
-│   └── main.py                       # FastAPI application
-├── requirements.txt                  # Dependencies
-├── .env.example                     # Environment variables template
-├── start_server.sh                  # Server startup script
-├── demo_orchestrator.py             # Demo script
-└── README.md                        # This file
+│   ├── main.py                          # FastAPI entrypoint + lifespan
+│   │
+│   ├── chat/                            # ★ Core chat orchestration
+│   │   ├── routes.py                    #   POST /chat, /chat/simple, /chat/stream
+│   │   ├── response_mappers.py          #   Map domain → API response
+│   │   ├── exception_handlers.py        #   Fallback khi pipeline lỗi
+│   │   │
+│   │   ├── agents/                      #   Package-by-feature agents
+│   │   │   ├── base.py                  #     ABC SpecializedAgent, AgentConfig, AnswerResult
+│   │   │   ├── smart_planner/           #     Planning + Query Rewriting (1 LLM call)
+│   │   │   │   ├── agent.py             #       SmartPlannerAgent class
+│   │   │   │   ├── models.py            #       SmartPlanResult, ExtractedFilters
+│   │   │   │   ├── rules.py             #       Rule-based logic (no LLM)
+│   │   │   │   └── prompts.py           #       Prompt helpers
+│   │   │   ├── answer/                  #     Answer Generation (1 LLM call)
+│   │   │   │   ├── agent.py             #       AnswerAgent (stream + non-stream)
+│   │   │   │   ├── utils.py             #       Citation, confidence, doc filtering
+│   │   │   │   └── prompts.py           #       build_answer_prompt()
+│   │   │   └── orchestrator/            #     Multi-Agent Orchestrator
+│   │   │       ├── orchestrator.py      #       OptimizedMultiAgentOrchestrator
+│   │   │       └── direct_responses.py  #       Hardcoded Vietnamese greetings
+│   │   │
+│   │   ├── adapters/                    #   Outbound adapters
+│   │   │   ├── openrouter_adapter.py    #     LLM calls → OpenRouter
+│   │   │   └── rag_adapter.py           #     HTTP calls → RAG Service
+│   │   │
+│   │   ├── services/                    #   Domain services
+│   │   │   ├── orchestration_service.py #     Simple single-agent pipeline
+│   │   │   ├── context_service.py       #     Contextual query rewriting
+│   │   │   ├── ircot_service.py         #     IRCoT reasoning (deprecated → LangGraph)
+│   │   │   └── planner_service.py       #     Planner helper
+│   │   │
+│   │   └── langgraph/                   #   LangGraph stateful orchestration
+│   │       ├── workflow.py              #     StateGraph: plan → retrieve ⟷ reason → answer
+│   │       ├── nodes.py                 #     Node implementations
+│   │       └── state.py                 #     IRCoTState definition
+│   │
+│   ├── reasoning/                       #   Knowledge Graph reasoning
+│   │   ├── graph_reasoning_agent.py     #     ReAct agent (local / global / multi-hop)
+│   │   ├── symbolic_reasoning_agent.py  #     Symbolic rules R001-R008
+│   │   ├── symbolic_engine.py           #     Rule execution engine
+│   │   ├── reasoning_rules.py          #     Rule definitions
+│   │   ├── query_analyzer.py            #     Query intent → graph query type
+│   │   └── context_enricher.py          #     Merge rules + graph + Q&A
+│   │
+│   ├── conversation/                    #   Conversation management
+│   │   ├── conversation_manager.py      #     In-memory sliding window (max 20 msgs)
+│   │   └── routes.py                    #     GET/DELETE /conversations
+│   │
+│   ├── admin/                           #   Admin & debug
+│   │   └── routes.py                    #     GET /health, /agents/info, POST /agents/test
+│   │
+│   └── shared/                          #   Cross-cutting concerns
+│       ├── domain.py                    #     Re-export domain entities (từ shared pkg)
+│       ├── ports.py                     #     AgentPort, RAGServicePort, ConversationManagerPort
+│       ├── schemas.py                   #     Pydantic request/response schemas
+│       ├── exceptions.py                #     Domain exceptions
+│       ├── config/
+│       │   ├── config_manager.py        #     Load agents_config_optimized.yaml
+│       │   └── ircot_config.py          #     IRCoT configuration
+│       └── container/
+│           ├── container.py             #     DI container (singleton)
+│           ├── agent_factory.py         #     Create agents from YAML config
+│           ├── port_providers.py        #     Provide AgentPort, RAGServicePort
+│           ├── graph_providers.py       #     Provide Neo4j adapter
+│           └── orchestration_providers.py  # Provide orchestrators
+│
+├── config/
+│   └── agents_config_optimized.yaml     # Agent models, system prompts, thresholds
+│
+├── Dockerfile                           # Multi-stage build, port 8001
+├── start_server.sh                      # Dev startup script
+├── requirements.txt                     # fastapi, langgraph, aiohttp, …
+├── pytest.ini                           # Test configuration
+└── .env.example                         # Template biến môi trường
 ```
 
-## Tính năng chính
+---
 
-### 1. Orchestration Pipeline
-- **RAG Integration**: Truy xuất thông tin liên quan từ RAG service
-- **Agent Communication**: Tích hợp với OpenRouter API cho các LLM
-- **Context Management**: Quản lý context cuộc hội thoại
-- **Response Synthesis**: Kết hợp thông tin RAG với khả năng sinh text của AI
+## 🔀 Pipeline xử lý
 
-### 2. API Endpoints
-
-#### `/api/v1/chat` (POST)
-Endpoint chính để xử lý cuộc hội thoại:
-```json
-{
-  "query": "Hướng dẫn đăng ký học phần tại UIT như thế nào?",
-  "session_id": "user_123",
-  "use_rag": true,
-  "rag_top_k": 5,
-  "model": "openai/gpt-3.5-turbo",
-  "temperature": 0.7
-}
+```
+User query
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 0: Contextual Rewriting                           │
+│  (Nếu có chat history → rewrite câu hỏi follow-up      │
+│   thành standalone query)                               │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 1: Smart Planner  (GPT-4o-mini, 1 LLM call)      │
+│  • Phân loại intent (greeting / informational / …)      │
+│  • Chấm complexity score 0-10                           │
+│  • Chọn strategy: direct / standard_rag / advanced_rag  │
+│  • Query rewriting + filter extraction                  │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+              ┌─ simple (score ≤ 3.5) ──→ Direct Response (no LLM)
+              │
+              ├─ medium ──→ Standard RAG retrieval
+              │
+              └─ complex (score ≥ 6.5) ──→ IRCoT + Graph Reasoning
+                                              │
+                    ┌─────────────────────────┤
+                    ▼                         ▼
+┌──────────────────────────┐  ┌──────────────────────────┐
+│  Vector + BM25 (parallel)│  │  Neo4j Graph Reasoning   │
+│  via RAG Service :8000   │  │  (ReAct / Symbolic R001- │
+│                          │  │   R008 rules)            │
+└────────────┬─────────────┘  └────────────┬─────────────┘
+             └──────────┬──────────────────┘
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 3: Answer Agent  (GPT-5.1-chat, 1 LLM call)      │
+│  • Tổng hợp context → câu trả lời tiếng Việt           │
+│  • Built-in formatting (emoji, structure, greeting)     │
+│  • Citation với char_spans                              │
+│  • Streaming support (SSE)                              │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+                    Final response → Frontend
 ```
 
-#### `/api/v1/chat/stream` (POST)
-Streaming response cho real-time chat.
+> **Cost:** ~2 LLM calls/request (vs 5 calls ở pipeline gốc) → tiết kiệm ~60 % chi phí, giảm ~33 % latency.
 
-#### `/api/v1/health` (GET)
-Health check cho tất cả các service components.
+---
 
-#### `/api/v1/conversations` (GET)
-Quản lý các session hội thoại active.
+## 🚀 Khởi chạy
 
-### 3. Kiến trúc Ports & Adapters
+### Yêu cầu
 
-#### Ports (Interfaces)
-- **AgentPort**: Interface cho LLM agents
-- **RAGServicePort**: Interface cho RAG service
-- **ConversationManagerPort**: Interface cho conversation management
+- Python 3.11+
+- RAG Service đang chạy tại `localhost:8000`
+- Neo4j *(optional, cho Graph Reasoning)* tại `localhost:7687`
 
-#### Adapters (Implementations)
-- **OpenRouterAdapter**: Tích hợp OpenRouter API
-- **RAGServiceAdapter**: Kết nối với RAG service
-- **InMemoryConversationManager**: Quản lý conversation in-memory
+### Cài đặt
 
-## Cài đặt và Chạy
-
-### 1. Cài đặt dependencies
 ```bash
+cd backend/orchestrator
+
+# Virtual environment
+python -m venv venv && source venv/bin/activate
+
+# Shared package + dependencies
+pip install -e ../shared
 pip install -r requirements.txt
-```
 
-### 2. Cấu hình environment
-```bash
+# Config
 cp .env.example .env
-# Chỉnh sửa .env với cấu hình của bạn
+# → Sửa .env: điền OPENROUTER_API_KEY bắt buộc
 ```
 
-### 3. Khởi động service
-```bash
-./start_server.sh
-```
+### Chạy
 
-Hoặc manual:
 ```bash
+# Dev (hot-reload)
 uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+
+# Hoặc dùng script
+bash start_server.sh
+
+# Docker
+docker build -t orchestrator .
+docker run -p 8001:8001 --env-file .env orchestrator
 ```
 
-### 4. Test integration
+### Swagger Docs
+
+Khi service chạy → truy cập `http://localhost:8002/docs` (Swagger) hoặc `/redoc`.
+
+---
+
+## 📡 API Endpoints
+
+| Method | Path | Mô tả |
+|--------|------|--------|
+| `POST` | `/api/v1/chat` | Multi-agent pipeline (stream / non-stream) |
+| `POST` | `/api/v1/chat/simple` | Single-agent pipeline (nhanh hơn, ít phức tạp) |
+| `GET` | `/api/v1/health` | Health check toàn bộ components |
+| `GET` | `/api/v1/agents/info` | Thông tin agents, pipeline, IRCoT config |
+| `POST` | `/api/v1/agents/test` | Test multi-agent system end-to-end |
+| `GET` | `/api/v1/conversations` | List conversations đang active |
+| `DELETE` | `/api/v1/conversations/{session_id}` | Xóa conversation |
+| `POST` | `/api/v1/conversations/cleanup` | Dọn dẹp conversations cũ |
+
+### Ví dụ request
+
 ```bash
-python test_basic.py
-```
-
-### 5. Demo đầy đủ
-```bash
-python demo_orchestrator.py
-```
-
-## Cấu hình
-
-### Environment Variables
-
-| Variable | Mô tả | Default |
-|----------|-------|---------|
-| `OPENROUTER_API_KEY` | API key cho OpenRouter | **Required** |
-| `OPENROUTER_BASE_URL` | Base URL OpenRouter API | `https://openrouter.ai/api/v1` |
-| `OPENROUTER_DEFAULT_MODEL` | Model mặc định | `openai/gpt-3.5-turbo` |
-| `RAG_SERVICE_URL` | URL của RAG service | `http://localhost:8001` |
-| `DEFAULT_SYSTEM_PROMPT` | System prompt mặc định | Auto-generated |
-| `HOST` | Server host | `0.0.0.0` |
-| `PORT` | Server port | `8002` |
-
-### Supported Models (OpenRouter)
-- `openai/gpt-4`
-- `openai/gpt-4-turbo`
-- `openai/gpt-3.5-turbo`
-- `anthropic/claude-3-opus`
-- `anthropic/claude-3-sonnet`
-- `google/gemini-pro`
-- `meta-llama/llama-2-70b-chat`
-
-## API Documentation
-
-Khi service đang chạy, truy cập:
-- **Swagger UI**: `http://localhost:8002/docs`
-- **ReDoc**: `http://localhost:8002/redoc`
-
-## Ví dụ sử dụng
-
-### 1. Chat đơn giản
-```python
-import aiohttp
-
-async def simple_chat():
-    async with aiohttp.ClientSession() as session:
-        payload = {
-            "query": "Xin chào!",
-            "use_rag": False
-        }
-        
-        async with session.post(
-            "http://localhost:8002/api/v1/chat",
-            json=payload
-        ) as response:
-            data = await response.json()
-            print(data["response"])
-```
-
-### 2. Chat với RAG
-```python
-payload = {
-    "query": "Học phí tại UIT như thế nào?",
-    "use_rag": True,
-    "rag_top_k": 3,
-    "session_id": "user_session_1"
-}
-```
-
-### 3. Streaming chat
-```python
-async def stream_chat():
-    payload = {
-        "query": "Giải thích về quy trình nhập học",
-        "stream": True,
-        "use_rag": True
-    }
-    
-    async with session.post(
-        "http://localhost:8002/api/v1/chat/stream",
-        json=payload
-    ) as response:
-        async for line in response.content:
-            # Process streaming data
-            pass
-```
-
-## Kiến trúc và Nguyên tắc
-
-### 1. Ports & Adapters Pattern
-- **Tách biệt rõ ràng** giữa business logic và infrastructure
-- **Dependency Injection** để quản lý dependencies
-- **Interface-based design** cho flexibility
-
-### 2. Clean Architecture Layers
-```
-API Layer (FastAPI) 
-    ↓
-Application Layer (Routes)
-    ↓  
-Domain Layer (Business Logic)
-    ↓
-Infrastructure Layer (Adapters)
-```
-
-### 3. Error Handling
-- Graceful degradation khi RAG service không available
-- Retry logic với exponential backoff
-- Comprehensive error logging
-
-### 4. Performance Considerations
-- Async/await throughout
-- Connection pooling
-- Streaming support cho large responses
-
-## Testing
-
-### Unit Tests
-```bash
-python -m pytest tests/
-```
-
-### Integration Tests
-```bash
-python demo_orchestrator.py
-```
-
-### Manual Testing
-```bash
-curl -X POST "http://localhost:8002/api/v1/chat" \
+curl -X POST http://localhost:8002/api/v1/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "Test message",
-    "use_rag": false
+    "query": "Điều kiện để học vượt tại UIT là gì?",
+    "session_id": "user-123",
+    "use_rag": true,
+    "use_knowledge_graph": true,
+    "rag_top_k": 5,
+    "stream": false
   }'
 ```
 
-## Monitoring và Logging
+### Streaming (SSE)
 
-### Health Check
 ```bash
-curl http://localhost:8002/api/v1/health
+curl -N -X POST http://localhost:8002/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Quy trình đăng ký học phần?", "stream": true}'
 ```
 
-### Logs
-Service sử dụng Python logging với các levels:
-- INFO: General information
-- WARNING: Potential issues
-- ERROR: Actual errors
-- DEBUG: Detailed debugging info
+---
 
-## Phát triển và Mở rộng
+## ⚙️ Biến môi trường chính
 
-### Thêm Agent Provider mới
-1. Implement `AgentPort` interface
-2. Tạo adapter class mới
-3. Update `ServiceContainer`
-4. Thêm cấu hình environment
+| Biến | Mô tả | Mặc định |
+|------|--------|----------|
+| `OPENROUTER_API_KEY` | **Bắt buộc** — API key từ openrouter.ai | — |
+| `OPENROUTER_BASE_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
+| `RAG_SERVICE_URL` | URL của RAG Service | `http://localhost:8001` |
+| `NEO4J_URI` | Neo4j connection string | `bolt://localhost:7687` |
+| `NEO4J_USER` / `NEO4J_PASSWORD` | Neo4j credentials | `neo4j` / `uitchatbot` |
+| `USE_SYMBOLIC_REASONING` | Bật symbolic rules R001-R008 | `true` |
+| `LOG_LEVEL` | Logging level (`DEBUG` / `INFO` / `WARNING`) | `INFO` |
+| `PORT` | Server port | `8002` |
 
-### Thêm Conversation Storage
-1. Implement `ConversationManagerPort`
-2. Tạo adapter cho database/Redis
-3. Update dependency injection
+---
 
-### Custom Business Logic
-Modify `OrchestrationService` để thêm:
-- Custom prompt engineering
-- Result post-processing
-- Advanced conversation flow
+## 🧩 Kiến trúc chi tiết
 
-## Troubleshooting
+### Ports & Adapters (Hexagonal Architecture)
 
-### Common Issues
-
-1. **OPENROUTER_API_KEY not set**
-   - Set environment variable in `.env`
-
-2. **RAG service connection failed**
-   - Check `RAG_SERVICE_URL`
-   - Ensure RAG service is running
-
-3. **Import errors**
-   - Check Python path
-   - Install requirements.txt
-
-4. **Port already in use**
-   - Change PORT in `.env`
-   - Kill existing process
-
-### Debug Mode
-```bash
-LOG_LEVEL=DEBUG uvicorn app.main:app --reload
+```
+              ┌─── Inbound ───┐           ┌─── Outbound ───┐
+              │  FastAPI       │           │  OpenRouter     │
+  Frontend ──→│  routes.py     │──→ Domain │  (LLM calls)   │
+              │                │   Logic   │                 │
+              └────────────────┘           │  RAG Service    │
+                                           │  (HTTP client)  │
+                                           │                 │
+                                           │  Neo4j          │
+                                           │  (graph adapter)│
+                                           └─────────────────┘
 ```
 
-## Đóng góp
+- **Ports:** `AgentPort`, `RAGServicePort`, `ConversationManagerPort` — abstract interfaces
+- **Adapters:** `OpenRouterAdapter`, `RAGServiceAdapter`, `Neo4jAdapter` — concrete implementations
+- **Container:** DI container (`container.py`) wires everything together at startup
 
-1. Fork repository
-2. Tạo feature branch
-3. Implement changes theo Ports & Adapters pattern
-4. Add tests
-5. Submit pull request
+### Agent Config (YAML-driven)
 
-## License
+Agent models, system prompts, và parameters được cấu hình trong `config/agents_config_optimized.yaml`.
+Không cần sửa code khi thay đổi model hoặc prompt — chỉ cần sửa YAML.
 
-MIT License - Xem file LICENSE để biết thêm chi tiết.
+### LangGraph Workflow
+
+Cho complex queries, hệ thống dùng LangGraph `StateGraph` với IRCoT loop:
+
+```
+START → plan → retrieve ⟷ reason → answer → END
+                  ↑______________|
+              (loop nếu confidence thấp)
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+cd backend/orchestrator
+
+# Chạy tất cả tests
+pytest
+
+# Chạy test cụ thể
+pytest tests/ -k "test_planner"
+
+# Coverage
+pytest --cov=app
+
+# Debug mode
+LOG_LEVEL=DEBUG pytest -s
+```
+
+---
+
+## 🐛 Troubleshooting
+
+| Lỗi | Nguyên nhân | Giải pháp |
+|------|-------------|-----------|
+| `OPENROUTER_API_KEY is required` | Chưa set API key | Điền vào `.env` |
+| `RAG service connection failed` | RAG Service chưa chạy | Chạy RAG Service trước (`cd ../rag && python start_server.py`) |
+| `Graph Reasoning Agent not initialized` | Neo4j chưa chạy | Chạy Neo4j hoặc ignore (KG là optional) |
+| `Import error: shared.domain` | Chưa cài shared package | `pip install -e ../shared` |
+| Port conflict | Port 8002 đã bị chiếm | Đổi `PORT` trong `.env` hoặc kill process cũ |
