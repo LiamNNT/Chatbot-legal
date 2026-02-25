@@ -41,19 +41,19 @@ class QueryComplexity(str, Enum):
 class ExtractedFiltersState:
     """Extracted filters from query analysis."""
     doc_types: List[str] = field(default_factory=list)
-    faculties: List[str] = field(default_factory=list)
+    legal_domains: List[str] = field(default_factory=list)
     years: List[int] = field(default_factory=list)
-    subjects: List[str] = field(default_factory=list)
+    legal_references: List[str] = field(default_factory=list)
     
     def is_empty(self) -> bool:
-        return not (self.doc_types or self.faculties or self.years or self.subjects)
+        return not (self.doc_types or self.legal_domains or self.years or self.legal_references)
     
     def to_dict(self) -> Dict[str, Any]:
         return {
             "doc_types": self.doc_types,
-            "faculties": self.faculties,
+            "legal_domains": self.legal_domains,
             "years": self.years,
-            "subjects": self.subjects
+            "legal_references": self.legal_references
         }
 
 

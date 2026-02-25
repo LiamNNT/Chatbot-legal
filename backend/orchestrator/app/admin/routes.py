@@ -95,23 +95,23 @@ async def get_agents_info() -> dict:
                 "enabled": True,
                 "agents": health_info.get("agents", {}),
                 "pipeline_steps": [
-                    "1. Planning (DeepSeek V3.1) - Analyze query and create execution plan",
-                    "2. Query Rewriting (LongCat Flash Chat) - Optimize queries for search",
+                    "1. Planning (Smart Planner) - Analyze query and create execution plan",
+                    "2. Query Rewriting - Optimize queries for search",
                     "3. RAG Retrieval - Get relevant context using optimized queries",
-                    "4. Answer Generation (Qwen3 Coder) - Generate comprehensive answers",
-                    "5. Response Formatting (DeepSeek R1) - Verify and create user-friendly responses",
+                    "4. Legal Verification Pipeline - QuestionSpec → Cypher Gen → Verify → KG Execute → Answer Gen → Answer Verify",
+                    "5. Answer Generation - Generate comprehensive answers from RAG + KG results",
                 ],
             },
             "models_used": {
                 "smart_planner": "mistralai/mistral-7b-instruct:free",
                 "answer_agent": "qwen/qwen-3-coder-free",
-                "response_formatter": "deepseek/deepseek-r1-free",
+                "verification_pipeline": "LLM via AgentPort (shared)",
             },
             "capabilities": {
                 "smart_planning": "Analyzes intent, complexity, and rewrites queries in single LLM call",
                 "rag_integration": "Retrieves relevant context from knowledge base (KG + Vector)",
                 "answer_generation": "Creates comprehensive, structured answers",
-                "response_formatting": "Verifies accuracy and ensures user-friendly output",
+                "legal_verification": "Symbolic verification pipeline for legal Q&A on Knowledge Graph (Rademaker et al.)",
             },
             "configuration": {
                 "verification_enabled": health_info.get("verification_enabled", True),
@@ -156,7 +156,7 @@ async def test_agents() -> dict:
             "agents_tested": {
                 "smart_planner": "✅ Executed" if "smart_planning_time" in response.processing_stats else "⚠️ Skipped",
                 "answer_agent": "✅ Executed" if "answer_generation_time" in response.processing_stats else "❌ Failed",
-                "response_formatter": "✅ Executed" if "response_formatting_time" in response.processing_stats else "❌ Failed",
+                "verification_pipeline": "✅ Executed" if "verification_pipeline_time" in response.processing_stats else "⚠️ Skipped",
             },
             "performance": {
                 "total_time": f"{response.processing_stats.get('total_time', 0):.2f}s",

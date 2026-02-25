@@ -17,7 +17,7 @@ class LangGraphNodes:
         rag_port,    # RAGServicePort for retrieval
         smart_planner=None,  # SmartPlannerAgent
         answer_agent=None,   # AnswerAgent
-        graph_reasoning_agent=None,  # GraphReasoningAgent
+        graph_reasoning_agent=None,  # LegalVerificationPipeline (or None)
         conversation_manager=None,   # ConversationManager
         context_service=None,        # ContextDomainService
         ircot_config=None            # IRCoT configuration
@@ -26,7 +26,7 @@ class LangGraphNodes:
         self.rag_port = rag_port
         self.smart_planner = smart_planner
         self.answer_agent = answer_agent
-        self.graph_reasoning_agent = graph_reasoning_agent
+        self.verification_pipeline = graph_reasoning_agent  # renamed but kept param name for compatibility
         self.conversation_manager = conversation_manager
         self.context_service = context_service
         self.ircot_config = ircot_config
@@ -198,27 +198,11 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
             graph_context = None
             
             # === PARALLEL EXECUTION: RAG + KG ===
-            if use_kg and self.graph_reasoning_agent:
-                logger.info("⚡ Parallel execution: RAG + Knowledge Graph")
-                
-                # Import GraphQueryType
-                from ...reasoning.graph_reasoning_agent import GraphQueryType
-                
-                graph_query_type_str = plan_result.get("graph_query_type", "local")
-                try:
-                    graph_query_type = GraphQueryType(graph_query_type_str)
-                except ValueError:
-                    graph_query_type = GraphQueryType.LOCAL
+            if use_kg and self.verification_pipeline:
+                logger.info("⚡ Parallel execution: RAG + Legal Verification Pipeline")
                 
                 # Create parallel tasks
-                graph_task = self.graph_reasoning_agent.reason(
-                    query=state["original_query"],
-                    query_type=graph_query_type,
-                    context={
-                        "extracted_filters": extracted_filters or {},
-                        "search_terms": plan_result.get("search_terms", [])
-                    }
-                )
+                pipeline_task = self.verification_pipeline.run(state["original_query"])
                 
                 rag_task = self._perform_rag_retrieval(
                     search_queries=search_queries,
@@ -227,32 +211,36 @@ Sử dụng tiếng Việt cho nội dung reasoning và thông tin."""
                 )
                 
                 # Run both in parallel
-                graph_result, rag_result = await asyncio.gather(graph_task, rag_task)
+                pipeline_result, rag_result = await asyncio.gather(pipeline_task, rag_task)
                 
-                # Process graph results
-                updates["graph_context"] = graph_result.synthesized_context
-                updates["graph_nodes_found"] = len(graph_result.nodes)
-                updates["graph_paths_found"] = len(graph_result.paths)
-                updates["graph_confidence"] = graph_result.confidence
+                # Process pipeline results
+                kg_nodes_found = pipeline_result.kg_result.record_count if pipeline_result.kg_result else 0
+                updates["graph_context"] = (
+                    pipeline_result.structured_answer.natural_language
+                    if pipeline_result.success and pipeline_result.structured_answer
+                    else ""
+                )
+                updates["graph_nodes_found"] = kg_nodes_found
+                updates["graph_paths_found"] = 0
+                updates["graph_confidence"] = pipeline_result.confidence
                 
-                # Add graph context as a document if useful
-                if (graph_result.synthesized_context and 
-                    len(graph_result.synthesized_context) > 50 and
-                    graph_result.confidence >= 0.5):
+                # Add verified answer as a document if pipeline succeeded
+                if (pipeline_result.success and pipeline_result.structured_answer
+                    and pipeline_result.confidence >= 0.5):
                     
                     graph_doc = {
-                        "content": graph_result.synthesized_context,
+                        "content": pipeline_result.structured_answer.natural_language,
                         "score": 1.0,
-                        "title": "Knowledge Graph Context",
+                        "title": "Knowledge Graph Verified Answer",
                         "source": "Knowledge Graph",
-                        "metadata": {"source_type": "graph_reasoning"}
+                        "metadata": {"source_type": "verification_pipeline"}
                     }
                     new_documents.append(graph_doc)
                 
                 # Process RAG results
                 new_documents.extend(self._process_rag_results(rag_result))
                 
-                logger.info(f"   Graph: {len(graph_result.nodes)} nodes, confidence={graph_result.confidence}")
+                logger.info(f"   Pipeline: success={pipeline_result.success}, nodes={kg_nodes_found}")
                 logger.info(f"   RAG: {len(rag_result.get('retrieved_documents', []))} documents")
                 
             else:

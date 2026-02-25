@@ -8,24 +8,24 @@ from typing import Dict, Any, List, Optional
 class ExtractedFilters:
     """Filters extracted from the query context."""
     doc_types: List[str] = field(default_factory=list)
-    faculties: List[str] = field(default_factory=list)
+    legal_domains: List[str] = field(default_factory=list)
     years: List[int] = field(default_factory=list)
-    subjects: List[str] = field(default_factory=list)
+    legal_references: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         result = {}
         if self.doc_types:
             result["doc_types"] = self.doc_types
-        if self.faculties:
-            result["faculties"] = self.faculties
+        if self.legal_domains:
+            result["legal_domains"] = self.legal_domains
         if self.years:
             result["years"] = self.years
-        if self.subjects:
-            result["subjects"] = self.subjects
+        if self.legal_references:
+            result["legal_references"] = self.legal_references
         return result
 
     def is_empty(self) -> bool:
-        return not any([self.doc_types, self.faculties, self.years, self.subjects])
+        return not any([self.doc_types, self.legal_domains, self.years, self.legal_references])
 
 
 @dataclass

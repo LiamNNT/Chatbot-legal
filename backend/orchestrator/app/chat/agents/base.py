@@ -9,10 +9,9 @@ from ...shared.ports import AgentPort
 
 
 class AgentType(Enum):
-    """Types of specialized agents (optimized 3-agent pipeline)."""
+    """Types of specialized agents (optimized 2-agent + verification pipeline)."""
     SMART_PLANNER = "smart_planner"  # Planning + Query Rewriting
     ANSWER_AGENT = "answer_agent"  # Answer generation
-    RESPONSE_FORMATTER = "response_formatter"  # Verification + Formatting
 
 
 @dataclass

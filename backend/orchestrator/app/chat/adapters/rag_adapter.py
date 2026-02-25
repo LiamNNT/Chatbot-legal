@@ -5,10 +5,10 @@ This adapter provides integration with the RAG system following the
 Ports & Adapters architecture pattern.
 
 Enhanced with filter support for:
-- doc_types: Document type filters (e.g., ["syllabus", "regulation"])
-- faculties: Faculty filters (e.g., ["CNTT", "KHTN"])
-- years: Academic year filters (e.g., [2023, 2024])
-- subjects: Subject/course code filters (e.g., ["SE101", "CS201"])
+- doc_types: Document type filters (e.g., ["luật", "nghị_định", "thông_tư"])
+- legal_domains: Legal domain filters (e.g., ["hình_sự", "dân_sự", "hành_chính"])
+- years: Year filters (e.g., [2023, 2024])
+- legal_references: Legal reference filters (e.g., ["điều 14", "khoản 2"])
 """
 
 import aiohttp
@@ -23,15 +23,15 @@ class RAGFilters:
     def __init__(
         self,
         doc_types: Optional[List[str]] = None,
-        faculties: Optional[List[str]] = None,
+        legal_domains: Optional[List[str]] = None,
         years: Optional[List[int]] = None,
-        subjects: Optional[List[str]] = None,
+        legal_references: Optional[List[str]] = None,
         language: str = "vi"
     ):
         self.doc_types = doc_types
-        self.faculties = faculties
+        self.legal_domains = legal_domains
         self.years = years
-        self.subjects = subjects
+        self.legal_references = legal_references
         self.language = language
     
     def to_dict(self) -> Dict[str, Any]:
@@ -39,19 +39,19 @@ class RAGFilters:
         result = {}
         if self.doc_types:
             result["doc_types"] = self.doc_types
-        if self.faculties:
-            result["faculties"] = self.faculties
+        if self.legal_domains:
+            result["legal_domains"] = self.legal_domains
         if self.years:
             result["years"] = self.years
-        if self.subjects:
-            result["subjects"] = self.subjects
+        if self.legal_references:
+            result["legal_references"] = self.legal_references
         if self.language:
             result["language"] = self.language
         return result
     
     def is_empty(self) -> bool:
         """Check if no filters are set."""
-        return not any([self.doc_types, self.faculties, self.years, self.subjects])
+        return not any([self.doc_types, self.legal_domains, self.years, self.legal_references])
 
 
 class RAGServiceAdapter(RAGServicePort):
@@ -62,7 +62,7 @@ class RAGServiceAdapter(RAGServicePort):
     communication with the RAG services.
     
     Features:
-    - Field-specific filters (doc_types, faculties, years, subjects)
+    - Field-specific filters (doc_types, legal_domains, years, legal_references)
     - Hybrid search with configurable modes
     - Citation support with character spans
     - Retry mechanism for resilience
@@ -121,12 +121,12 @@ class RAGServiceAdapter(RAGServicePort):
             filter_dict = filters.to_dict()
             if filter_dict.get("doc_types"):
                 payload["doc_types"] = filter_dict["doc_types"]
-            if filter_dict.get("faculties"):
-                payload["faculties"] = filter_dict["faculties"]
+            if filter_dict.get("legal_domains"):
+                payload["legal_domains"] = filter_dict["legal_domains"]
             if filter_dict.get("years"):
                 payload["years"] = filter_dict["years"]
-            if filter_dict.get("subjects"):
-                payload["subjects"] = filter_dict["subjects"]
+            if filter_dict.get("legal_references"):
+                payload["legal_references"] = filter_dict["legal_references"]
             if filter_dict.get("language"):
                 payload["language"] = filter_dict["language"]
         

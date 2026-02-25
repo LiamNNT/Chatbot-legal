@@ -3,7 +3,7 @@ Dependency injection container for orchestrator service.
 
 The ServiceContainer composes three focused provider mixins:
 - **PortProviderMixin**           — LLM, RAG, conversation ports
-- **GraphProviderMixin**          — Neo4j, symbolic reasoning
+- **GraphProviderMixin**          — Neo4j graph adapter
 - **OrchestrationProviderMixin**  — orchestration services, multi-agent, LangGraph
 
 This file owns only:
@@ -36,8 +36,6 @@ class ServiceContainer(
 
         # Graph fields
         self._graph_adapter = None
-        self._symbolic_graph_extension = None
-        self._symbolic_reasoning_engine = None
 
         # Orchestration fields
         self._orchestration_service = None
@@ -84,14 +82,6 @@ def get_multi_agent_orchestrator():
 
 def get_langgraph_orchestrator():
     return get_container().get_langgraph_orchestrator()
-
-
-def get_symbolic_reasoning_engine():
-    return get_container().get_symbolic_reasoning_engine()
-
-
-def get_symbolic_graph_extension():
-    return get_container().get_symbolic_graph_extension()
 
 
 async def cleanup_container() -> None:

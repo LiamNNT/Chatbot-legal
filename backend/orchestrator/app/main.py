@@ -44,10 +44,10 @@ async def lifespan(app: FastAPI):
     try:
         container = get_container()
         orchestrator = container.get_multi_agent_orchestrator()
-        if orchestrator.graph_reasoning_agent:
-            logger.info("✓ Graph Reasoning Agent is available")
+        if orchestrator.verification_pipeline:
+            logger.info("✓ Legal Verification Pipeline is available")
         else:
-            logger.warning("⚠ Graph Reasoning Agent is NOT available")
+            logger.warning("⚠ Legal Verification Pipeline is NOT available")
     except Exception as e:
         logger.warning(f"⚠ Could not initialize multi-agent orchestrator: {e}")
     

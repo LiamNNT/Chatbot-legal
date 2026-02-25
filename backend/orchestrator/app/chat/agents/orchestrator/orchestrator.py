@@ -6,7 +6,7 @@ Agents:
 2. Answer Agent   (answer generation with built-in formatting)
 
 Enhanced with:
-- Filter support (doc_types, faculties, years, subjects)
+- Filter support (doc_types, legal_domains, years, legal_references)
 - Citation with char_spans for precise source attribution
 - Graph Reasoning: local, global (community), multi-hop dynamic reasoning
 - IRCoT (Interleaving Retrieval with Chain-of-Thought)
@@ -24,8 +24,6 @@ from datetime import datetime
 
 from ..base import AgentConfig, AgentType, AnswerResult
 from ..smart_planner import SmartPlannerAgent, SmartPlanResult, ExtractedFilters
-from ....reasoning.graph_reasoning_agent import GraphReasoningAgent, GraphQueryType, GraphReasoningResult
-from ....reasoning.symbolic_reasoning_agent import SymbolicReasoningAgent, SymbolicReasoningResult, SymbolicQueryType
 from ...adapters.rag_adapter import RAGFilters
 from ....conversation.conversation_manager import InMemoryConversationManagerAdapter
 from ....shared.ports import AgentPort, RAGServicePort
@@ -33,6 +31,7 @@ from ....shared.domain import OrchestrationRequest, OrchestrationResponse, RAGCo
 from ....shared.config.ircot_config import IRCoTConfig, IRCoTMode, IRCoTResult
 from ...services.ircot_service import IRCoTReasoningService
 from ...services.context_service import ContextDomainService
+from ..reasoning.pipeline import LegalVerificationPipeline
 from .direct_responses import get_direct_response
 
 logger = logging.getLogger(__name__)
@@ -50,14 +49,12 @@ class OptimizedMultiAgentOrchestrator:
         enable_planning: bool = True,
         graph_adapter=None,
         ircot_config: Optional[IRCoTConfig] = None,
-        react_model: Optional[str] = None,
     ):
         self.agent_port = agent_port
         self.rag_port = rag_port
         self.enable_planning = enable_planning
         self.agent_factory = agent_factory
         self.graph_adapter = graph_adapter
-        self.react_model = react_model
 
         # IRCoT
         self.ircot_config = ircot_config or IRCoTConfig()
@@ -77,19 +74,15 @@ class OptimizedMultiAgentOrchestrator:
         logger.info(f"✓ Answer Agent initialized with model: {self.answer_agent.config.model}")
         logger.info("✓ Response formatting built into Answer Agent (optimized pipeline)")
 
-        # Graph Reasoning
+        # Legal Verification Pipeline (Symbolic Verification for KG)
         if graph_adapter:
-            self.graph_reasoning_agent = GraphReasoningAgent(
-                graph_adapter=graph_adapter, llm_port=agent_port, react_model=self.react_model
+            self.verification_pipeline = LegalVerificationPipeline(
+                llm_port=agent_port, graph_adapter=graph_adapter
             )
-            self.symbolic_reasoning_agent = SymbolicReasoningAgent(
-                graph_adapter=graph_adapter, llm_port=agent_port, react_model=self.react_model
-            )
-            logger.info("✓ Graph + Symbolic Reasoning Agents initialized")
+            logger.info("✓ Legal Verification Pipeline initialized")
         else:
-            self.graph_reasoning_agent = None
-            self.symbolic_reasoning_agent = None
-            logger.info("⚠ Graph Reasoning Agent not initialized (no graph_adapter)")
+            self.verification_pipeline = None
+            logger.info("⚠ Legal Verification Pipeline not initialized (no graph_adapter)")
 
         # IRCoT
         if self.ircot_config.enabled:
@@ -105,7 +98,7 @@ class OptimizedMultiAgentOrchestrator:
         self.context_service = ContextDomainService(llm_client=agent_port)
 
         logger.info("=" * 60)
-        logger.info("🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (2 Agents + Graph + IRCoT + Memory)")
+        logger.info("🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (2 Agents + Verification Pipeline + IRCoT + Memory)")
         logger.info("=" * 60)
 
     # ------------------------------------------------------------------
@@ -323,13 +316,13 @@ class OptimizedMultiAgentOrchestrator:
 
             graph_context = None
 
-            if should_use_graph and self.graph_reasoning_agent is not None:
-                # Parallel: graph + vector
+            if should_use_graph and self.verification_pipeline is not None:
+                # Parallel: verification pipeline + vector
                 graph_context, rag_data = await self._parallel_graph_and_vector(
                     request, plan_result, search_queries, top_k, extracted_filters, use_rerank, processing_stats
                 )
-            elif should_use_graph and self.graph_reasoning_agent is None:
-                logger.warning("⚠️ KG requested but graph_reasoning_agent unavailable — vector only")
+            elif should_use_graph and self.verification_pipeline is None:
+                logger.warning("⚠️ KG requested but verification_pipeline unavailable — vector only")
                 processing_stats["kg_unavailable_warning"] = True
                 rag_data = await self._perform_rag_retrieval(search_queries, top_k, extracted_filters, use_rerank)
             else:
@@ -389,49 +382,45 @@ class OptimizedMultiAgentOrchestrator:
         use_rerank: bool,
         processing_stats: Dict[str, Any],
     ):
-        import os
-
-        graph_query_type_str = getattr(plan_result, "graph_query_type", "local") if plan_result else "local"
-        try:
-            graph_query_type = GraphQueryType(graph_query_type_str)
-        except ValueError:
-            graph_query_type = GraphQueryType.LOCAL
-
-        use_symbolic = os.getenv("USE_SYMBOLIC_REASONING", "true").lower() == "true"
-        context_kwargs = {
-            "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
-            "search_terms": plan_result.search_terms if plan_result else [],
-        }
-
-        if use_symbolic and self.symbolic_reasoning_agent is not None:
-            graph_task = self.symbolic_reasoning_agent.reason(query=request.user_query, context=context_kwargs)
-        else:
-            graph_task = self.graph_reasoning_agent.reason(
-                query=request.user_query, query_type=graph_query_type, context=context_kwargs
-            )
+        graph_task = self.verification_pipeline.run(request.user_query)
         vector_task = self._perform_rag_retrieval(search_queries, top_k, extracted_filters, use_rerank)
 
         graph_start = time.time()
-        graph_result, rag_data = await asyncio.gather(graph_task, vector_task)
+        pipeline_result, rag_data = await asyncio.gather(graph_task, vector_task)
         elapsed = time.time() - graph_start
 
         processing_stats.update(
             graph_reasoning_time=elapsed,
-            graph_query_type=graph_query_type.value,
-            graph_nodes_found=len(graph_result.nodes),
-            graph_paths_found=len(getattr(graph_result, "paths", [])),
-            graph_confidence=graph_result.confidence,
+            graph_nodes_found=pipeline_result.kg_result.record_count if pipeline_result.kg_result else 0,
+            graph_confidence=pipeline_result.confidence,
+            verification_passed=pipeline_result.success,
+            cypher_retries=pipeline_result.cypher_retries,
+            answer_retries=pipeline_result.answer_retries,
         )
-        if hasattr(graph_result, "rules_applied") and graph_result.rules_applied:
-            processing_stats.update(symbolic_rules_applied=graph_result.rules_applied, use_symbolic_reasoning=True)
+        if pipeline_result.cypher_verification:
+            processing_stats["cypher_rules_checked"] = [
+                r.rule_id for r in pipeline_result.cypher_verification.rules_checked
+            ]
+        if pipeline_result.answer_verdict:
+            processing_stats["answer_verdict"] = pipeline_result.answer_verdict.status.value
 
-        graph_context = (
-            graph_result.synthesized_context
-            if hasattr(graph_result, "synthesized_context")
-            else graph_result.to_context_string()
-        )
+        # Build graph context string from pipeline result
+        if pipeline_result.success and pipeline_result.structured_answer:
+            graph_context = pipeline_result.structured_answer.natural_language
+            if pipeline_result.structured_answer.citations:
+                graph_context += "\n\nNguồn tham khảo:\n" + "\n".join(
+                    f"- {c}" for c in pipeline_result.structured_answer.citations
+                )
+        elif pipeline_result.kg_result and pipeline_result.kg_result.records:
+            # Fallback: raw KG data
+            graph_context = "Dữ liệu từ Knowledge Graph:\n" + "\n".join(
+                str(r.data) for r in pipeline_result.kg_result.records[:10]
+            )
+        else:
+            graph_context = ""
+
         logger.info(
-            f"✅ Parallel: Graph {len(graph_result.nodes)} nodes / "
+            f"✅ Parallel: Verification Pipeline (success={pipeline_result.success}) / "
             f"Vector {len(rag_data.get('retrieved_documents', []))} docs in {elapsed:.2f}s"
         )
         return graph_context, rag_data
@@ -446,8 +435,6 @@ class OptimizedMultiAgentOrchestrator:
         plan_result: SmartPlanResult,
         processing_stats: Dict[str, Any],
     ) -> Optional[RAGContext]:
-        import os
-
         step_start = time.time()
         logger.info(
             f"🔄 IRCoT retrieval (complexity={plan_result.complexity}, score={plan_result.complexity_score})"
@@ -457,7 +444,7 @@ class OptimizedMultiAgentOrchestrator:
             extracted_filters = plan_result.extracted_filters
             should_use_graph = False
             graph_context = None
-            graph_result = None
+            pipeline_result = None
 
             if hasattr(request, "use_knowledge_graph") and request.use_knowledge_graph:
                 should_use_graph = True
@@ -467,25 +454,8 @@ class OptimizedMultiAgentOrchestrator:
             complexity_score = getattr(plan_result, "complexity_score", 7.0)
             ircot_max_iterations = 3 if complexity_score >= 7.0 else 2
 
-            if should_use_graph and self.graph_reasoning_agent is not None:
-                graph_query_type_str = getattr(plan_result, "graph_query_type", "local")
-                try:
-                    graph_query_type = GraphQueryType(graph_query_type_str)
-                except ValueError:
-                    graph_query_type = GraphQueryType.LOCAL
-
-                use_symbolic = os.getenv("USE_SYMBOLIC_REASONING", "true").lower() == "true"
-                context_kwargs = {
-                    "extracted_filters": extracted_filters.to_dict() if extracted_filters else {},
-                    "search_terms": plan_result.search_terms if plan_result else [],
-                }
-
-                if use_symbolic and self.symbolic_reasoning_agent is not None:
-                    graph_task = self.symbolic_reasoning_agent.reason(query=request.user_query, context=context_kwargs)
-                else:
-                    graph_task = self.graph_reasoning_agent.reason(
-                        query=request.user_query, query_type=graph_query_type, context=context_kwargs
-                    )
+            if should_use_graph and self.verification_pipeline is not None:
+                graph_task = self.verification_pipeline.run(request.user_query)
                 ircot_task = self.ircot_service.reason_with_retrieval(
                     query=request.user_query,
                     initial_context=None,
@@ -494,17 +464,22 @@ class OptimizedMultiAgentOrchestrator:
                 )
 
                 graph_start = time.time()
-                graph_result, ircot_result = await asyncio.gather(graph_task, ircot_task)
+                pipeline_result, ircot_result = await asyncio.gather(graph_task, ircot_task)
                 parallel_time = time.time() - graph_start
 
                 processing_stats.update(
                     graph_reasoning_time=parallel_time,
-                    graph_nodes_found=len(graph_result.nodes),
-                    graph_paths_found=len(graph_result.paths),
-                    graph_confidence=graph_result.confidence,
+                    graph_nodes_found=pipeline_result.kg_result.record_count if pipeline_result.kg_result else 0,
+                    graph_confidence=pipeline_result.confidence,
+                    verification_passed=pipeline_result.success,
                 )
-                graph_context = graph_result.synthesized_context
-            elif should_use_graph and self.graph_reasoning_agent is None:
+                if pipeline_result.success and pipeline_result.structured_answer:
+                    graph_context = pipeline_result.structured_answer.natural_language
+                elif pipeline_result.kg_result and pipeline_result.kg_result.records:
+                    graph_context = "Dữ liệu từ Knowledge Graph:\n" + "\n".join(
+                        str(r.data) for r in pipeline_result.kg_result.records[:10]
+                    )
+            elif should_use_graph and self.verification_pipeline is None:
                 logger.warning("⚠️ KG unavailable in IRCoT — vector only")
                 processing_stats["kg_unavailable_warning"] = True
                 ircot_result = await self.ircot_service.reason_with_retrieval(
@@ -535,10 +510,8 @@ class OptimizedMultiAgentOrchestrator:
                 complexity=plan_result.complexity if plan_result else "complex",
                 strategy=plan_result.strategy if plan_result else "ircot",
             )
-            if should_use_graph and graph_result:
-                processing_stats["graph_query_type"] = (
-                    graph_query_type.value if "graph_query_type" in locals() else "unknown"
-                )
+            if should_use_graph and pipeline_result:
+                processing_stats["verification_pipeline_used"] = True
 
             # Map accumulated context
             mapped_documents = []
@@ -647,9 +620,9 @@ class OptimizedMultiAgentOrchestrator:
         if extracted_filters and not extracted_filters.is_empty():
             rag_filters = RAGFilters(
                 doc_types=extracted_filters.doc_types or None,
-                faculties=extracted_filters.faculties or None,
+                legal_domains=extracted_filters.legal_domains or None,
                 years=extracted_filters.years or None,
-                subjects=extracted_filters.subjects or None,
+                legal_references=extracted_filters.legal_references or None,
             )
 
         async def _retrieve_one(query: str) -> List[Dict[str, Any]]:

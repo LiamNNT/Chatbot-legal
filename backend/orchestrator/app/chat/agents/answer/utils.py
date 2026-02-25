@@ -43,9 +43,9 @@ def filter_amended_documents(context_documents: List[Dict[str, Any]]) -> List[Di
         article_num = article_match.group(1)
 
         old_markers = [
-            "ĐTBC ≥ 7" in content or "ĐTBC >= 7" in content,
-            "điểm trung bình chung ≥ 7" in content.lower(),
-            "học vượt chỉ dành cho sinh viên có ĐTBC" in content,
+            doc.get("is_superseded", False),
+            "hết hiệu lực" in content.lower(),
+            "đã bị thay thế" in content.lower(),
         ]
         has_old_markers = any(old_markers)
 
@@ -173,7 +173,7 @@ def estimate_confidence(context_documents: List[Dict[str, Any]], answer: str) ->
     if len(answer) > 100:
         confidence += 0.1
 
-    if any(kw in answer.lower() for kw in ["uit", "trường", "đại học", "quy định"]):
+    if any(kw in answer.lower() for kw in ["luật", "nghị định", "thông tư", "quy định", "điều", "khoản"]):
         confidence += 0.1
 
     return min(0.95, max(0.1, confidence))

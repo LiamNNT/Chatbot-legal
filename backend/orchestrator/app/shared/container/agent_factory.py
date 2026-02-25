@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from ...chat.agents.base import SpecializedAgent, AgentConfig, AgentType
 from ...chat.agents.answer import AnswerAgent
 from ...chat.agents.smart_planner import SmartPlannerAgent
-from ...chat.agents.response_formatter_agent import ResponseFormatterAgent
 from ...shared.ports import AgentPort
 from ..config.config_manager import ConfigurationManager, get_config_manager
 
@@ -25,7 +24,6 @@ class ConfigurableAgentFactory(AgentFactory):
     AGENT_CLASSES: Dict[str, Type[SpecializedAgent]] = {
         "smart_planner": SmartPlannerAgent,
         "answer_agent": AnswerAgent,
-        "response_formatter": ResponseFormatterAgent,
     }
     
     def __init__(self, config_manager: Optional[ConfigurationManager] = None):
@@ -66,7 +64,6 @@ class ConfigurableAgentFactory(AgentFactory):
         agent_type_map = {
             "smart_planner": AgentType.SMART_PLANNER,
             "answer_agent": AgentType.ANSWER_AGENT,
-            "response_formatter": AgentType.RESPONSE_FORMATTER,
         }
         
         agent_type_str = config_data.get("agent_type", "")

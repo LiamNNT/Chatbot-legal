@@ -11,22 +11,23 @@ from typing import List, Optional, Dict
 from .models import SmartPlanResult, ExtractedFilters
 
 
-# UIT-specific abbreviation mappings
-UIT_ABBREVIATIONS: Dict[str, str] = {
-    "hp": "học phần",
-    "đkhp": "đăng ký học phần",
-    "khmt": "khoa học máy tính",
-    "cntt": "công nghệ thông tin",
-    "httt": "hệ thống thông tin",
-    "mmt": "mạng máy tính và truyền thông",
-    "mmtt": "mạng máy tính và truyền thông",
-    "sv": "sinh viên",
-    "gv": "giảng viên",
-    "đtbc": "điểm trung bình chung",
-    "ctđt": "chương trình đào tạo",
-    "uit": "đại học công nghệ thông tin",
-    "đhqg": "đại học quốc gia",
-    "hcm": "hồ chí minh",
+# Legal abbreviation mappings
+LEGAL_ABBREVIATIONS: Dict[str, str] = {
+    "nđ": "nghị định",
+    "tt": "thông tư",
+    "qđ": "quyết định",
+    "cp": "chính phủ",
+    "blhs": "bộ luật hình sự",
+    "blds": "bộ luật dân sự",
+    "bllđ": "bộ luật lao động",
+    "blttds": "bộ luật tố tụng dân sự",
+    "bltths": "bộ luật tố tụng hình sự",
+    "xphc": "xử phạt hành chính",
+    "vbpl": "văn bản pháp luật",
+    "qh": "quốc hội",
+    "ttcp": "thủ tướng chính phủ",
+    "ubnd": "ủy ban nhân dân",
+    "hđnd": "hội đồng nhân dân",
 }
 
 
@@ -142,9 +143,10 @@ def needs_knowledge_graph(query: str) -> bool:
     regulation_patterns = ["khoản", "mục", "chương", "quy chế", "nghị định", "thông tư"]
     regulation_questions = [
         "điều kiện", "yêu cầu", "quy định", "thủ tục", "hồ sơ",
-        "chuyển ngành", "chuyển trường", "chuyển chương trình",
-        "bảo lưu", "thôi học", "tốt nghiệp", "xét tốt nghiệp",
-        "khen thưởng", "kỷ luật", "học bổng",
+        "chế tài", "hình phạt", "mức phạt", "xử phạt",
+        "hành vi", "vi phạm", "nghĩa vụ", "quyền",
+        "trách nhiệm", "thẩm quyền", "hiệu lực",
+        "cấm", "bị cấm", "không được phép",
     ]
 
     has_relationship = any(p in query_lower for p in relationship_patterns)
@@ -182,15 +184,17 @@ def determine_graph_query_type(query: str) -> str:
 
     # MULTI_HOP patterns
     multi_hop_patterns = [
-        r'nếu.*(rớt|trượt|không qua|fail).*thì',
-        r'nếu.*(không học|bỏ qua|skip).*thì',
-        r'(rớt|trượt).*ảnh hưởng',
-        r'(rớt|trượt).*bị trễ',
-        r'chuỗi.*(môn|học phần)',
-        r'từ.*(cơ sở|nền tảng).*đến.*(chuyên ngành|nâng cao)',
-        r'đường đi.*học', r'lộ trình.*học',
-        r'ảnh hưởng.*như thế nào.*tốt nghiệp',
-        r'tác động.*đến.*năm (cuối|\d)',
+        r'nếu.*vi phạm.*thì.*bị',
+        r'nếu.*không.*tuân thủ.*thì',
+        r'hành vi.*bị.*xử phạt.*như thế nào',
+        r'mối quan hệ.*giữa.*luật.*và.*nghị định',
+        r'nghị định.*hướng dẫn.*luật',
+        r'thông tư.*hướng dẫn.*nghị định',
+        r'từ.*vi phạm.*đến.*chế tài',
+        r'ảnh hưởng.*như thế nào',
+        r'tác động.*đến',
+        r'dẫn chiếu.*đến',
+        r'liên quan.*đến.*điều',
     ]
     for pattern in multi_hop_patterns:
         if re.search(pattern, query_lower):
@@ -209,15 +213,15 @@ def determine_graph_query_type(query: str) -> str:
 
     # GLOBAL patterns
     global_patterns = [
-        r'so sánh.*(chương trình|ngành|khoa)',
-        r'khác biệt.*(giữa|của).*(chương trình|ngành|khoa)',
-        r'(cntt|khmt|httt|mmt).*(vs|so với|và).*(cntt|khmt|httt|mmt)',
-        r'tóm tắt.*(quy định|chương trình|môn học)',
+        r'so sánh.*(luật|nghị định|thông tư|quy định)',
+        r'khác biệt.*(giữa|của).*(luật|nghị định|phiên bản)',
+        r'tóm tắt.*(quy định|luật|nghị định|thông tư)',
         r'tổng quan.*(về|của)',
-        r'liệt kê tất cả.*(môn|chương trình)',
-        r'có bao nhiêu (môn|quy định|điều)',
-        r'phân loại.*(môn|quy định)',
-        r'nhóm.*(môn học|quy định)',
+        r'liệt kê tất cả.*(điều|khoản|quy định|chế tài)',
+        r'có bao nhiêu (điều|khoản|quy định|hành vi)',
+        r'phân loại.*(vi phạm|chế tài|hành vi)',
+        r'nhóm.*(vi phạm|quy định)',
+        r'các loại.*(hình phạt|chế tài|vi phạm)',
     ]
     for pattern in global_patterns:
         if re.search(pattern, query_lower):
@@ -225,10 +229,11 @@ def determine_graph_query_type(query: str) -> str:
 
     # LOCAL patterns (simple lookup)
     local_patterns = [
-        r'(tiên quyết|học trước|cần học)',
-        r'môn.*(trước|sau)',
-        r'(thuộc|của) khoa',
-        r'môn.*(bắt buộc|tự chọn)',
+        r'(nội dung|quy định).*(điều|khoản)',
+        r'điều\s*\d+',
+        r'khoản\s*\d+',
+        r'(thuộc|của|trong).*(luật|nghị định|thông tư)',
+        r'(mức phạt|hình phạt|chế tài).*cụ thể',
         r'^(cho biết|thông tin về)',
     ]
     for pattern in local_patterns:
@@ -244,14 +249,11 @@ def apply_rule_based_rewriting(query: str, max_queries: int = 3) -> List[str]:
     rewritten = []
 
     expanded = query_lower
-    for abbr, full in UIT_ABBREVIATIONS.items():
+    for abbr, full in LEGAL_ABBREVIATIONS.items():
         if abbr in expanded:
             expanded = expanded.replace(abbr, full)
     if expanded != query_lower:
         rewritten.append(expanded)
-
-    if "uit" not in query_lower and "đại học công nghệ" not in query_lower:
-        rewritten.append(f"{query} tại UIT")
 
     if query not in rewritten:
         rewritten.insert(0, query)
@@ -273,55 +275,59 @@ def extract_keywords(query: str, max_keywords: int = 10) -> List[str]:
 
 def extract_filters_from_query(query: str) -> ExtractedFilters:
     """
-    Extract search filters (faculties, years, subjects) from query context.
+    Extract search filters (legal domains, years, legal references) from query context.
     """
     query_lower = query.lower()
     filters = ExtractedFilters()
 
-    # Faculties detection
-    faculty_patterns = {
-        "CNTT": ["công nghệ thông tin", "cntt", "khoa cntt"],
-        "KHMT": ["khoa học máy tính", "khmt", "computer science"],
-        "HTTT": ["hệ thống thông tin", "httt", "information systems"],
-        "MMT": ["mạng máy tính", "mmt", "mmtt", "truyền thông", "network"],
-        "KTMT": ["kỹ thuật máy tính", "ktmt", "computer engineering"],
-        "KHTN": ["khoa học tự nhiên", "khtn"],
-        "CTDA": ["công trình đa âm", "ctda"],
+    # Legal domain detection
+    domain_patterns = {
+        "hình_sự": ["hình sự", "tội phạm", "hình phạt", "blhs"],
+        "dân_sự": ["dân sự", "hợp đồng", "bồi thường", "blds"],
+        "hành_chính": ["hành chính", "xử phạt", "vi phạm hành chính", "xphc"],
+        "lao_động": ["lao động", "người lao động", "người sử dụng lao động", "bllđ"],
+        "thương_mại": ["thương mại", "doanh nghiệp", "kinh doanh"],
+        "giao_thông": ["giao thông", "đường bộ", "phương tiện"],
+        "đất_đai": ["đất đai", "quyền sử dụng đất", "bất động sản"],
+        "thuế": ["thuế", "thuế thu nhập", "thuế giá trị gia tăng"],
     }
-    for faculty, patterns in faculty_patterns.items():
+    for domain, patterns in domain_patterns.items():
         if any(p in query_lower for p in patterns):
-            filters.faculties.append(faculty)
+            filters.legal_domains.append(domain)
+
+    # Document type detection
+    doc_type_patterns = {
+        "luật": ["luật", "bộ luật"],
+        "nghị_định": ["nghị định", "nđ"],
+        "thông_tư": ["thông tư", "tt"],
+        "quyết_định": ["quyết định", "qđ"],
+        "nghị_quyết": ["nghị quyết"],
+    }
+    for doc_type, patterns in doc_type_patterns.items():
+        if any(p in query_lower for p in patterns):
+            filters.doc_types.append(doc_type)
 
     # Years detection
     year_patterns = [
-        r'năm\s*(\d{4})', r'khóa\s*(\d{4})', r'niên khóa\s*(\d{4})',
+        r'năm\s*(\d{4})', r'số\s*(\d+)/(\d{4})',
         r'(\d{4})\s*[-–]\s*\d{4}', r'\b(20\d{2})\b',
     ]
     for pattern in year_patterns:
         for match in re.findall(pattern, query_lower):
             try:
-                year = int(match)
-                if 2000 <= year <= 2100 and year not in filters.years:
+                year = int(match) if isinstance(match, str) else int(match[-1])
+                if 1945 <= year <= 2100 and year not in filters.years:
                     filters.years.append(year)
-            except ValueError:
+            except (ValueError, IndexError):
                 continue
 
-    # Subjects detection (codes like SE101, CS201)
-    subject_pattern = r'\b([A-Z]{2,4}\d{3})\b'
-    for match in re.findall(subject_pattern, query.upper()):
-        if match not in filters.subjects:
-            filters.subjects.append(match)
-
-    # Common subject name → code mapping
-    subject_name_patterns = {
-        "IT001": ["nhập môn lập trình", "intro to programming"],
-        "IT002": ["lập trình hướng đối tượng", "oop"],
-        "IT003": ["cấu trúc dữ liệu", "data structures"],
-        "SE100": ["nhập môn công nghệ phần mềm"],
-        "SE101": ["công nghệ phần mềm"],
-    }
-    for code, patterns in subject_name_patterns.items():
-        if any(p in query_lower for p in patterns) and code not in filters.subjects:
-            filters.subjects.append(code)
+    # Legal reference detection (Điều X, Khoản Y, Nghị định số X)
+    article_refs = re.findall(r'điều\s*\d+', query_lower)
+    clause_refs = re.findall(r'khoản\s*\d+', query_lower)
+    decree_refs = re.findall(r'nghị \u0111ịnh\s*(?:số\s*)?\d+', query_lower)
+    for ref in article_refs + clause_refs + decree_refs:
+        ref_clean = ref.strip()
+        if ref_clean and ref_clean not in filters.legal_references:
+            filters.legal_references.append(ref_clean)
 
     return filters

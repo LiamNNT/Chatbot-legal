@@ -435,12 +435,13 @@ def create_langgraph_orchestrator(
             logger.warning(f"AnswerAgent not available: {e}")
     
     if graph_adapter:
-        from ...reasoning.graph_reasoning_agent import GraphReasoningAgent
-        graph_reasoning_agent = GraphReasoningAgent(
-            graph_adapter=graph_adapter,
-            llm_port=agent_port
+        from ..agents.reasoning.pipeline import LegalVerificationPipeline
+        verification_pipeline = LegalVerificationPipeline(
+            llm_port=agent_port,
+            graph_adapter=graph_adapter
         )
-        logger.info("✓ GraphReasoningAgent created for LangGraph")
+        graph_reasoning_agent = verification_pipeline
+        logger.info("✓ LegalVerificationPipeline created for LangGraph")
     
     return LangGraphOrchestrator(
         agent_port=agent_port,

@@ -24,12 +24,12 @@ def get_direct_response(query: str, intent: str) -> Optional[str]:
         if p in q:
             return (
                 "Chào bạn! 👋\n\n"
-                "Mình là **Đậu Đậu** 🫘 - chatbot AI của Trường Đại học Công nghệ Thông tin (UIT), ĐHQG-HCM.\n\n"
-                "Mình được tạo ra để hỗ trợ sinh viên và phụ huynh giải đáp thắc mắc về:\n\n"
-                "- 📚 Quy chế đào tạo, quy định học vụ\n"
-                "- 📝 Đăng ký học phần, chương trình đào tạo\n"
-                "- 🎓 Thông tin tuyển sinh, học phí\n"
-                "- 💡 Các câu hỏi về UIT\n\n"
+                "Mình là **Trợ lý Pháp luật AI** ⚖️ - chatbot chuyên hỗ trợ tra cứu và giải đáp về văn bản pháp luật Việt Nam.\n\n"
+                "Mình có thể giúp bạn tìm hiểu về:\n\n"
+                "- 📜 Luật, Nghị định, Thông tư, Quyết định\n"
+                "- ⚖️ Quy định pháp luật, điều khoản cụ thể\n"
+                "- 🔍 Tra cứu chế tài, hình phạt, mức xử phạt\n"
+                "- 💡 Giải đáp thắc mắc về quyền và nghĩa vụ pháp lý\n\n"
                 "Cần hỗ trợ gì thì cứ hỏi mình nhé! 😊"
             )
 
@@ -39,9 +39,9 @@ def get_direct_response(query: str, intent: str) -> Optional[str]:
         if q == p or q.startswith(p + " ") or q.startswith(p + ","):
             return (
                 "Chào bạn! 👋\n\n"
-                "Mình là **Đậu Đậu** 🫘 - chatbot của UIT.\n\n"
-                "Mình có thể giúp bạn tìm hiểu về quy chế đào tạo, "
-                "đăng ký học phần, thông tin tuyển sinh và nhiều thứ khác về UIT.\n\n"
+                "Mình là **Trợ lý Pháp luật AI** ⚖️.\n\n"
+                "Mình có thể giúp bạn tra cứu luật, nghị định, thông tư, "
+                "quy định pháp luật và giải đáp các thắc mắc pháp lý.\n\n"
                 "Bạn cần hỏi gì nào? 😊"
             )
 
@@ -51,7 +51,7 @@ def get_direct_response(query: str, intent: str) -> Optional[str]:
         if p in q:
             return (
                 "Không có gì đâu bạn! 😊\n\n"
-                "Nếu cần hỏi thêm điều gì về UIT, cứ nhắn mình nhé! 💪"
+                "Nếu cần tra cứu thêm quy định pháp luật, cứ nhắn mình nhé! 💪"
             )
 
     # Goodbye
@@ -60,8 +60,8 @@ def get_direct_response(query: str, intent: str) -> Optional[str]:
         if p in q:
             return (
                 "Tạm biệt bạn! 👋\n\n"
-                "Chúc bạn học tập tốt! "
-                "Khi nào cần hỗ trợ thì quay lại hỏi Đậu Đậu nhé! 🫘😊"
+                "Chúc bạn mọi điều tốt đẹp! "
+                "Khi nào cần hỗ trợ tra cứu pháp luật thì quay lại nhé! ⚖️😊"
             )
 
     # Simple acknowledgments

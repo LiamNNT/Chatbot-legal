@@ -6,7 +6,7 @@ Responsibilities:
 2. Complexity scoring (0-10)
 3. Strategy determination (direct / standard_rag / advanced_rag)
 4. Query rewriting and search term extraction
-5. Filter extraction (faculties, years, subjects)
+5. Filter extraction (legal domains, years, legal references)
 
 The system prompt is loaded from YAML config at runtime.
 """

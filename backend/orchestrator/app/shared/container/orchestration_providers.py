@@ -36,7 +36,6 @@ class OrchestrationProviderMixin:
     def get_rag_port(self): ...     # pragma: no cover
     def get_conversation_manager(self): ...  # pragma: no cover
     def get_graph_adapter(self): ...  # pragma: no cover
-    def get_symbolic_reasoning_engine(self): ...  # pragma: no cover
 
     # ------------------------------------------------------------------
     # Configuration
@@ -101,16 +100,6 @@ class OrchestrationProviderMixin:
             ircot_config = self._create_ircot_config()
             graph_adapter = self.get_graph_adapter()
 
-            react_model = os.getenv("GRAPH_REACT_MODEL", None)
-            if not react_model:
-                try:
-                    react_model_config = config_manager.get_model_config("graph_react_model")
-                    if react_model_config:
-                        react_model = react_model_config.name
-                        logger.info(f"Graph ReAct model from config: {react_model}")
-                except Exception as e:
-                    logger.debug(f"Could not load Graph ReAct model from config: {e}")
-
             # --- startup banner ---
             logger.info("=" * 60)
             logger.info("🚀 Using OPTIMIZED orchestrator (3 agents, 40%% cost savings)")
@@ -120,16 +109,10 @@ class OrchestrationProviderMixin:
                     f"threshold={ircot_config.complexity_threshold}"
                 )
             if graph_adapter:
-                react_model_info = f" (model: {react_model})" if react_model else ""
-                logger.info(f"🔗 Graph Reasoning ENABLED (Neo4j connected){react_model_info}")
+                logger.info("🔗 Graph Reasoning ENABLED (Neo4j connected)")
+                logger.info("🧠 Legal Verification Pipeline ENABLED")
             else:
                 logger.info("⚠ Graph Reasoning DISABLED (no graph adapter)")
-
-            symbolic_engine = self.get_symbolic_reasoning_engine()
-            if symbolic_engine:
-                logger.info(f"🧠 Symbolic Reasoning ENABLED: mode={symbolic_engine.mode.value}")
-            else:
-                logger.info("⚠ Symbolic Reasoning DISABLED")
             logger.info("=" * 60)
 
             self._multi_agent_orchestrator = OptimizedMultiAgentOrchestrator(
@@ -140,7 +123,6 @@ class OrchestrationProviderMixin:
                 enable_planning=enable_planning,
                 graph_adapter=graph_adapter,
                 ircot_config=ircot_config,
-                react_model=react_model,
             )
 
         return self._multi_agent_orchestrator

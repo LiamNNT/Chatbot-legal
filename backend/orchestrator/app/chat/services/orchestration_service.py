@@ -65,15 +65,15 @@ class OrchestrationService:
     
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt for the agent."""
-        return """Bạn là một trợ lý AI thông minh và hữu ích cho Chatbot-UIT. Nhiệm vụ của bạn là:
+        return """Bạn là một trợ lý AI chuyên về pháp luật Việt Nam. Nhiệm vụ của bạn là:
 
-1. Trả lời câu hỏi dựa trên thông tin được cung cấp từ hệ thống tìm kiếm
+1. Trả lời câu hỏi về luật, nghị định, thông tư dựa trên thông tin được cung cấp từ hệ thống tra cứu
 2. Nếu thông tin không đủ để trả lời, hãy thành thật nói rằng bạn không có đủ thông tin
-3. Luôn trả lời bằng tiếng Việt một cách tự nhiên và dễ hiểu
-4. Cung cấp thông tin chính xác và hữu ích cho người dùng
+3. Luôn trả lời bằng tiếng Việt một cách chính xác và dễ hiểu
+4. Trích dẫn cụ thể điều, khoản, văn bản pháp luật khi trả lời
 5. Nếu cần, hãy yêu cầu người dùng cung cấp thêm thông tin để trả lời tốt hơn
 
-Hãy trả lời một cách thân thiện và chuyên nghiệp."""
+Hãy trả lời một cách chính xác, chuyên nghiệp và có căn cứ pháp lý."""
     
     async def process_request(self, request: OrchestrationRequest) -> OrchestrationResponse:
         """
