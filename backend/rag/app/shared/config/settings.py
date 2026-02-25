@@ -36,8 +36,8 @@ class Settings(BaseSettings):
     enable_dual_index: bool = False  # Set to True to enable dual-write to Weaviate + OpenSearch
 
     # --- AI Model Configuration ---
-    emb_model: str = "intfloat/multilingual-e5-base" # The embedding model to use
-    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Optional reranker model
+    emb_model: str = "BAAI/bge-m3"  # Multilingual embedding model optimized for Vietnamese legal text
+    rerank_model: str = "BAAI/bge-reranker-v2-m3"  # Multilingual reranker optimized for Vietnamese
     
     # --- Reranking Configuration ---
     use_reranking: bool = True  # Enable reranking with cross-encoder

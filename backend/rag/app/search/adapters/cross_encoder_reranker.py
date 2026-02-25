@@ -28,7 +28,7 @@ class CrossEncoderRerankingService(RerankingService):
     
     def __init__(
         self,
-        model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        model_name: str = "BAAI/bge-reranker-v2-m3",
         max_length: int = 512,
         batch_size: int = 16,
         device: Optional[str] = None,
@@ -280,7 +280,7 @@ class MultilingualCrossEncoderRerankingService(CrossEncoderRerankingService):
     
     def __init__(
         self,
-        model_name: str = "cross-encoder/ms-marco-MiniLM-L-12-v2",
+        model_name: str = "BAAI/bge-reranker-v2-m3",
         vietnamese_model_name: Optional[str] = None,
         max_length: int = 512,
         batch_size: int = 16,
@@ -428,7 +428,7 @@ class MultilingualCrossEncoderRerankingService(CrossEncoderRerankingService):
 
 
 def create_reranking_service(
-    model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    model_name: str = "BAAI/bge-reranker-v2-m3",
     multilingual: bool = True,
     **kwargs
 ) -> RerankingService:

@@ -356,10 +356,10 @@ curl -X POST http://localhost:8000/v1/ingest/docx \
 | `NEO4J_URI` | Neo4j connection | `bolt://localhost:7687` |
 | `NEO4J_USER` / `NEO4J_PASSWORD` | Credentials | `neo4j` / `password` |
 | **Embedding** | | |
-| `EMBEDDING_MODEL` | Sentence-transformer model | `intfloat/multilingual-e5-base` |
+| `EMBEDDING_MODEL` | Sentence-transformer model | `BAAI/bge-m3` |
 | `EMBEDDING_DEVICE` | Device (cpu/cuda) | `cpu` |
 | **Reranking** | | |
-| `RERANKER_MODEL` | Cross-encoder model | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| `RERANKER_MODEL` | Cross-encoder model | `BAAI/bge-reranker-v2-m3` |
 | `RERANKER_TOP_K` | Số documents sau rerank | `5` |
 | **LLM** | | |
 | `OPENROUTER_API_KEY` | OpenRouter API key | — |

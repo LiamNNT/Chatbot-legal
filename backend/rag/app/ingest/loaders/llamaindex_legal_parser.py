@@ -73,7 +73,7 @@ Output format: Markdown với cấu trúc rõ ràng.
     
     # Embedding settings
     embedding_model: str = Field(
-        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        default="BAAI/bge-m3",
         description="Model for semantic chunking"
     )
     
