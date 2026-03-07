@@ -25,8 +25,6 @@ COMPLEX_MIN_SCORE = 6.5
 
 
 class SmartPlannerAgent(SpecializedAgent):
-    """Smart Planner — single LLM call for planning + query rewriting."""
-
     def __init__(self, config: AgentConfig, agent_port):
         super().__init__(config, agent_port)
         params = getattr(config, 'parameters', {}) or {}

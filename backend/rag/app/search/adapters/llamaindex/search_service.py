@@ -22,7 +22,7 @@ Usage:
     from app.search.adapters.llamaindex.search_service import LlamaIndexSearchService
     
     service = LlamaIndexSearchService(
-        vector_repository=weaviate_adapter,
+        vector_repository=qdrant_adapter,
         keyword_repository=opensearch_adapter,
         reranking_service=cross_encoder_reranker
     )

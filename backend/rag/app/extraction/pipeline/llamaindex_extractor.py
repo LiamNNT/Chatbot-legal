@@ -104,9 +104,9 @@ class ExtractionConfig(BaseModel):
         
         return cls(
             llama_cloud_api_key=os.getenv("LLAMA_CLOUD_API_KEY"),
-            neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-            neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
-            neo4j_password=os.getenv("NEO4J_PASSWORD"),
+            neo4j_uri=os.getenv("NEO4J_URI", ""),
+            neo4j_user=os.getenv("NEO4J_USERNAME", ""),
+            neo4j_password=os.getenv("NEO4J_PASSWORD", ""),
             llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
             llm_api_key=os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY"),
             llm_base_url=os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),

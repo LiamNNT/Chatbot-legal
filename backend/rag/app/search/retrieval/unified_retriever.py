@@ -43,7 +43,7 @@ from app.search.retrieval.schemas import (
 from app.search.retrieval.legal_query_parser import LegalQueryParser
 from app.search.retrieval.metadata_filter_builder import (
     MetadataFilterBuilder,
-    WeaviateFilterBuilder,
+    QdrantFilterBuilder,
     OpenSearchFilterBuilder,
     get_filter_builder,
 )
@@ -109,7 +109,7 @@ class UnifiedRetriever:
         
         self.config = config or RetrievalConfig()
         self.parser = parser or LegalQueryParser()
-        self.filter_builder = filter_builder or WeaviateFilterBuilder()
+        self.filter_builder = filter_builder or QdrantFilterBuilder()
         
         # Initialize neighbor expander with fetch functions
         self.neighbor_expander = neighbor_expander or NeighborExpander(
@@ -639,7 +639,7 @@ class UnifiedRetriever:
         This factory method bridges with the existing adapter architecture.
         
         Args:
-            vector_adapter: WeaviateVectorAdapter or similar
+            vector_adapter: QdrantVectorAdapter or similar
             keyword_adapter: OpenSearchKeywordAdapter or similar
             reranker: CrossEncoderReranker or similar
             config: Retrieval configuration
@@ -677,7 +677,7 @@ class UnifiedRetriever:
                     return chunks
         
         # Determine filter builder from adapter type
-        filter_builder = WeaviateFilterBuilder()
+        filter_builder = QdrantFilterBuilder()
         if keyword_adapter and "opensearch" in type(keyword_adapter).__name__.lower():
             filter_builder = OpenSearchFilterBuilder()
         

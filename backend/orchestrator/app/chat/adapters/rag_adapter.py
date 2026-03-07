@@ -1,16 +1,3 @@
-"""
-RAG service adapter for integrating with the RAG services.
-
-This adapter provides integration with the RAG system following the
-Ports & Adapters architecture pattern.
-
-Enhanced with filter support for:
-- doc_types: Document type filters (e.g., ["luật", "nghị_định", "thông_tư"])
-- legal_domains: Legal domain filters (e.g., ["hình_sự", "dân_sự", "hành_chính"])
-- years: Year filters (e.g., [2023, 2024])
-- legal_references: Legal reference filters (e.g., ["điều 14", "khoản 2"])
-"""
-
 import aiohttp
 import asyncio
 from typing import Dict, Any, Optional, List
@@ -18,8 +5,6 @@ from ...shared.ports import RAGServicePort
 
 
 class RAGFilters:
-    """Filters for RAG search requests."""
-    
     def __init__(
         self,
         doc_types: Optional[List[str]] = None,
@@ -55,19 +40,6 @@ class RAGFilters:
 
 
 class RAGServiceAdapter(RAGServicePort):
-    """
-    Adapter for RAG service integration.
-    
-    This adapter implements the RAGServicePort interface to provide
-    communication with the RAG services.
-    
-    Features:
-    - Field-specific filters (doc_types, legal_domains, years, legal_references)
-    - Hybrid search with configurable modes
-    - Citation support with character spans
-    - Retry mechanism for resilience
-    """
-    
     def __init__(
         self,
         rag_service_url: str = "http://localhost:8001",

@@ -3,7 +3,7 @@
 Backend Startup Script for Chatbot-UIT
 ======================================
 Khoi dong toan bo backend services:
-- Docker services (OpenSearch, Weaviate, Neo4j)
+- Docker services (OpenSearch, Qdrant, Neo4j)
 - RAG Service (port 8000)
 - Orchestrator Service (port 8001)
 
@@ -161,7 +161,7 @@ def stop_all_services(project_root: Path, skip_docker: bool = False):
         docker_compose_cmd = detect_docker_compose_command()
         
         if infra_dir.exists() and docker_compose_cmd:
-            for compose_file in ["docker-compose.neo4j.yml", "docker-compose.opensearch.yml", "docker-compose.weaviate.yml"]:
+            for compose_file in ["docker-compose.opensearch.yml"]:
                 compose_path = infra_dir / compose_file
                 if compose_path.exists():
                     cmd = docker_compose_cmd + ["-f", compose_file, "down"]
@@ -198,12 +198,10 @@ def start_docker_services(project_root: Path):
         sys.exit(1)
     
     compose_files = [
-        "docker-compose.opensearch.yml",
-        "docker-compose.weaviate.yml", 
-        "docker-compose.neo4j.yml"
+        "docker-compose.opensearch.yml"
     ]
     
-    print_info("Starting OpenSearch, Weaviate, and Neo4j...")
+    print_info("Starting OpenSearch...")
     
     for compose_file in compose_files:
         compose_path = infra_dir / compose_file
@@ -228,23 +226,11 @@ def start_docker_services(project_root: Path):
             check=False
         ).returncode == 0
         
-        weaviate_ok = run_command(
-            ["curl", "-sf", "http://localhost:8090/v1/.well-known/ready"],
-            check=False
-        ).returncode == 0
-        
-        neo4j_ok = run_command(
-            ["curl", "-sf", "http://localhost:7474"],
-            check=False
-        ).returncode == 0
-        
-        if opensearch_ok and weaviate_ok and neo4j_ok:
+        if opensearch_ok:
             print()
             print_success("All Docker services are healthy!")
             print_info("  - OpenSearch: http://localhost:9200")
             print_info("  - OpenSearch Dashboards: http://localhost:5601")
-            print_info("  - Weaviate: http://localhost:8090")
-            print_info("  - Neo4j: http://localhost:7474 (bolt://localhost:7687)")
             return
         
         print(".", end="", flush=True)
@@ -466,13 +452,10 @@ def print_summary():
     print(f"{Colors.GREEN}Services running:{Colors.NC}")
     print(f"  • OpenSearch:           http://localhost:9200")
     print(f"  • OpenSearch Dashboards: http://localhost:5601")
-    print(f"  • Weaviate:             http://localhost:8090")
-    print(f"  • Neo4j:                http://localhost:7474 (bolt: 7687)")
+    print(f"  • Qdrant Cloud:         (configured via QDRANT_URL env var)")
+    print(f"  • Neo4j Cloud:          (configured via NEO4J_URI env var)")
     print(f"  • RAG Service:          http://localhost:8000/docs")
     print(f"  • Orchestrator:         http://localhost:8001/docs")
-    print()
-    print(f"{Colors.BOLD}Database Credentials:{Colors.NC}")
-    print(f"  • Neo4j: neo4j / uitchatbot")
     print()
     print(f"{Colors.BOLD}Log Prefixes:{Colors.NC}")
     print(f"  • {Colors.CYAN}[RAG]{Colors.NC}  - RAG Service logs")

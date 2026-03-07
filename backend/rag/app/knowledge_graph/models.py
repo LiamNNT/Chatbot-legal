@@ -86,7 +86,6 @@ class EdgeType(str, Enum):
     """
     # --- Quan hệ cấu trúc văn bản ---
     THUOC_VE = "THUOC_VE"                   # Điều thuộc về Chương (belongs to)
-    CHUA = "CHUA"                           # Chương chứa các Điều (contains)
     KE_TIEP = "KE_TIEP"                     # Điều 2 kế tiếp Điều 1 (next)
     
     # --- Quan hệ tham chiếu ---

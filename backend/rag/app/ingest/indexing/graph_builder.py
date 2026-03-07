@@ -61,8 +61,8 @@ class LegalGraphBuilder:
     Example:
         ```python
         builder = LegalGraphBuilder(
-            uri="bolt://localhost:7687",
-            user="neo4j",
+            uri="neo4j+s://your-instance.databases.neo4j.io",
+            user="username",
             password="password"
         )
         
@@ -78,10 +78,10 @@ class LegalGraphBuilder:
     
     def __init__(
         self,
-        uri: str = "bolt://localhost:7687",
-        user: str = "neo4j",
-        password: str = "password",
-        database: str = "neo4j"
+        uri: str = "",
+        user: str = "",
+        password: str = "",
+        database: str = ""
     ):
         """
         Initialize Neo4j connection.
@@ -1079,9 +1079,9 @@ def main():
     
     parser = argparse.ArgumentParser(description="Build Neo4j Legal Knowledge Graph from JSON")
     parser.add_argument("json_file", help="Path to legal document JSON file")
-    parser.add_argument("--uri", default=os.getenv("NEO4J_URI", "bolt://localhost:7687"))
-    parser.add_argument("--user", default=os.getenv("NEO4J_USER", "neo4j"))
-    parser.add_argument("--password", default=os.getenv("NEO4J_PASSWORD", "password"))
+    parser.add_argument("--uri", default=os.getenv("NEO4J_URI", ""))
+    parser.add_argument("--user", default=os.getenv("NEO4J_USERNAME", ""))
+    parser.add_argument("--password", default=os.getenv("NEO4J_PASSWORD", ""))
     parser.add_argument("--clear", action="store_true", help="Clear database before building")
     
     args = parser.parse_args()

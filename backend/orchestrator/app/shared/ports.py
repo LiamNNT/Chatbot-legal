@@ -1,12 +1,3 @@
-"""
-Orchestrator port definitions.
-
-AgentPort is re-exported from the shared package.
-ConversationManagerPort and RAGServicePort are orchestrator-specific
-variants (different signatures from the shared versions) and stay here
-until a future unification pass.
-"""
-
 from abc import ABC, abstractmethod
 from typing import Optional, AsyncGenerator, Any
 
@@ -15,8 +6,6 @@ from shared.domain.entities import ConversationContext
 
 
 class ConversationManagerPort(ABC):
-    """Orchestrator-specific conversation manager port."""
-
     @abstractmethod
     async def create_context(self, session_id: str, system_prompt: Optional[str] = None) -> ConversationContext:
         pass

@@ -1,13 +1,3 @@
-"""
-Orchestration provider methods for the orchestrator DI container.
-
-Provides creation / caching of:
-- OrchestrationService  (simple single-agent pipeline)
-- OptimizedMultiAgentOrchestrator  (multi-agent pipeline)
-- LangGraph orchestrator  (optional stateful orchestration)
-- IRCoT configuration
-"""
-
 import os
 import logging
 from typing import Optional
@@ -22,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class OrchestrationProviderMixin:
-    """Mixin that adds orchestration-service methods to a ServiceContainer."""
-
     _orchestration_service: Optional[OrchestrationService]
     _multi_agent_orchestrator: Optional[OptimizedMultiAgentOrchestrator]
     _langgraph_orchestrator: Optional[object]

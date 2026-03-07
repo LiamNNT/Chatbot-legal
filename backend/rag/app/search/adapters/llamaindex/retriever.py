@@ -7,7 +7,7 @@ and access to LlamaIndex's ecosystem of optimizations.
 
 Architecture:
     LlamaIndexHybridRetriever
-    ├── VectorIndexRetriever (from existing Weaviate adapter)
+    ├── VectorIndexRetriever (from existing Qdrant adapter)
     ├── BM25Retriever (from existing OpenSearch adapter)  
     └── QueryFusionRetriever (RRF/weighted fusion)
            └── NodePostprocessors (reranking, deduplication)
@@ -21,7 +21,7 @@ Usage:
     from app.search.adapters.llamaindex.retriever import LlamaIndexHybridRetriever
     
     retriever = LlamaIndexHybridRetriever(
-        vector_store=weaviate_store,
+        vector_store=qdrant_store,
         bm25_store=opensearch_store,
         embedding_model=embed_model
     )

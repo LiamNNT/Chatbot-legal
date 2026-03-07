@@ -1,13 +1,3 @@
-"""
-Admin / debug route handlers for the orchestrator API.
-
-Endpoints:
-    GET  /health       – Health check
-    GET  /debug/graph  – Debug graph adapter status
-    GET  /agents/info  – Agent system information
-    POST /agents/test  – Test multi-agent system
-"""
-
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 import os
@@ -32,7 +22,6 @@ logger = logging.getLogger(__name__)
     description="Check the health status of all orchestrator components",
 )
 async def health_check() -> HealthResponse:
-    """Perform health check on all orchestrator components."""
     try:
         orchestration_service = get_orchestration_service()
         health_status = await orchestration_service.health_check()
@@ -67,7 +56,7 @@ async def debug_graph_adapter():
             "enabled": os.getenv("ENABLE_GRAPH_REASONING", "true").lower() == "true",
             "graph_adapter_initialized": graph_adapter is not None,
             "neo4j_uri": os.getenv("NEO4J_URI", "not set"),
-            "neo4j_user": os.getenv("NEO4J_USER", "not set"),
+            "neo4j_user": os.getenv("NEO4J_USERNAME", "not set"),
             "neo4j_database": os.getenv("NEO4J_DATABASE", "not set"),
             "adapter_type": str(type(graph_adapter)) if graph_adapter else "None",
         }

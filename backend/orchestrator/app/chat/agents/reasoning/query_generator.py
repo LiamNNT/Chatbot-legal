@@ -36,9 +36,9 @@ _KG_SCHEMA = """
 ## Neo4j Knowledge Graph Schema — Vietnamese Legal Documents
 
 ### Node labels (use Vietnamese values)
-Văn bản:  Luật, Nghị định, Thông tư, Quyết định
-Cấu trúc: Phần, Chương, Mục, Điều, Khoản, Điểm
-Thực thể: Cơ quan, Tổ chức, Cá nhân, Chủ thể
+Văn bản:   Luật, Nghị định, Thông tư, Quyết định
+Cấu trúc:  Phần, Chương, Mục, Điều, Khoản, Điểm
+Thực thể:  Cơ quan, Tổ chức, Cá nhân, Chủ thể
 Khái niệm: Khái niệm, Thuật ngữ, Nguyên tắc, Chính sách
 Quyền/NV:  Quyền, Nghĩa vụ, Trách nhiệm
 Hành vi:   Hành vi cấm, Hành vi được phép, Vi phạm
@@ -47,21 +47,35 @@ Thủ tục:   Thủ tục, Điều kiện, Trình tự
 Phạm vi:   Lĩnh vực, Phạm vi
 
 ### Common node properties
-Văn bản:   name, document_number, title, effective_date, status, issuing_authority
-Điều:      name, article_number, title, content
-Khoản:     name, clause_number, content
-Chế tài:   name, content, penalty_type, min_amount, max_amount, currency
-Hành vi:   name, content, description
+Văn bản:    name, document_number, title, effective_date, status, issuing_authority
+Điều:       name, article_number, title, content
+Khoản:      name, clause_number, content
+Điểm:       name, point_label, content
+Khái niệm:  name, term, definition, content
+Hành vi cấm: name, prohibited_act, content
+Chế tài:    name, sanction_content, content, sanction_type
+Quyền:      name, right_content, content
+Nghĩa vụ:   name, obligation_content, content
+Chủ thể:    name, subject_type, full_name
 
-### Relationship types (UPPER_SNAKE_CASE)
-Cấu trúc:   THUOC_VE (belongs-to), CHUA (contains), KE_TIEP (next)
-Tham chiếu:  THAM_CHIEU, DAN_CHIEU, VIEN_DAN
-Hiệu lực:   THAY_THE (replace), SUA_DOI (amend), BO_SUNG (supplement), BAI_BO (repeal)
-Ngữ nghĩa:  DINH_NGHIA, LA_LOAI, BAO_GOM, LIEN_QUAN, DONG_NGHIA
-Pháp lý:    QUY_DINH, AP_DUNG, DIEU_CHINH, RANG_BUOC
-Chủ thể:    CO_QUYEN, CO_NGHIA_VU, CHIU_TRACH_NHIEM, QUAN_LY, THUOC_THAM_QUYEN
-Hành vi:     DAN_DEN (leads-to), BI_XU_LY (sanctioned-by)
+### Relationship types (UPPER_SNAKE_CASE) — Chiều quan hệ rất quan trọng!
+Cấu trúc:   THUOC_VE (child→parent: Điều→Chương→Luật), KE_TIEP (prev→next sibling)
+Tham chiếu:  THAM_CHIEU, DAN_CHIEU, VIEN_DAN (source→target)
+Hiệu lực:   THAY_THE, SUA_DOI, BO_SUNG, BAI_BO (new_doc→old_doc)
+Ngữ nghĩa:  DINH_NGHIA (Điều→Khái niệm), LA_LOAI, BAO_GOM, LIEN_QUAN, DONG_NGHIA
+Pháp lý:    QUY_DINH (Điều→Hành vi cấm/Chế tài/Quyền/Nghĩa vụ), AP_DUNG, DIEU_CHINH, RANG_BUOC
+Chủ thể:    CO_QUYEN (Chủ thể→Quyền), CO_NGHIA_VU (Chủ thể→Nghĩa vụ), CHIU_TRACH_NHIEM, QUAN_LY, THUOC_THAM_QUYEN
+Hành vi:     DAN_DEN (cause→effect), BI_XU_LY (Hành vi cấm→Chế tài)
 Điều kiện:   YEU_CAU, NGOAI_TRU
+
+### Traversal patterns (QUAN TRỌNG — luôn dùng đúng chiều!)
+- Tìm Điều trong Luật:     MATCH (dieu:Điều)-[:THUOC_VE*1..3]->(doc:Luật)
+- Tìm Khoản trong Điều:    MATCH (khoan:Khoản)-[:THUOC_VE]->(dieu:Điều)
+- Tìm Điểm trong Khoản:    MATCH (diem:Điểm)-[:THUOC_VE]->(khoan:Khoản)
+- Tìm Hành vi cấm của Điều: MATCH (dieu:Điều)-[:QUY_DINH]->(hv:`Hành vi cấm`)
+- Tìm Chế tài cho Hành vi:  MATCH (hv:`Hành vi cấm`)-[:BI_XU_LY]->(ct:`Chế tài`)
+- Tìm Định nghĩa:          MATCH (dieu:Điều)-[:DINH_NGHIA]->(kn:`Khái niệm`)
+- Tìm Quyền của Chủ thể:   MATCH (ct:`Chủ thể`)-[:CO_QUYEN]->(q:Quyền)
 """
 
 _SYSTEM_PROMPT = f"""Bạn là trợ lý chuyên sinh truy vấn Cypher cho đồ thị tri thức pháp luật Việt Nam trên Neo4j.
@@ -89,29 +103,33 @@ QUAN TRỌNG:
 # Pre-built Cypher templates for common intents
 _CYPHER_TEMPLATES: dict[str, str] = {
     "sanction_lookup": """
-MATCH (doc)-[:CHUA*1..3]->(dieu:`Điều`)-[:CHUA*0..2]->(khoan)
+MATCH (dieu:`Điều`)-[:THUOC_VE*1..3]->(doc)
 WHERE doc.name CONTAINS $doc_name OR doc.document_number CONTAINS $doc_name
-MATCH (hv)-[:BI_XU_LY]->(ct:`Chế tài`)
+OPTIONAL MATCH (khoan:`Khoản`)-[:THUOC_VE]->(dieu)
+OPTIONAL MATCH (dieu)-[:QUY_DINH]->(hv:`Hành vi cấm`)
 WHERE hv.content CONTAINS $behaviour OR hv.name CONTAINS $behaviour
-MATCH (hv)-[:THUOC_VE|LIEN_QUAN*1..2]->(dieu)
+OPTIONAL MATCH (hv)-[:BI_XU_LY]->(ct:`Chế tài`)
 RETURN dieu.name AS article, khoan.content AS clause_content,
+       hv.name AS violation, hv.content AS violation_detail,
        ct.name AS sanction, ct.content AS sanction_detail,
        ct.min_amount AS min_amount, ct.max_amount AS max_amount,
        doc.name AS document
 LIMIT 10
 """,
     "definition_lookup": """
-MATCH (kn)-[:DINH_NGHIA|LA_LOAI]->(target)
-WHERE kn.name CONTAINS $term OR kn.content CONTAINS $term
-OPTIONAL MATCH (kn)-[:THUOC_VE*1..3]->(dieu:`Điều`)-[:THUOC_VE*1..3]->(doc)
-RETURN kn.name AS concept, kn.content AS definition,
+MATCH (kn:`Khái niệm`)
+WHERE kn.term CONTAINS $term OR kn.name CONTAINS $term OR kn.content CONTAINS $term
+OPTIONAL MATCH (dieu:`Điều`)-[:DINH_NGHIA]->(kn)
+OPTIONAL MATCH (dieu)-[:THUOC_VE*1..3]->(doc)
+RETURN kn.name AS concept, kn.definition AS definition, kn.content AS content,
        dieu.name AS article, doc.name AS document
 LIMIT 5
 """,
     "prohibition_check": """
 MATCH (hv:`Hành vi cấm`)
 WHERE hv.content CONTAINS $behaviour OR hv.name CONTAINS $behaviour
-OPTIONAL MATCH (hv)-[:THUOC_VE|LIEN_QUAN*1..3]->(dieu:`Điều`)-[:THUOC_VE*1..3]->(doc)
+OPTIONAL MATCH (dieu:`Điều`)-[:QUY_DINH]->(hv)
+OPTIONAL MATCH (dieu)-[:THUOC_VE*1..3]->(doc)
 OPTIONAL MATCH (hv)-[:BI_XU_LY]->(ct:`Chế tài`)
 RETURN hv.name AS prohibited_act, hv.content AS description,
        dieu.name AS article, doc.name AS document,
@@ -119,10 +137,10 @@ RETURN hv.name AS prohibited_act, hv.content AS description,
 LIMIT 10
 """,
     "article_lookup": """
-MATCH (doc)-[:CHUA*1..3]->(dieu:`Điều`)
+MATCH (dieu:`Điều`)-[:THUOC_VE*1..3]->(doc)
 WHERE (doc.name CONTAINS $doc_name OR doc.document_number CONTAINS $doc_name)
   AND (dieu.article_number = $article_number OR dieu.name CONTAINS $article_name)
-OPTIONAL MATCH (dieu)-[:CHUA]->(khoan:`Khoản`)
+OPTIONAL MATCH (khoan:`Khoản`)-[:THUOC_VE]->(dieu)
 RETURN dieu.name AS article, dieu.content AS article_content,
        collect(khoan.content) AS clauses, doc.name AS document
 """,

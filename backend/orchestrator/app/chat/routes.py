@@ -17,7 +17,6 @@ from typing import AsyncGenerator
 from ..shared.container.container import get_orchestration_service, get_multi_agent_orchestrator
 from ..shared.domain import OrchestrationRequest, RAGContext
 from ..shared.exceptions import OrchestrationDomainException
-from .agents.base import AgentType
 from ..shared.schemas import (
     ChatRequest,
     ChatResponse,
@@ -207,7 +206,9 @@ async def _chat_stream_multi_agent(request: ChatRequest):
             planning_result = None
             if multi_agent_orchestrator.enable_planning:
                 try:
-                    smart_planner = multi_agent_orchestrator.agent_factory.create_agent(AgentType.SMART_PLANNER)
+                    smart_planner = multi_agent_orchestrator.agent_factory.create_agent(
+                        "smart_planner", multi_agent_orchestrator.agent_port
+                    )
                     planning_result = await smart_planner.process({"query": request.query, "conversation_history": []})
                     yield f"data: {json.dumps({'type': 'planning', 'content': 'Đang phân tích câu hỏi...'})}\n\n"
                 except Exception as e:
@@ -239,7 +240,9 @@ async def _chat_stream_multi_agent(request: ChatRequest):
 
             # Step 3: Stream answer
             yield f"data: {json.dumps({'type': 'status', 'content': 'Đang tạo câu trả lời...'})}\n\n"
-            answer_agent = multi_agent_orchestrator.agent_factory.create_agent(AgentType.ANSWER_AGENT)
+            answer_agent = multi_agent_orchestrator.agent_factory.create_agent(
+                "answer_agent", multi_agent_orchestrator.agent_port
+            )
             answer_input = {
                 "query": request.query,
                 "context_documents": context_documents,

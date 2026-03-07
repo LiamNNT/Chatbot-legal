@@ -26,14 +26,14 @@ def _create_embedder(model_name: str):
 
 
 def _create_vector_adapter(backend: str, embedder):
-    """Instantiate the vector-store adapter for *backend* ("weaviate" | "opensearch")."""
+    """Instantiate the vector-store adapter for *backend* ("qdrant" | "opensearch")."""
     from app.shared.config.settings import settings
 
-    if backend == "weaviate":
-        from app.search.adapters.weaviate_vector_adapter import WeaviateVectorAdapter
+    if backend == "qdrant":
+        from app.search.adapters.qdrant_vector_adapter import QdrantVectorAdapter
 
         class _SimpleEmbedding:
-            """Thin wrapper so WeaviateVectorAdapter can call .get_text_embedding()."""
+            """Thin wrapper so QdrantVectorAdapter can call .get_text_embedding()."""
 
             def __init__(self, enc):
                 self.embedder = enc
@@ -41,12 +41,12 @@ def _create_vector_adapter(backend: str, embedder):
             def get_text_embedding(self, text: str):
                 return self.embedder.encode(text).tolist()
 
-        adapter = WeaviateVectorAdapter(
-            weaviate_url=settings.weaviate_url,
+        adapter = QdrantVectorAdapter(
+            qdrant_url=settings.qdrant_url,
             embedding_model=_SimpleEmbedding(embedder),
-            api_key=settings.weaviate_api_key if settings.weaviate_api_key else None,
+            api_key=settings.qdrant_api_key if settings.qdrant_api_key else None,
         )
-        logger.info("Initialized Weaviate adapter: %s", settings.weaviate_url)
+        logger.info("Initialized Qdrant adapter: %s", settings.qdrant_url)
         return adapter
 
     # OpenSearch fallback
@@ -66,7 +66,7 @@ def _create_graph_adapter():
 
         adapter = Neo4jGraphAdapter(
             uri=settings.neo4j_uri,
-            username=settings.neo4j_user,
+            username=settings.neo4j_username,
             password=settings.neo4j_password,
         )
         logger.info("Initialized Neo4j adapter: %s", settings.neo4j_uri)

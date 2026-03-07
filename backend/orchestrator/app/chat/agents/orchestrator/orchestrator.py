@@ -1,26 +1,10 @@
-"""
-Optimized Multi-Agent Orchestrator — 2-agent pipeline.
-
-Agents:
-1. Smart Planner  (planning + query rewriting)
-2. Answer Agent   (answer generation with built-in formatting)
-
-Enhanced with:
-- Filter support (doc_types, legal_domains, years, legal_references)
-- Citation with char_spans for precise source attribution
-- Graph Reasoning: local, global (community), multi-hop dynamic reasoning
-- IRCoT (Interleaving Retrieval with Chain-of-Thought)
-- Conversation memory (sliding window)
-- Contextual query rewriting for follow-up questions
-
-Cost savings: ~60 % fewer LLM calls + 33 % lower latency vs original 5-agent pipeline.
-"""
-
 import asyncio
 import time
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+
+from backend.shared.src.shared.ports import rag_port
 
 from ..base import AgentConfig, AgentType, AnswerResult
 from ..smart_planner import SmartPlannerAgent, SmartPlanResult, ExtractedFilters
@@ -45,7 +29,6 @@ class OptimizedMultiAgentOrchestrator:
         agent_port: AgentPort,
         rag_port: RAGServicePort,
         agent_factory,
-        enable_verification: bool = True,
         enable_planning: bool = True,
         graph_adapter=None,
         ircot_config: Optional[IRCoTConfig] = None,
@@ -53,7 +36,6 @@ class OptimizedMultiAgentOrchestrator:
         self.agent_port = agent_port
         self.rag_port = rag_port
         self.enable_planning = enable_planning
-        self.agent_factory = agent_factory
         self.graph_adapter = graph_adapter
 
         # IRCoT
@@ -64,14 +46,19 @@ class OptimizedMultiAgentOrchestrator:
 
         # Agents via factory
         try:
-            self.smart_planner = self.agent_factory.create_agent("smart_planner", agent_port)
+            self.smart_planner = agent_factory.create_agent("smart_planner", agent_port)
             logger.info(f"✓ Smart Planner initialized with model: {self.smart_planner.config.model}")
         except Exception as e:
             logger.warning(f"Smart Planner not found in config, using fallback: {e}")
             self.smart_planner = None
 
-        self.answer_agent = self.agent_factory.create_agent("answer_agent", agent_port)
-        logger.info(f"✓ Answer Agent initialized with model: {self.answer_agent.config.model}")
+        try: 
+            self.answer_agent = agent_factory.create_agent("answer_agent", agent_port)
+            logger.info(f"✓ Answer Agent initialized with model: {self.answer_agent.config.model}")
+        except Exception as e:
+            logger.warning(f"Answer Agent not found in config, using fallback: {e}")
+            self.answer_agent = None
+
         logger.info("✓ Response formatting built into Answer Agent (optimized pipeline)")
 
         # Legal Verification Pipeline (Symbolic Verification for KG)
@@ -96,10 +83,6 @@ class OptimizedMultiAgentOrchestrator:
         # Conversation memory
         self.conversation_manager = InMemoryConversationManagerAdapter(max_messages=20)
         self.context_service = ContextDomainService(llm_client=agent_port)
-
-        logger.info("=" * 60)
-        logger.info("🚀 OPTIMIZED ORCHESTRATOR INITIALIZED (2 Agents + Verification Pipeline + IRCoT + Memory)")
-        logger.info("=" * 60)
 
     # ------------------------------------------------------------------
     # Main entry point

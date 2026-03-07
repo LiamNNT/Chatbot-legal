@@ -24,9 +24,9 @@ router = APIRouter(prefix="/kg", tags=["Knowledge Graph"])
 def get_neo4j_connection():
     """Get Neo4j connection parameters from environment."""
     return {
-        "uri": os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-        "user": os.getenv("NEO4J_USER", "neo4j"),
-        "password": os.getenv("NEO4J_PASSWORD", "uitchatbot")
+        "uri": os.getenv("NEO4J_URI", ""),
+        "user": os.getenv("NEO4J_USERNAME", ""),
+        "password": os.getenv("NEO4J_PASSWORD", "")
     }
 
 
@@ -946,25 +946,25 @@ async def delete_document(document_number: str = Query(..., description="Documen
         except Exception as e:
             logger.warning(f"Could not delete jobs: {e}")
         
-        # Delete from Weaviate vector store
-        weaviate_deleted = 0
+        # Delete from Qdrant vector store
+        qdrant_deleted = 0
         try:
             import os
-            from app.ingest.store.vector.weaviate_store import (
-                get_weaviate_client, 
+            from app.shared.config.settings import settings
+            from app.ingest.store.vector.qdrant_store import (
+                get_qdrant_client, 
                 delete_documents_by_law_id
             )
             
-            weaviate_url = os.getenv("WEAVIATE_URL", "http://localhost:8090")
-            weaviate_api_key = os.getenv("WEAVIATE_API_KEY", "")
+            qdrant_url = os.getenv("QDRANT_URL", settings.qdrant_url)
+            qdrant_api_key = os.getenv("QDRANT_API_KEY", "")
             
-            client = get_weaviate_client(url=weaviate_url, api_key=weaviate_api_key)
-            weaviate_deleted = delete_documents_by_law_id(client, document_number)
-            client.close()
+            client = get_qdrant_client(url=qdrant_url, api_key=qdrant_api_key if qdrant_api_key else None)
+            qdrant_deleted = delete_documents_by_law_id(client, document_number)
             
-            logger.info(f"Deleted {weaviate_deleted} chunks from Weaviate for {document_number}")
+            logger.info(f"Deleted {qdrant_deleted} chunks from Qdrant for {document_number}")
         except Exception as e:
-            logger.warning(f"Could not delete from Weaviate: {e}")
+            logger.warning(f"Could not delete from Qdrant: {e}")
         
         # Delete from OpenSearch
         opensearch_deleted = 0
@@ -995,7 +995,7 @@ async def delete_document(document_number: str = Query(..., description="Documen
         except Exception as e:
             logger.warning(f"Could not delete from OpenSearch: {e}")
         
-        logger.info(f"Deleted document {document_number}: Neo4j={total_deleted} nodes, Jobs={jobs_deleted}, Weaviate={weaviate_deleted}, OpenSearch={opensearch_deleted}")
+        logger.info(f"Deleted document {document_number}: Neo4j={total_deleted} nodes, Jobs={jobs_deleted}, Qdrant={qdrant_deleted}, OpenSearch={opensearch_deleted}")
         
         return {
             "status": "success",
@@ -1003,7 +1003,7 @@ async def delete_document(document_number: str = Query(..., description="Documen
             "deleted": deleted_counts,
             "total_deleted": total_deleted,
             "jobs_deleted": jobs_deleted,
-            "weaviate_deleted": weaviate_deleted,
+            "qdrant_deleted": qdrant_deleted,
             "opensearch_deleted": opensearch_deleted
         }
         

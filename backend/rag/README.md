@@ -1,13 +1,13 @@
 # 🔍 RAG Service (Retrieval-Augmented Generation)
 
 > FastAPI microservice xử lý tìm kiếm, indexing và trích xuất tri thức cho Chatbot-UIT.
-> Kết hợp **Vector Search (Weaviate) + BM25 (OpenSearch) + Cross-Encoder Reranking** với hỗ trợ ngôn ngữ Tiếng Việt.
+> Kết hợp **Vector Search (Qdrant) + BM25 (OpenSearch) + Cross-Encoder Reranking** với hỗ trợ ngôn ngữ Tiếng Việt.
 
 | Thông tin | Giá trị |
-|-----------|---------|
+|-----------|--------|
 | **Port** | `8000` |
 | **Framework** | FastAPI |
-| **Vector DB** | Weaviate (multilingual-e5-base) |
+| **Vector DB** | Qdrant (BAAI/bge-m3) |
 | **Keyword Search** | OpenSearch (BM25) |
 | **Knowledge Graph** | Neo4j |
 | **Reranker** | ms-marco-MiniLM-L-6-v2 (cross-encoder) |
@@ -30,7 +30,7 @@ rag/
 │   │   ├── retrieval/                       #   Advanced legal retrieval
 │   │   │   ├── unified_retriever.py         #     UnifiedRetriever (RRF fusion + rerank)
 │   │   │   ├── legal_query_parser.py        #     Parse Điều/Khoản/Điểm references
-│   │   │   ├── metadata_filter_builder.py   #     Build Weaviate metadata filters
+│   │   │   ├── metadata_filter_builder.py   #     Build Qdrant/OpenSearch metadata filters
 │   │   │   ├── neighbor_expander.py         #     Expand to neighboring chunks
 │   │   │   └── schemas.py                   #     Internal retrieval schemas
 │   │   │
@@ -43,12 +43,11 @@ rag/
 │   │   │   └── services.py                  #     EmbeddingPort, RerankerPort, FusionPort
 │   │   │
 │   │   └── adapters/                        #   Concrete implementations
-│   │       ├── weaviate_vector_adapter.py   #     Weaviate vector search
+│   │       ├── qdrant_vector_adapter.py     #     Qdrant vector search
 │   │       ├── opensearch_keyword_adapter.py#     OpenSearch BM25 search
 │   │       ├── cross_encoder_reranker.py    #     Cross-encoder reranking
 │   │       ├── integration_adapter.py       #     RRF score fusion
 │   │       ├── service_adapters.py          #     Embedding adapter
-│   │       ├── llamaindex_vector_adapter.py #     LlamaIndex-based vector search
 │   │       ├── mappers/                     #     Data mapping helpers
 │   │       └── llamaindex/                  #     LlamaIndex hybrid retriever
 │   │           ├── hybrid_retriever.py      #       Custom hybrid retriever
@@ -65,14 +64,14 @@ rag/
 │   │   │   └── llamaindex_legal_parser.py   #     LlamaParse + python-docx parser for PDF/DOCX
 │   │   │
 │   │   ├── indexing/                        #   Index builders
-│   │   │   ├── index_semantic_data.py       #     Index → Weaviate (vector)
+│   │   │   ├── index_semantic_data.py       #     Index → Qdrant (vector)
 │   │   │   ├── index_opensearch_data.py     #     Index → OpenSearch (BM25)
 │   │   │   ├── graph_builder.py             #     Build Knowledge Graph (Neo4j)
 │   │   │   └── sync_entity_nodes.py         #     Sync entities across stores
 │   │   │
 │   │   ├── store/                           #   Low-level store operations
 │   │   │   ├── opensearch/                  #     OpenSearch index management
-│   │   │   └── vector/                      #     Weaviate collection management
+│   │   │   └── vector/                      #     Qdrant collection management
 │   │   │
 │   │   └── services/                        #   Ingestion services
 │   │       ├── ingest_service.py            #     Main ingestion orchestration
@@ -155,9 +154,8 @@ User query
          ▼                                   ▼
 ┌──────────────────┐              ┌──────────────────┐
 │  Vector Search   │              │  BM25 Search     │
-│  (Weaviate)      │              │  (OpenSearch)    │
-│  multilingual-   │              │  Vietnamese      │
-│  e5-base         │              │  keyword match   │
+│  (Qdrant)        │              │  (OpenSearch)    │
+│  BAAI/bge-m3     │              │  Vietnamese      │
 │  embeddings      │              │                  │
 └────────┬─────────┘              └────────┬─────────┘
          │                                 │
@@ -208,7 +206,7 @@ DOCX/PDF file upload
          ┌─────────────────┼─────────────────┐
          ▼                 ▼                  ▼
 ┌────────────────┐ ┌──────────────┐ ┌─────────────────┐
-│  Weaviate      │ │  OpenSearch  │ │  Neo4j KG       │
+│  Qdrant        │ │  OpenSearch  │ │  Neo4j KG       │
 │  (vectors)     │ │  (BM25 text) │ │  (entities &    │
 │                │ │              │ │   relations)    │
 └────────────────┘ └──────────────┘ └─────────────────┘
@@ -221,9 +219,9 @@ DOCX/PDF file upload
 ### Yêu cầu
 
 - Python 3.11+
-- Weaviate (port 8080) — vector database
+- Qdrant Cloud — vector database
 - OpenSearch (port 9200) — keyword search
-- Neo4j (port 7687) — knowledge graph
+- Neo4j Cloud (Aura) — knowledge graph
 - Redis (port 6379, optional) — background job state
 
 ### Cài đặt
@@ -240,7 +238,7 @@ pip install -r requirements.txt
 
 # Config
 cp .env.example .env
-# → Sửa .env: điền connection strings cho Weaviate, OpenSearch, Neo4j
+# → Sửa .env: điền connection strings cho Qdrant Cloud, OpenSearch, Neo4j Cloud
 ```
 
 ### Chạy infrastructure (Docker)
@@ -252,9 +250,8 @@ cd infrastructure
 docker compose up -d
 
 # Hoặc từng service
-docker compose -f docker-compose.weaviate.yml up -d
 docker compose -f docker-compose.opensearch.yml up -d
-docker compose -f docker-compose.neo4j.yml up -d
+# Qdrant Cloud & Neo4j Cloud — không cần Docker, cấu hình qua .env
 ```
 
 ### Chạy RAG Service
@@ -344,16 +341,16 @@ curl -X POST http://localhost:8000/v1/ingest/docx \
 
 | Biến | Mô tả | Mặc định |
 |------|--------|----------|
-| **Weaviate** | | |
-| `WEAVIATE_URL` | Weaviate connection URL | `http://localhost:8080` |
-| `WEAVIATE_COLLECTION` | Tên collection | `LegalDocuments` |
+| **Qdrant** | | |
+| `QDRANT_URL` | Qdrant Cloud URL | Qdrant Cloud endpoint |
+| `QDRANT_COLLECTION_NAME` | Tên collection | `vietnamese_documents` |
 | **OpenSearch** | | |
 | `OPENSEARCH_URL` | OpenSearch URL | `https://localhost:9200` |
 | `OPENSEARCH_INDEX` | Tên index | `legal_documents` |
 | `OPENSEARCH_USER` / `OPENSEARCH_PASSWORD` | Credentials | `admin` / `admin` |
 | **Neo4j** | | |
-| `NEO4J_URI` | Neo4j connection | `bolt://localhost:7687` |
-| `NEO4J_USER` / `NEO4J_PASSWORD` | Credentials | `neo4j` / `password` |
+| `NEO4J_URI` | Neo4j Cloud URI | Neo4j Aura endpoint |
+| `NEO4J_USERNAME` / `NEO4J_PASSWORD` | Credentials | Set in `.env` |
 | **Embedding** | | |
 | `EMBEDDING_MODEL` | Sentence-transformer model | `BAAI/bge-m3` |
 | `EMBEDDING_DEVICE` | Device (cpu/cuda) | `cpu` |
@@ -376,7 +373,7 @@ curl -X POST http://localhost:8000/v1/ingest/docx \
 
 ```
                 ┌─── Inbound ───┐           ┌─── Outbound ───────────┐
-                │  FastAPI       │           │  Weaviate (vectors)    │
+                │  FastAPI       │           │  Qdrant (vectors)      │
  Orchestrator ─→│  routes.py     │──→ Domain │  OpenSearch (BM25)     │
                 │                │   Logic   │  Neo4j (KG)            │
                 └────────────────┘           │  Cross-encoder (local) │
@@ -386,7 +383,7 @@ curl -X POST http://localhost:8000/v1/ingest/docx \
 ```
 
 - **Ports:** `VectorStorePort`, `KeywordStorePort`, `EmbeddingPort`, `RerankerPort`, `FusionPort`
-- **Adapters:** `WeaviateVectorAdapter`, `OpenSearchKeywordAdapter`, `CrossEncoderReranker`, `IntegrationAdapter`
+- **Adapters:** `QdrantVectorAdapter`, `OpenSearchKeywordAdapter`, `CrossEncoderReranker`, `IntegrationAdapter`
 - **Container:** `container.py` — singleton DI, lazy initialization
 
 ### Legal Query Parser
@@ -401,7 +398,7 @@ Vietnamese legal document references được tự động parse:
     → document_ref: "Luật 24/2018"
 ```
 
-Parser trích xuất metadata → filter trực tiếp trên Weaviate/OpenSearch → precision cao hơn.
+Parser trích xuất metadata → filter trực tiếp trên Qdrant/OpenSearch → precision cao hơn.
 
 ### Reciprocal Rank Fusion (RRF)
 
@@ -437,10 +434,10 @@ LOG_LEVEL=DEBUG pytest -s
 
 | Lỗi | Nguyên nhân | Giải pháp |
 |------|-------------|-----------|
-| `Weaviate connection failed` | Weaviate chưa chạy | `docker compose -f docker-compose.weaviate.yml up -d` |
+| `Qdrant connection failed` | Qdrant Cloud không truy cập được | Kiểm tra `QDRANT_URL` và `QDRANT_API_KEY` trong .env |
 | `OpenSearch SSL error` | Certificate issue | Set `OPENSEARCH_VERIFY_CERTS=false` trong .env |
-| `Neo4j authentication failed` | Wrong credentials | Kiểm tra `NEO4J_USER` / `NEO4J_PASSWORD` |
+| `Neo4j authentication failed` | Wrong credentials | Kiểm tra `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` trong .env |
 | `CUDA out of memory` | GPU hết RAM cho embedding | Set `EMBEDDING_DEVICE=cpu` |
 | `Import error: shared` | Chưa cài shared package | `pip install -e ../shared` |
-| Collection not found | Chưa tạo Weaviate collection | Chạy ingestion hoặc tạo collection thủ công |
+| Collection not found | Chưa tạo Qdrant collection | Chạy ingestion hoặc tạo collection thủ công |
 | Port 8000 already in use | Port bị chiếm | Kill process cũ hoặc đổi port trong `start_server.py` |

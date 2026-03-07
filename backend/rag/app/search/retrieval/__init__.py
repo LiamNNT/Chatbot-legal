@@ -46,7 +46,7 @@ from app.search.retrieval.legal_query_parser import (
 
 from app.search.retrieval.metadata_filter_builder import (
     MetadataFilterBuilder,
-    WeaviateFilterBuilder,
+    QdrantFilterBuilder,
     OpenSearchFilterBuilder,
 )
 
@@ -71,7 +71,7 @@ __all__ = [
     "LegalQueryParser",
     # Filter Builders
     "MetadataFilterBuilder",
-    "WeaviateFilterBuilder",
+    "QdrantFilterBuilder",
     "OpenSearchFilterBuilder",
     # Expander
     "NeighborExpander",

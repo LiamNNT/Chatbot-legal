@@ -129,7 +129,7 @@ config = RetrievalConfig(
 )
 
 retriever = LlamaIndexHybridRetriever(
-    vector_repository=weaviate_adapter,
+    vector_repository=qdrant_adapter,
     keyword_repository=opensearch_adapter,
     config=config
 )
@@ -151,7 +151,7 @@ from core.domain.llamaindex_retriever import (
 
 # These use existing repository implementations
 vector_retriever = PortBasedVectorRetriever(
-    vector_repository=weaviate_adapter,
+    vector_repository=qdrant_adapter,
     top_k=10
 )
 ```
@@ -255,7 +255,7 @@ from core.domain.llamaindex_search_service import (
 
 # Using factory
 service = create_llamaindex_search_service(
-    vector_repository=weaviate_adapter,
+    vector_repository=qdrant_adapter,
     keyword_repository=opensearch_adapter,
     reranking_service=cross_encoder,
     vector_weight=0.5,

@@ -30,7 +30,7 @@ USE_LLAMAINDEX = os.getenv("USE_LLAMAINDEX", "false").lower() in ("true", "1", "
 # These are infrastructure concerns and should only be imported when needed
 def _lazy_import_adapters():
     """Lazy import adapters to maintain dependency direction."""
-    from app.search.adapters.weaviate_vector_adapter import WeaviateVectorAdapter
+    from app.search.adapters.qdrant_vector_adapter import QdrantVectorAdapter
     from app.search.adapters.opensearch_keyword_adapter import OpenSearchKeywordAdapter
     from app.search.adapters.service_adapters import HybridFusionAdapter
     from app.search.adapters.cross_encoder_reranker import create_reranking_service
@@ -38,7 +38,7 @@ def _lazy_import_adapters():
     from app.shared.config.settings import settings
     
     return {
-        'WeaviateVectorAdapter': WeaviateVectorAdapter,
+        'QdrantVectorAdapter': QdrantVectorAdapter,
         'OpenSearchKeywordAdapter': OpenSearchKeywordAdapter,
         'HybridFusionAdapter': HybridFusionAdapter,
         'create_reranking_service': create_reranking_service,
@@ -48,19 +48,6 @@ def _lazy_import_adapters():
 
 
 class DIContainer:
-    """
-    Dependency Injection Container for the RAG system.
-    
-    This is the COMPOSITION ROOT - the place where the application is wired together.
-    It follows the Ports & Adapters pattern by:
-    1. Creating concrete implementations (adapters) for the ports
-    2. Injecting dependencies into the core domain services
-    3. Managing the lifecycle of all components
-    
-    Note: It's perfectly acceptable for this class to import and know about
-    adapters because that's its job - to compose the application.
-    """
-    
     def __init__(self):
         self._vector_repository: Optional[VectorSearchRepository] = None
         self._keyword_repository: Optional[KeywordSearchRepository] = None
@@ -72,11 +59,11 @@ class DIContainer:
         """Get or create the vector search repository."""
         if self._vector_repository is None:
             deps = _lazy_import_adapters()
-            WeaviateVectorAdapter = deps['WeaviateVectorAdapter']
+            QdrantVectorAdapter = deps['QdrantVectorAdapter']
             SentenceTransformer = deps['SentenceTransformer']
             settings = deps['settings']
             
-            # Create a simple embedding wrapper that matches Weaviate adapter interface
+            # Create a simple embedding wrapper that matches adapter interface
             class SimpleEmbedding:
                 def __init__(self, model_name: str):
                     self.model = SentenceTransformer(model_name)
@@ -86,12 +73,12 @@ class DIContainer:
             
             embedding_model = SimpleEmbedding(settings.emb_model)
             
-            self._vector_repository = WeaviateVectorAdapter(
-                weaviate_url=settings.weaviate_url,
+            self._vector_repository = QdrantVectorAdapter(
+                qdrant_url=settings.qdrant_url,
                 embedding_model=embedding_model,
-                api_key=settings.weaviate_api_key if settings.weaviate_api_key else None
+                api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
             )
-            logger.info("Created Weaviate vector repository")
+            logger.info("Created Qdrant vector repository")
         
         return self._vector_repository
     

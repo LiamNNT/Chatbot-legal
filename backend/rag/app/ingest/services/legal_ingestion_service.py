@@ -19,7 +19,7 @@ Architecture:
     │                                   ExtractionResult +            │
     │                                   Entities + Relations          │
     │                                                                 │
-    │  index_to_vector_db(chunks) ─► Weaviate/OpenSearch             │
+    │  index_to_vector_db(chunks) ─► Qdrant/OpenSearch             │
     │  index_to_neo4j(entities, relations) ─► Neo4j                  │
     └─────────────────────────────────────────────────────────────────┘
 
@@ -228,17 +228,18 @@ class IngestionConfig(BaseModel):
     token_threshold: int = Field(default=800, description="Token threshold for DOCX chunking")
     
     # Vector DB settings
-    vector_backend: str = Field(default="weaviate", description="weaviate or opensearch")
-    weaviate_url: str = Field(default="http://localhost:8090")
-    weaviate_class_name: str = Field(default="LegalChunk")
+    vector_backend: str = Field(default="qdrant", description="qdrant or opensearch")
+    qdrant_url: str = Field(default_factory=lambda: os.getenv("QDRANT_URL", "https://2ee9a81c-be7d-484a-93cf-2f229545d6a4.us-east-1-1.aws.cloud.qdrant.io/"))
+    qdrant_api_key: str = Field(default_factory=lambda: os.getenv("QDRANT_API_KEY", ""))
+    qdrant_collection_name: str = Field(default="vietnamese_documents")
     opensearch_host: str = Field(default="localhost")
     opensearch_port: int = Field(default=9200)
     opensearch_index: str = Field(default="legal_chunks")
     
     # Neo4j settings
-    neo4j_uri: str = Field(default="bolt://localhost:7687")
-    neo4j_user: str = Field(default="neo4j")
-    neo4j_password: str = Field(default="password")
+    neo4j_uri: str = Field(default_factory=lambda: os.getenv("NEO4J_URI", ""))
+    neo4j_user: str = Field(default_factory=lambda: os.getenv("NEO4J_USERNAME", ""))
+    neo4j_password: str = Field(default_factory=lambda: os.getenv("NEO4J_PASSWORD", ""))
     
     # Embedding settings
     embedding_model: str = Field(default="intfloat/multilingual-e5-base")
@@ -263,13 +264,13 @@ class IngestionConfig(BaseModel):
             return cls(
                 token_threshold=getattr(settings, 'ingest_token_threshold', 800),
                 vector_backend=settings.vector_backend,
-                weaviate_url=settings.weaviate_url,
-                weaviate_class_name=settings.weaviate_class_name,
+                qdrant_url=settings.qdrant_url,
+                qdrant_collection_name=settings.qdrant_collection_name,
                 opensearch_host=settings.opensearch_host,
                 opensearch_port=settings.opensearch_port,
                 opensearch_index=settings.opensearch_index,
                 neo4j_uri=settings.neo4j_uri,
-                neo4j_user=settings.neo4j_user,
+                neo4j_user=settings.neo4j_username,
                 neo4j_password=settings.neo4j_password,
                 embedding_model=settings.emb_model,
                 llama_cloud_api_key=getattr(settings, 'llama_cloud_api_key', None),
@@ -396,16 +397,16 @@ class LegalIngestionService:
     def _get_vector_adapter(self):
         """Get or create vector DB adapter."""
         if self._vector_adapter is None:
-            if self.config.vector_backend == "weaviate":
+            if self.config.vector_backend == "qdrant":
                 try:
-                    from app.search.adapters.weaviate_vector_adapter import WeaviateVectorAdapter
-                    self._vector_adapter = WeaviateVectorAdapter(
-                        weaviate_url=self.config.weaviate_url,
-                        collection_name=self.config.weaviate_class_name,
+                    from app.search.adapters.qdrant_vector_adapter import QdrantVectorAdapter
+                    self._vector_adapter = QdrantVectorAdapter(
+                        qdrant_url=self.config.qdrant_url,
+                        collection_name=self.config.qdrant_collection_name,
                     )
-                    logger.info(f"Weaviate adapter initialized: {self.config.weaviate_url}")
+                    logger.info(f"Qdrant adapter initialized: {self.config.qdrant_url}")
                 except Exception as e:
-                    logger.error(f"Failed to create Weaviate adapter: {e}")
+                    logger.error(f"Failed to create Qdrant adapter: {e}")
             else:
                 # OpenSearch adapter
                 try:
@@ -738,7 +739,7 @@ class LegalIngestionService:
         batch_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        Index chunks to vector database (Weaviate or OpenSearch).
+        Index chunks to vector database (Qdrant or OpenSearch).
         
         Args:
             chunks: List of chunks to index

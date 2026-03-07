@@ -71,9 +71,9 @@ Chatbot-UIT là hệ thống chatbot thông minh được xây dựng để hỗ
          │                │                │
          ▼                ▼                ▼
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ OpenSearch  │  │  Weaviate   │  │   Neo4j     │
+│ OpenSearch  │  │  Qdrant     │  │   Neo4j     │
 │ (BM25)      │  │  (Vector)   │  │   (Graph)   │
-│ Port 9200   │  │  Port 8090  │  │  Port 7687  │
+│ Port 9200   │  │  Port 6333  │  │  Port 7687  │
 └─────────────┘  └─────────────┘  └─────────────┘
 ```
 
@@ -117,9 +117,7 @@ Chatbot-UIT/
 │
 ├── infrastructure/              # Docker Compose files
 │   ├── docker-compose.yml
-│   ├── docker-compose.opensearch.yml
-│   ├── docker-compose.weaviate.yml
-│   └── docker-compose.neo4j.yml
+│   └── docker-compose.opensearch.yml
 │
 ├── scripts/                     # Utility scripts
 │   ├── start_backend.py         # Start all backend services
@@ -205,8 +203,8 @@ python start_backend.py
 
 Script sẽ tự động:
 1. ✅ Stop các services đang chạy (nếu có)
-2. ✅ Khởi động Docker services (OpenSearch, Weaviate, Neo4j)
-3. ✅ Khởi động RAG Service (port 8000)
+2. ✅ Khởi động Docker services (OpenSearch)
+3. ✅ Khởi động RAG Service (port 8000) — kết nối Qdrant Cloud & Neo4j Cloud
 4. ✅ Khởi động Orchestrator Service (port 8001)
 
 **Options:**
@@ -233,27 +231,18 @@ Mỗi service chạy trong **1 terminal riêng**. Nhấn `Ctrl+C` để dừng s
 > **Lưu ý**: Dùng flag `-p <tên>` để đặt project name riêng, tránh xung đột giữa các compose file.
 
 ```bash
-# Terminal 1 — Weaviate (Vector DB - port 8090)
-cd infrastructure
-docker compose -p weaviate -f docker-compose.weaviate.yml up
-# Ctrl+C để dừng
-
-# Terminal 2 — OpenSearch (BM25 Search - port 9200)
+# Terminal 1 — OpenSearch (BM25 Search - port 9200)
 cd infrastructure
 docker compose -p opensearch -f docker-compose.opensearch.yml up
 # Ctrl+C để dừng
 
-# Terminal 3 — Neo4j (Knowledge Graph - port 7474/7687)
-cd infrastructure
-docker compose -p neo4j -f docker-compose.neo4j.yml up
-# Ctrl+C để dừng
-
-# Terminal 4 — RAG Service (port 8000)
+# Terminal 2 — RAG Service (port 8000)
+# Qdrant Cloud & Neo4j Cloud được cấu hình qua .env
 cd backend/rag
 python start_server.py
 # hoặc: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Terminal 5 — Orchestrator Service (port 8001)
+# Terminal 3 — Orchestrator Service (port 8001)
 cd backend/orchestrator
 uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
@@ -266,19 +255,13 @@ Nếu không muốn giữ terminal mở, dùng flag `-d`:
 cd infrastructure
 
 # Khởi động nền (không cần giữ terminal)
-docker compose -p weaviate -f docker-compose.weaviate.yml up -d
 docker compose -p opensearch -f docker-compose.opensearch.yml up -d
-docker compose -p neo4j -f docker-compose.neo4j.yml up -d
 
 # Xem logs
-docker logs -f vietnamese-rag-weaviate   # Weaviate logs
 docker logs -f opensearch-node1          # OpenSearch logs
-docker logs -f neo4j-catrag              # Neo4j logs
 
-# Dừng từng service
-docker compose -p weaviate -f docker-compose.weaviate.yml down
+# Dừng service
 docker compose -p opensearch -f docker-compose.opensearch.yml down
-docker compose -p neo4j -f docker-compose.neo4j.yml down
 ```
 
 #### Kiểm tra trạng thái services
@@ -288,9 +271,7 @@ docker compose -p neo4j -f docker-compose.neo4j.yml down
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # Health check
-curl -s http://localhost:8090/v1/.well-known/ready  # Weaviate
 curl -s http://localhost:9200                        # OpenSearch
-curl -s http://localhost:7474                        # Neo4j
 ```
 
 ---
@@ -342,10 +323,9 @@ GET /v1/health
 
 | Database | URL | Username | Password |
 |----------|-----|----------|----------|
-| Neo4j Browser | http://localhost:7474 | neo4j | uitchatbot |
-| Neo4j Bolt | bolt://localhost:7687 | neo4j | uitchatbot |
 | OpenSearch | http://localhost:9200 | - | - |
-| Weaviate | http://localhost:8090 | - | - |
+| Qdrant Cloud | Configured via `QDRANT_URL` env var | - | API key in `.env` |
+| Neo4j Cloud | Configured via `NEO4J_URI` env var | - | Credentials in `.env` |
 
 ---
 

@@ -41,10 +41,10 @@ class GraphProviderMixin:
             try:
                 from rag.app.knowledge_graph.stores.neo4j_store import Neo4jGraphAdapter
 
-                neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-                neo4j_user = os.getenv("NEO4J_USER", "neo4j")
-                neo4j_password = os.getenv("NEO4J_PASSWORD", "uitchatbot")
-                neo4j_database = os.getenv("NEO4J_DATABASE", "neo4j")
+                neo4j_uri = os.getenv("NEO4J_URI", "")
+                neo4j_user = os.getenv("NEO4J_USERNAME", "")
+                neo4j_password = os.getenv("NEO4J_PASSWORD", "")
+                neo4j_database = os.getenv("NEO4J_DATABASE", "")
 
                 logger.info(f"🔗 Connecting to Neo4j: {neo4j_uri}")
                 self._graph_adapter = Neo4jGraphAdapter(

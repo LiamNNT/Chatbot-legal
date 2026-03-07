@@ -48,18 +48,18 @@ Make sure you have the required packages:
 
 ```bash
 cd services/rag_services
-pip install llama-index-vector-stores-weaviate weaviate-client
+pip install qdrant-client
 ```
 
 ### 2. Configure Environment
 
-Ensure your `.env` file has Weaviate settings:
+Ensure your `.env` file has Qdrant settings:
 
 ```bash
-VECTOR_BACKEND=weaviate
-WEAVIATE_URL=<your_weaviate_url>
-WEAVIATE_API_KEY=<your_api_key>
-WEAVIATE_CLASS_NAME=ChatbotUit
+VECTOR_BACKEND=qdrant
+QDRANT_URL=<your-qdrant-cloud-url>
+QDRANT_API_KEY=<your-qdrant-cloud-api-key>
+QDRANT_COLLECTION_NAME=vietnamese_documents
 ```
 
 ### 3. Run Indexing Script
@@ -73,7 +73,7 @@ This script will:
 - Extract metadata (subject, year, cohort, etc.)
 - Split content into chunks
 - Generate embeddings
-- Store in Weaviate vector database
+- Store in Qdrant vector database
 
 ### 4. Test Search
 

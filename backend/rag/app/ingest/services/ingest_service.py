@@ -5,7 +5,7 @@ Document Ingestion Service for Vietnamese Legal Documents.
 This service orchestrates the ingestion pipeline:
 1. Parse DOCX/PDF -> hierarchical chunks (+ KG entities for PDF)
 2. Generate embeddings
-3. Index to Vector DB (OpenSearch/Weaviate)
+3. Index to Vector DB (Qdrant/OpenSearch)
 4. Build Knowledge Graph in Neo4j
 
 The service runs processing in the background and updates job progress.
@@ -52,7 +52,7 @@ class IngestService:
     Handles:
     - File parsing with LlamaIndexLegalParser (DOCX/DOC/PDF)
     - Embedding generation
-    - Vector DB indexing (Weaviate or OpenSearch)
+    - Vector DB indexing (Qdrant or OpenSearch)
     - Neo4j Knowledge Graph building
     - Progress tracking
     
@@ -67,7 +67,7 @@ class IngestService:
     def __init__(
         self,
         job_store: Optional[JobStore] = None,
-        vector_backend: str = "weaviate",
+        vector_backend: str = "qdrant",
         embedding_model: Optional[str] = None,
         token_threshold: int = 1500,
         # ── Pre-built adapters (preferred — avoids infra imports) ──
@@ -81,7 +81,7 @@ class IngestService:
         
         Args:
             job_store: Job state storage (defaults to singleton)
-            vector_backend: "weaviate" or "opensearch"
+            vector_backend: "qdrant" or "opensearch"
             embedding_model: Embedding model name
             token_threshold: Token threshold for chunk splitting (default 1500 to match legacy)
             embedder: Pre-built embedding model (avoids infra import)
@@ -129,7 +129,7 @@ class IngestService:
                     llm_base_url=settings.openai_base_url or None,
                     llm_model=settings.llm_model,
                     neo4j_uri=settings.neo4j_uri,
-                    neo4j_user=settings.neo4j_user,
+                    neo4j_user=settings.neo4j_username,
                     neo4j_password=settings.neo4j_password,
                     use_gpt4o_mode=getattr(settings, 'llama_parse_gpt4o_mode', True),
                 )
@@ -168,8 +168,8 @@ class IngestService:
         if self._vector_adapter is None:
             from app.shared.config.settings import settings
             
-            if self.vector_backend == "weaviate":
-                from app.search.adapters.weaviate_vector_adapter import WeaviateVectorAdapter
+            if self.vector_backend == "qdrant":
+                from app.search.adapters.qdrant_vector_adapter import QdrantVectorAdapter
                 
                 class SimpleEmbedding:
                     def __init__(self, embedder):
@@ -178,12 +178,12 @@ class IngestService:
                     def get_text_embedding(self, text: str):
                         return self.embedder.encode(text).tolist()
                 
-                self._vector_adapter = WeaviateVectorAdapter(
-                    weaviate_url=settings.weaviate_url,
+                self._vector_adapter = QdrantVectorAdapter(
+                    qdrant_url=settings.qdrant_url,
                     embedding_model=SimpleEmbedding(self._get_embedder()),
-                    api_key=settings.weaviate_api_key if settings.weaviate_api_key else None
+                    api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
                 )
-                logger.info(f"Initialized Weaviate adapter: {settings.weaviate_url}")
+                logger.info(f"Initialized Qdrant adapter: {settings.qdrant_url}")
             else:
                 # OpenSearch adapter
                 from app.ingest.store.opensearch.client import get_opensearch_client
@@ -203,7 +203,7 @@ class IngestService:
                 
                 self._graph_adapter = Neo4jGraphAdapter(
                     uri=settings.neo4j_uri,
-                    username=settings.neo4j_user,
+                    username=settings.neo4j_username,
                     password=settings.neo4j_password,
                 )
                 logger.info(f"Initialized Neo4j adapter: {settings.neo4j_uri}")
@@ -466,9 +466,8 @@ class IngestService:
                     # Log target database info
                     from app.shared.config.settings import settings
                     logger.info(f"[VECTOR_INDEX] Job {job_id}: Target backend={self.vector_backend}")
-                    if self.vector_backend == "weaviate":
-                        from app.ingest.store.vector.weaviate_store import get_collection_name
-                        logger.info(f"[VECTOR_INDEX] Job {job_id}: Weaviate URL={settings.weaviate_url}, Collection={get_collection_name()}")
+                    if self.vector_backend == "qdrant":
+                        logger.info(f"[VECTOR_INDEX] Job {job_id}: Qdrant URL={settings.qdrant_url}, Collection={settings.qdrant_collection_name}")
                     else:
                         logger.info(f"[VECTOR_INDEX] Job {job_id}: OpenSearch host={settings.opensearch_host}:{settings.opensearch_port}, Index={settings.opensearch_index}")
                     

@@ -5,11 +5,14 @@ Tạo các fulltext indexes cần thiết trong Neo4j
 
 from neo4j import GraphDatabase
 import os
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'backend', 'rag', '.env'))
 
 # Neo4j connection
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+NEO4J_URI = os.getenv("NEO4J_URI", "")
+NEO4J_USER = os.getenv("NEO4J_USERNAME", "")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 
 print("=" * 80)
 print("CREATING NEO4J FULLTEXT INDEXES")

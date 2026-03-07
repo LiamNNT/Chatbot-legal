@@ -30,19 +30,7 @@ def stop_docker_services(project_root: Path):
     docker_dir = project_root / "infrastructure"
     
     subprocess.run(
-        ["docker-compose", "-f", "docker-compose.weaviate.yml", "down"],
-        cwd=docker_dir,
-        check=False,
-        capture_output=True
-    )
-    subprocess.run(
         ["docker-compose", "-f", "docker-compose.opensearch.yml", "down"],
-        cwd=docker_dir,
-        check=False,
-        capture_output=True
-    )
-    subprocess.run(
-        ["docker-compose", "-f", "docker-compose.neo4j.yml", "down"],
         cwd=docker_dir,
         check=False,
         capture_output=True

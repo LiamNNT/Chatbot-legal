@@ -151,7 +151,7 @@ async def _process_ingestion(
     The document will be processed in the background:
     1. Parse document structure (Chapters, Articles, Clauses, Points)
     2. Generate text embeddings
-    3. Index to vector database (Weaviate/OpenSearch)
+    3. Index to vector database (Qdrant/OpenSearch)
     4. Build knowledge graph in Neo4j
     
     Returns a job_id for tracking progress.
@@ -217,7 +217,7 @@ async def start_ingestion(
     1. Parse PDF with LlamaParse API (cloud-based, handles complex tables)
     2. Extract semantic chunks preserving article boundaries
     3. Extract entities and relations using GPT-4o
-    4. Index chunks to vector database (Weaviate/OpenSearch)
+    4. Index chunks to vector database (Qdrant/OpenSearch)
     5. Build knowledge graph in Neo4j
     
     This endpoint uses LlamaIndex-based extraction instead of VLM.

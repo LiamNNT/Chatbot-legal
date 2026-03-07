@@ -1,12 +1,19 @@
 """
 Export Neo4j graph to JSON format.
 """
+import os
 from neo4j import GraphDatabase
 import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'backend', 'rag', '.env'))
 
 def export_graph():
-    driver = GraphDatabase.driver('bolt://localhost:7687', auth=('neo4j', 'uitchatbot'))
+    uri = os.getenv('NEO4J_URI', '')
+    username = os.getenv('NEO4J_USERNAME', '')
+    password = os.getenv('NEO4J_PASSWORD', '')
+    driver = GraphDatabase.driver(uri, auth=(username, password))
     
     with driver.session() as session:
         # Get all nodes

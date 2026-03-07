@@ -13,8 +13,7 @@ from ...shared.domain import (
 
 
 class OpenRouterAdapter(AgentPort):
-    def __init__(
-        self, api_key: str, base_url: str = "https://openrouter.ai/api/v1", default_model: str = "google/gemma-3-27b-it:free", timeout: Optional[int] = 30, max_retries: int = 3):
+    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1", default_model: str = "google/gemma-3-27b-it:free", timeout: Optional[int] = 30, max_retries: int = 3):
         self.api_key = api_key
         self.base_url = base_url
         self.default_model = default_model

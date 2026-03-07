@@ -47,10 +47,10 @@ class Neo4jGraphAdapter(GraphRepository):
     
     def __init__(
         self,
-        uri: str = "bolt://localhost:7687",
-        username: str = "neo4j",
-        password: str = "uitchatbot",
-        database: str = "neo4j"
+        uri: str = "",
+        username: str = "",
+        password: str = "",
+        database: str = ""
     ):
         """
         Initialize Neo4j connection.
@@ -1195,9 +1195,9 @@ class Neo4jGraphAdapter(GraphRepository):
 
 # Factory function for easy instantiation
 def create_neo4j_adapter(
-    uri: str = "bolt://localhost:7687",
-    username: str = "neo4j",
-    password: str = "uitchatbot"
+    uri: str = "",
+    username: str = "",
+    password: str = ""
 ) -> Neo4jGraphAdapter:
     """
     Factory function to create Legal Graph adapter.

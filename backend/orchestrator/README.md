@@ -152,7 +152,7 @@ User query
 
 - Python 3.11+
 - RAG Service đang chạy tại `localhost:8000`
-- Neo4j *(optional, cho Graph Reasoning)* tại `localhost:7687`
+- Neo4j Cloud *(optional, cho Graph Reasoning)* — cấu hình qua `NEO4J_URI` trong `.env`
 
 ### Cài đặt
 
@@ -236,8 +236,8 @@ curl -N -X POST http://localhost:8002/api/v1/chat \
 | `OPENROUTER_API_KEY` | **Bắt buộc** — API key từ openrouter.ai | — |
 | `OPENROUTER_BASE_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
 | `RAG_SERVICE_URL` | URL của RAG Service | `http://localhost:8001` |
-| `NEO4J_URI` | Neo4j connection string | `bolt://localhost:7687` |
-| `NEO4J_USER` / `NEO4J_PASSWORD` | Neo4j credentials | `neo4j` / `uitchatbot` |
+| `NEO4J_URI` | Neo4j Cloud connection string | Neo4j Aura endpoint |
+| `NEO4J_USERNAME` / `NEO4J_PASSWORD` | Neo4j credentials | Set in `.env` |
 | `USE_SYMBOLIC_REASONING` | Bật symbolic rules R001-R008 | `true` |
 | `LOG_LEVEL` | Logging level (`DEBUG` / `INFO` / `WARNING`) | `INFO` |
 | `PORT` | Server port | `8002` |
@@ -308,6 +308,6 @@ LOG_LEVEL=DEBUG pytest -s
 |------|-------------|-----------|
 | `OPENROUTER_API_KEY is required` | Chưa set API key | Điền vào `.env` |
 | `RAG service connection failed` | RAG Service chưa chạy | Chạy RAG Service trước (`cd ../rag && python start_server.py`) |
-| `Graph Reasoning Agent not initialized` | Neo4j chưa chạy | Chạy Neo4j hoặc ignore (KG là optional) |
+| `Graph Reasoning Agent not initialized` | Neo4j Cloud không kết nối được | Kiểm tra `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` trong `.env` |
 | `Import error: shared.domain` | Chưa cài shared package | `pip install -e ../shared` |
 | Port conflict | Port 8002 đã bị chiếm | Đổi `PORT` trong `.env` hoặc kill process cũ |

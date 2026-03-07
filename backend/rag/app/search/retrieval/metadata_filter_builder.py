@@ -3,7 +3,7 @@
 Metadata Filter Builder for Vector Database Queries.
 
 This module builds database-specific filters from LegalQuery metadata.
-Supports both Weaviate and OpenSearch filter formats.
+Supports Qdrant and OpenSearch filter formats.
 """
 
 from __future__ import annotations
@@ -77,194 +77,105 @@ class MetadataFilterBuilder(ABC):
         pass
 
 
-class WeaviateFilterBuilder(MetadataFilterBuilder):
+class QdrantFilterBuilder(MetadataFilterBuilder):
     """
-    Filter builder for Weaviate vector database.
-    
-    Weaviate uses a Where clause with operators like:
-    - Equal, NotEqual
-    - ContainsAny, ContainsAll
-    - Like (for text matching)
-    - And, Or (for combining filters)
+    Filter builder for Qdrant vector database.
+
+    Qdrant uses ``models.Filter`` with ``FieldCondition`` / ``MatchValue``
+    and boolean combinators (``must``, ``should``).
     """
-    
-    # Mapping of metadata fields to Weaviate property names
+
     FIELD_MAPPING = {
         "law_id": "law_id",
         "article_id": "article_id",
-        "clause_no": "clause_no", 
+        "clause_no": "clause_no",
         "point_no": "point_no",
         "chapter": "chapter",
         "section": "section",
         "doc_type": "doc_type",
         "source_file": "filename",
     }
-    
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _field_condition(key: str, value: Any, strict: bool) -> Dict[str, Any]:
+        """Return a single Qdrant ``FieldCondition``-style dict."""
+        if isinstance(value, str) and not strict:
+            # Qdrant does not have "LIKE"; fall back to substring match
+            return {"key": key, "match": {"text": value}}
+        if isinstance(value, list):
+            return {"key": key, "match": {"any": [str(v) for v in value]}}
+        # Exact match for str / int / float / bool
+        return {"key": key, "match": {"value": value}}
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def build_filter(
         self,
         legal_query: LegalQuery,
         strict: bool = False,
         additional_filters: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Build Weaviate Where filter from LegalQuery."""
-        
-        conditions = []
-        
-        # Build conditions from legal query
+        must: List[Dict[str, Any]] = []
+        should: List[Dict[str, Any]] = []
+
         if legal_query.law_id:
-            conditions.append(
-                self._build_condition("law_id", legal_query.law_id, strict)
-            )
-        
+            must.append(self._field_condition("law_id", legal_query.law_id, strict))
+
         if legal_query.article_id:
-            # Article ID might be stored as "Điều 11" or just "11"
-            article_value = legal_query.article_id
-            if not article_value.startswith("Điều"):
-                # Try both formats
-                conditions.append({
-                    "operator": "Or",
-                    "operands": [
-                        self._build_condition("article_id", article_value, strict),
-                        self._build_condition("article_id", f"Điều {article_value}", strict),
-                    ]
-                })
+            v = legal_query.article_id
+            if not v.startswith("Điều"):
+                should.append(self._field_condition("article_id", v, strict))
+                should.append(self._field_condition("article_id", f"Điều {v}", strict))
             else:
-                conditions.append(
-                    self._build_condition("article_id", article_value, strict)
-                )
-        
+                must.append(self._field_condition("article_id", v, strict))
+
         if legal_query.clause_no:
-            conditions.append(
-                self._build_condition("clause_no", legal_query.clause_no, strict)
-            )
-        
+            must.append(self._field_condition("clause_no", legal_query.clause_no, strict))
+
         if legal_query.point_no:
-            conditions.append(
-                self._build_condition("point_no", legal_query.point_no.lower(), strict)
-            )
-        
-        # Add additional filters
+            must.append(self._field_condition("point_no", legal_query.point_no.lower(), strict))
+
         if additional_filters:
             for field, value in additional_filters.items():
                 if value is not None:
-                    conditions.append(
-                        self._build_condition(field, value, strict)
-                    )
-        
-        # Combine conditions
-        if not conditions:
+                    must.append(self._field_condition(
+                        self.FIELD_MAPPING.get(field, field), value, strict,
+                    ))
+
+        if not must and not should:
             return None
-        
-        if len(conditions) == 1:
-            return conditions[0]
-        
-        return {
-            "operator": "And",
-            "operands": conditions,
-        }
-    
+
+        qdrant_filter: Dict[str, Any] = {}
+        if must:
+            qdrant_filter["must"] = must
+        if should:
+            qdrant_filter["should"] = should
+        return qdrant_filter
+
     def build_filter_from_dict(
         self,
         filters: Dict[str, Any],
         strict: bool = False,
     ) -> Optional[Dict[str, Any]]:
-        """Build Weaviate Where filter from dictionary."""
-        
-        conditions = []
-        
+        must: List[Dict[str, Any]] = []
         for field, value in filters.items():
             if value is not None:
-                mapped_field = self.FIELD_MAPPING.get(field, field)
-                conditions.append(
-                    self._build_condition(mapped_field, value, strict)
-                )
-        
-        if not conditions:
+                mapped = self.FIELD_MAPPING.get(field, field)
+                must.append(self._field_condition(mapped, value, strict))
+        if not must:
             return None
-        
-        if len(conditions) == 1:
-            return conditions[0]
-        
-        return {
-            "operator": "And",
-            "operands": conditions,
-        }
-    
+        return {"must": must}
+
     def build_chunk_id_filter(self, chunk_ids: List[str]) -> Dict[str, Any]:
-        """Build filter to retrieve specific chunks by ID."""
-        
         if len(chunk_ids) == 1:
-            return {
-                "path": ["chunk_id"],
-                "operator": "Equal",
-                "valueText": chunk_ids[0],
-            }
-        
-        return {
-            "path": ["chunk_id"],
-            "operator": "ContainsAny",
-            "valueTextArray": chunk_ids,
-        }
-    
-    def _build_condition(
-        self,
-        field: str,
-        value: Any,
-        strict: bool,
-    ) -> Dict[str, Any]:
-        """Build a single Weaviate filter condition."""
-        
-        mapped_field = self.FIELD_MAPPING.get(field, field)
-        
-        if isinstance(value, str):
-            if strict:
-                return {
-                    "path": [mapped_field],
-                    "operator": "Equal",
-                    "valueText": value,
-                }
-            else:
-                # Use Like for partial matching
-                return {
-                    "path": [mapped_field],
-                    "operator": "Like",
-                    "valueText": f"*{value}*",
-                }
-        
-        elif isinstance(value, int):
-            return {
-                "path": [mapped_field],
-                "operator": "Equal",
-                "valueInt": value,
-            }
-        
-        elif isinstance(value, float):
-            return {
-                "path": [mapped_field],
-                "operator": "Equal",
-                "valueNumber": value,
-            }
-        
-        elif isinstance(value, bool):
-            return {
-                "path": [mapped_field],
-                "operator": "Equal",
-                "valueBoolean": value,
-            }
-        
-        elif isinstance(value, list):
-            return {
-                "path": [mapped_field],
-                "operator": "ContainsAny",
-                "valueTextArray": [str(v) for v in value],
-            }
-        
-        else:
-            return {
-                "path": [mapped_field],
-                "operator": "Equal",
-                "valueText": str(value),
-            }
+            return {"must": [{"key": "chunk_id", "match": {"value": chunk_ids[0]}}]}
+        return {"must": [{"key": "chunk_id", "match": {"any": chunk_ids}}]}
 
 
 class OpenSearchFilterBuilder(MetadataFilterBuilder):
@@ -430,13 +341,13 @@ def get_filter_builder(backend: str) -> MetadataFilterBuilder:
     Factory function to get appropriate filter builder.
     
     Args:
-        backend: "weaviate" or "opensearch"
+        backend: "qdrant" or "opensearch"
         
     Returns:
         MetadataFilterBuilder instance
     """
     builders = {
-        "weaviate": WeaviateFilterBuilder,
+        "qdrant": QdrantFilterBuilder,
         "opensearch": OpenSearchFilterBuilder,
         "elasticsearch": OpenSearchFilterBuilder,
     }

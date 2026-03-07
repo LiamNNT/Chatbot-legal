@@ -4,7 +4,7 @@ Health Check Endpoints for RAG Services
 Provides comprehensive health monitoring for all service dependencies:
 - Neo4j Graph Database
 - OpenAI LLM API
-- Weaviate Vector Database
+- Qdrant Vector Database
 - OpenSearch Keyword Search
 - Overall service health aggregation
 
@@ -84,7 +84,7 @@ async def check_neo4j_health() -> ComponentHealth:
         # Try to connect and run simple query
         repo = Neo4jGraphAdapter(
             uri=settings.neo4j_uri,
-            user=settings.neo4j_user,
+            username=settings.neo4j_username,
             password=settings.neo4j_password
         )
         
@@ -191,65 +191,56 @@ async def check_llm_health() -> ComponentHealth:
         )
 
 
-async def check_weaviate_health() -> ComponentHealth:
+async def check_qdrant_health() -> ComponentHealth:
     """
-    Check Weaviate vector database health
+    Check Qdrant vector database health
     
     Returns:
-        ComponentHealth with Weaviate status
+        ComponentHealth with Qdrant status
     """
     try:
-        import weaviate
+        from qdrant_client import QdrantClient
         from app.shared.config.settings import settings
         
         start_time = time.time()
         
-        # Connect to Weaviate
-        client = weaviate.Client(
-            url=settings.weaviate_url,
-            timeout_config=(5, 15)  # (connect, read) timeout
+        # Connect to Qdrant
+        client = QdrantClient(
+            url=settings.qdrant_url,
+            timeout=15,
         )
         
-        # Check if ready
-        is_ready = client.is_ready()
+        # Check connectivity by listing collections
+        collections = client.get_collections().collections
         
         latency_ms = (time.time() - start_time) * 1000
         
-        if is_ready:
-            # Get schema info
-            schema = client.schema.get()
-            class_count = len(schema.get("classes", []))
-            
-            return ComponentHealth(
-                status=HealthStatus.HEALTHY,
-                latency_ms=latency_ms,
-                message="Weaviate connection successful",
-                details={
-                    "url": settings.weaviate_url,
-                    "class_count": class_count,
-                    "ready": True,
-                }
-            )
-        else:
-            return ComponentHealth(
-                status=HealthStatus.UNHEALTHY,
-                latency_ms=latency_ms,
-                message="Weaviate not ready",
-                details={"ready": False}
-            )
+        collection_names = [c.name for c in collections]
+        
+        return ComponentHealth(
+            status=HealthStatus.HEALTHY,
+            latency_ms=latency_ms,
+            message="Qdrant connection successful",
+            details={
+                "url": settings.qdrant_url,
+                "collection_count": len(collections),
+                "collections": collection_names,
+                "ready": True,
+            }
+        )
     
     except ImportError as e:
         return ComponentHealth(
             status=HealthStatus.UNKNOWN,
-            message=f"Weaviate client not configured: {str(e)}",
+            message=f"Qdrant client not configured: {str(e)}",
             details={"error_type": "import_error"}
         )
     
     except Exception as e:
-        logger.error(f"Weaviate health check failed: {e}")
+        logger.error(f"Qdrant health check failed: {e}")
         return ComponentHealth(
             status=HealthStatus.UNHEALTHY,
-            message=f"Weaviate connection failed: {str(e)}",
+            message=f"Qdrant connection failed: {str(e)}",
             details={"error": str(e), "error_type": type(e).__name__}
         )
 
@@ -362,13 +353,13 @@ async def get_overall_health() -> AggregatedHealth:
     # Run all health checks in parallel
     neo4j_task = check_neo4j_health()
     llm_task = check_llm_health()
-    weaviate_task = check_weaviate_health()
+    qdrant_task = check_qdrant_health()
     opensearch_task = check_opensearch_health()
     
     components_health = await asyncio.gather(
         neo4j_task,
         llm_task,
-        weaviate_task,
+        qdrant_task,
         opensearch_task,
         return_exceptions=True
     )
@@ -383,7 +374,7 @@ async def get_overall_health() -> AggregatedHealth:
             status=HealthStatus.UNKNOWN,
             message=f"Health check error: {str(components_health[1])}"
         ),
-        "weaviate": components_health[2] if not isinstance(components_health[2], Exception) else ComponentHealth(
+        "qdrant": components_health[2] if not isinstance(components_health[2], Exception) else ComponentHealth(
             status=HealthStatus.UNKNOWN,
             message=f"Health check error: {str(components_health[2])}"
         ),
@@ -431,12 +422,12 @@ async def get_llm_health() -> ComponentHealth:
 @router.get("/vector", response_model=ComponentHealth)
 async def get_vector_health() -> ComponentHealth:
     """
-    Get Weaviate vector database health status
+    Get Qdrant vector database health status
     
     Returns:
-        ComponentHealth with Weaviate diagnostics
+        ComponentHealth with Qdrant diagnostics
     """
-    return await check_weaviate_health()
+    return await check_qdrant_health()
 
 
 @router.get("/search", response_model=ComponentHealth)

@@ -24,8 +24,8 @@ from dataclasses import dataclass
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from shared.domain.rag_models import DocumentChunk, DocumentMetadata, DocumentLanguage
-from app.search.adapters.weaviate_vector_adapter import WeaviateVectorAdapter
-from app.ingest.store.vector.weaviate_store import get_weaviate_client, DOCUMENT_COLLECTION
+from app.search.adapters.qdrant_vector_adapter import QdrantVectorAdapter
+from app.ingest.store.vector.qdrant_store import get_qdrant_client, DOCUMENT_COLLECTION
 
 # Setup logging
 logging.basicConfig(
@@ -276,7 +276,7 @@ def convert_to_document_chunks(chunks_data: List[ChunkData], filename: str) -> L
 
 
 async def index_batches(
-    vector_adapter: WeaviateVectorAdapter,
+    vector_adapter: QdrantVectorAdapter,
     chunks: List[DocumentChunk],
     batch_size: int = 50
 ):
@@ -284,7 +284,7 @@ async def index_batches(
     Index chunks theo batch để tránh memory issues.
     
     Args:
-        vector_adapter: Weaviate adapter instance
+        vector_adapter: Qdrant adapter instance
         chunks: Danh sách chunks cần index
         batch_size: Số lượng chunks mỗi batch
     """
@@ -330,9 +330,9 @@ async def main():
         help="Batch size for indexing (default: 50)"
     )
     parser.add_argument(
-        "--weaviate-url",
-        default="http://localhost:8090",
-        help="Weaviate server URL"
+        "--qdrant-url",
+        default=None,
+        help="Qdrant server URL (defaults to QDRANT_URL env var or settings)"
     )
     
     args = parser.parse_args()
@@ -378,12 +378,12 @@ async def main():
         embedding_model = HuggingFaceEmbedding(model_name=settings.emb_model)
         logger.info(f"✓ Embedding model loaded: {settings.emb_model}")
         
-        vector_adapter = WeaviateVectorAdapter(
-            weaviate_url=args.weaviate_url,
+        vector_adapter = QdrantVectorAdapter(
+            qdrant_url=args.qdrant_url,
             embedding_model=embedding_model,
             api_key=None
         )
-        logger.info("✓ Weaviate adapter initialized")
+        logger.info("✓ Qdrant adapter initialized")
         
     except Exception as e:
         logger.error(f"Failed to initialize vector adapter: {e}")

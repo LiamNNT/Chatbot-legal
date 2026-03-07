@@ -258,7 +258,7 @@ async def run_llamaindex_pipeline(
                 
                 adapter = Neo4jGraphAdapter(
                     uri=settings.neo4j_uri,
-                    username=settings.neo4j_user,
+                    username=settings.neo4j_username,
                     password=settings.neo4j_password,
                 )
                 
@@ -525,9 +525,9 @@ async def run_stage2_pipeline(
             try:
                 from app.ingest.indexing.graph_builder import Neo4jGraphBuilder
                 
-                uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-                user = os.getenv("NEO4J_USER", "neo4j")
-                password = os.getenv("NEO4J_PASSWORD", "password")
+                uri = os.getenv("NEO4J_URI", "")
+                user = os.getenv("NEO4J_USERNAME", "")
+                password = os.getenv("NEO4J_PASSWORD", "")
                 
                 with Neo4jGraphBuilder(uri=uri, user=user, password=password) as builder:
                     stats = builder.build_graph(
@@ -780,9 +780,9 @@ async def run_extraction_pipeline(
             try:
                 from app.ingest.indexing.graph_builder import Neo4jGraphBuilder
                 
-                uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-                user = os.getenv("NEO4J_USER", "neo4j")
-                password = os.getenv("NEO4J_PASSWORD", "password")
+                uri = os.getenv("NEO4J_URI", "")
+                user = os.getenv("NEO4J_USERNAME", "")
+                password = os.getenv("NEO4J_PASSWORD", "")
                 
                 with Neo4jGraphBuilder(uri=uri, user=user, password=password) as builder:
                     stats = builder.build_graph(
@@ -1297,9 +1297,9 @@ async def run_neo4j_import(
         
         from app.ingest.indexing.graph_builder import Neo4jGraphBuilder
         
-        uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER", "neo4j")
-        password = os.getenv("NEO4J_PASSWORD", "password")
+        uri = os.getenv("NEO4J_URI", "")
+        user = os.getenv("NEO4J_USERNAME", "")
+        password = os.getenv("NEO4J_PASSWORD", "")
         
         extraction_jobs[job_id]["progress"] = 20
         extraction_jobs[job_id]["current_step"] = "Đang xử lý dữ liệu..."
@@ -1394,9 +1394,9 @@ async def get_neo4j_stats():
     try:
         from app.ingest.indexing.graph_builder import Neo4jGraphBuilder
         
-        uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER", "neo4j")
-        password = os.getenv("NEO4J_PASSWORD", "password")
+        uri = os.getenv("NEO4J_URI", "")
+        user = os.getenv("NEO4J_USERNAME", "")
+        password = os.getenv("NEO4J_PASSWORD", "")
         
         with Neo4jGraphBuilder(uri=uri, user=user, password=password) as builder:
             stats = builder.get_graph_stats()
@@ -1412,9 +1412,9 @@ async def clear_neo4j():
     try:
         from app.ingest.indexing.graph_builder import Neo4jGraphBuilder
         
-        uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER", "neo4j")
-        password = os.getenv("NEO4J_PASSWORD", "password")
+        uri = os.getenv("NEO4J_URI", "")
+        user = os.getenv("NEO4J_USERNAME", "")
+        password = os.getenv("NEO4J_PASSWORD", "")
         
         with Neo4jGraphBuilder(uri=uri, user=user, password=password) as builder:
             builder.clear_database()
@@ -1425,17 +1425,17 @@ async def clear_neo4j():
 
 
 # =============================================================================
-# VECTOR DATABASE (Weaviate) INDEXING
+# VECTOR DATABASE (Qdrant) INDEXING
 # =============================================================================
 
-@router.post("/weaviate/upload")
-async def upload_json_to_weaviate(
+@router.post("/vector/upload")
+async def upload_json_to_qdrant(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     doc_type: str = "regulation"
 ):
     """
-    Upload a JSON file and index to Weaviate vector database.
+    Upload a JSON file and index to Qdrant vector database.
     """
     if not file.filename.lower().endswith('.json'):
         raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file JSON")
@@ -1452,8 +1452,8 @@ async def upload_json_to_weaviate(
         "job_id": job_id,
         "status": "pending",
         "progress": 0,
-        "current_step": "Đang chuẩn bị index Weaviate...",
-        "stage": "weaviate_index",
+        "current_step": "Đang chuẩn bị index Qdrant...",
+        "stage": "qdrant_index",
         "created_at": datetime.now().isoformat(),
         "completed_at": None,
         "result_file": None,
@@ -1462,7 +1462,7 @@ async def upload_json_to_weaviate(
     }
     
     background_tasks.add_task(
-        run_weaviate_index,
+        run_qdrant_index,
         job_id,
         data,
         file.filename,
@@ -1472,20 +1472,20 @@ async def upload_json_to_weaviate(
     return ExtractionStatus(**extraction_jobs[job_id])
 
 
-async def run_weaviate_index(
+async def run_qdrant_index(
     job_id: str,
     data: Dict[str, Any],
     filename: str,
     doc_type: str
 ):
-    """Index extraction data to Weaviate."""
+    """Index extraction data to Qdrant."""
     try:
         extraction_jobs[job_id]["status"] = "processing"
         extraction_jobs[job_id]["current_step"] = "Đang xử lý dữ liệu JSON..."
         extraction_jobs[job_id]["progress"] = 10
         
         from app.ingest.indexing.index_semantic_data import load_and_process_json, convert_to_document_chunks
-        from app.search.adapters.weaviate_vector_adapter import WeaviateVectorAdapter
+        from app.search.adapters.qdrant_vector_adapter import QdrantVectorAdapter
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding
         from app.shared.config.settings import settings
         import tempfile
@@ -1512,16 +1512,17 @@ async def run_weaviate_index(
         document_chunks = convert_to_document_chunks(chunks_data, doc_filename)
         
         extraction_jobs[job_id]["progress"] = 50
-        extraction_jobs[job_id]["current_step"] = "Đang kết nối Weaviate..."
+        extraction_jobs[job_id]["current_step"] = "Đang kết nối Qdrant..."
         
         # Initialize embedding model and adapter
         embedding_model = HuggingFaceEmbedding(model_name=settings.emb_model)
-        weaviate_url = os.getenv("WEAVIATE_URL", "http://localhost:8090")
+        qdrant_url = os.getenv("QDRANT_URL", settings.qdrant_url)
+        qdrant_api_key = os.getenv("QDRANT_API_KEY", settings.qdrant_api_key)
         
-        vector_adapter = WeaviateVectorAdapter(
-            weaviate_url=weaviate_url,
+        vector_adapter = QdrantVectorAdapter(
+            qdrant_url=qdrant_url,
             embedding_model=embedding_model,
-            api_key=None
+            api_key=qdrant_api_key or None
         )
         
         extraction_jobs[job_id]["progress"] = 60
@@ -1546,7 +1547,7 @@ async def run_weaviate_index(
         
         extraction_jobs[job_id]["progress"] = 100
         extraction_jobs[job_id]["status"] = "completed"
-        extraction_jobs[job_id]["current_step"] = "Index Weaviate hoàn thành!"
+        extraction_jobs[job_id]["current_step"] = "Index Qdrant hoàn thành!"
         extraction_jobs[job_id]["completed_at"] = datetime.now().isoformat()
         extraction_jobs[job_id]["stats"] = {
             "source_file": filename,
@@ -1558,30 +1559,28 @@ async def run_weaviate_index(
         
     except Exception as e:
         import traceback
-        print(f"Weaviate index error: {traceback.format_exc()}")
+        print(f"Qdrant index error: {traceback.format_exc()}")
         extraction_jobs[job_id]["status"] = "failed"
         extraction_jobs[job_id]["error"] = str(e)
         extraction_jobs[job_id]["current_step"] = f"Lỗi: {str(e)}"
 
 
-@router.get("/weaviate/stats")
-async def get_weaviate_stats():
-    """Get Weaviate database statistics."""
+@router.get("/vector/stats")
+async def get_vector_stats():
+    """Get Qdrant vector database statistics."""
     try:
-        from app.ingest.store.vector.weaviate_store import get_weaviate_client, DOCUMENT_COLLECTION
+        from app.ingest.store.vector.qdrant_store import get_qdrant_client, get_collection_name
         
-        client = get_weaviate_client()
-        collection = client.collections.get(DOCUMENT_COLLECTION)
-        
-        # Get count
-        response = collection.aggregate.over_all(total_count=True)
-        total_count = response.total_count
+        client = get_qdrant_client()
+        collection_name = get_collection_name()
+        info = client.get_collection(collection_name)
         
         return {
             "status": "connected",
             "stats": {
-                "collection": DOCUMENT_COLLECTION,
-                "total_documents": total_count
+                "collection": collection_name,
+                "total_documents": info.points_count,
+                "vectors_count": info.vectors_count,
             }
         }
     except Exception as e:

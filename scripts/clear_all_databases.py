@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to clear ALL data from Weaviate, Neo4j, and OpenSearch.
+Script to clear ALL data from Qdrant, Neo4j, and OpenSearch.
 Use this to start fresh with clean databases.
 """
 
@@ -10,46 +10,41 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def clear_weaviate():
-    """Clear all data from Weaviate."""
+def clear_qdrant():
+    """Clear all data from Qdrant."""
     print("\n" + "="*60)
-    print("🔵 CLEARING WEAVIATE")
+    print("🔵 CLEARING QDRANT")
     print("="*60)
     
     try:
-        from app.ingest.store.vector.weaviate_store import get_weaviate_client, DOCUMENT_COLLECTION
-        from weaviate.classes.query import Filter
-        
-        client = get_weaviate_client("http://localhost:8090")
-        
-        # Check if collection exists
-        if client.collections.exists(DOCUMENT_COLLECTION):
-            collection = client.collections.get(DOCUMENT_COLLECTION)
-            
-            # Count objects before deletion
-            count_result = collection.aggregate.over_all(total_count=True)
-            total_count = count_result.total_count if count_result else 0
-            print(f"📊 Current objects in '{DOCUMENT_COLLECTION}': {total_count}")
-            
-            if total_count > 0:
-                # Delete collection and recreate it (cleanest approach)
-                print(f"🗑️  Deleting collection '{DOCUMENT_COLLECTION}'...")
-                client.collections.delete(DOCUMENT_COLLECTION)
-                print(f"✅ Deleted collection '{DOCUMENT_COLLECTION}'")
-                
-                # Note: Collection will be recreated on next import
-                print("ℹ️  Collection will be recreated on next data import")
-            else:
-                print("✅ Collection already empty")
+        import os
+        from qdrant_client import QdrantClient
+
+        qdrant_url = os.getenv("QDRANT_URL", "https://2ee9a81c-be7d-484a-93cf-2f229545d6a4.us-east-1-1.aws.cloud.qdrant.io/")
+        qdrant_api_key = os.getenv("QDRANT_API_KEY", "")
+        client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key or None)
+        collections = client.get_collections().collections
+
+        if collections:
+            for col in collections:
+                info = client.get_collection(col.name)
+                count = info.points_count
+                print(f"📊 Collection '{col.name}': {count} points")
+                if count and count > 0:
+                    print(f"🗑️  Deleting collection '{col.name}'...")
+                    client.delete_collection(col.name)
+                    print(f"✅ Deleted collection '{col.name}'")
+                else:
+                    print(f"✅ Collection '{col.name}' already empty")
         else:
-            print(f"⚠️  Collection '{DOCUMENT_COLLECTION}' does not exist")
-        
+            print("⚠️  No collections found in Qdrant")
+
         client.close()
-        print("✅ Weaviate cleared successfully!")
+        print("✅ Qdrant cleared successfully!")
         return True
         
     except Exception as e:
-        print(f"❌ Error clearing Weaviate: {e}")
+        print(f"❌ Error clearing Qdrant: {e}")
         return False
 
 
@@ -63,9 +58,9 @@ def clear_neo4j():
         from neo4j import GraphDatabase
         import os
         
-        uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER", "neo4j")
-        password = os.getenv("NEO4J_PASSWORD", "uitchatbot")
+        uri = os.getenv("NEO4J_URI", "")
+        user = os.getenv("NEO4J_USERNAME", "")
+        password = os.getenv("NEO4J_PASSWORD", "")
         
         driver = GraphDatabase.driver(uri, auth=(user, password))
         
@@ -138,7 +133,7 @@ def main():
     print("🧹 CLEARING ALL DATABASES")
     print("="*60)
     print("\n⚠️  This will DELETE ALL data from:")
-    print("   - Weaviate (Vector Store)")
+    print("   - Qdrant (Vector Store)")
     print("   - Neo4j (Graph Database)")
     print("   - OpenSearch (Text Search)")
     
@@ -151,7 +146,7 @@ def main():
     print("\n🚀 Starting cleanup...\n")
     
     results = {
-        "Weaviate": clear_weaviate(),
+        "Qdrant": clear_qdrant(),
         "Neo4j": clear_neo4j(),
         "OpenSearch": clear_opensearch()
     }
