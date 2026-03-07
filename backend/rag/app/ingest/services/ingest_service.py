@@ -11,7 +11,7 @@ This service orchestrates the ingestion pipeline:
 The service runs processing in the background and updates job progress.
 
 Supported file types:
-- DOCX/DOC: Uses VietnamLegalDocxParser for hierarchical chunking
+- DOCX/DOC: Uses LlamaIndexLegalParser for hierarchical chunking
 - PDF: Uses LlamaIndexExtractionService for parsing + KG extraction
 """
 
@@ -38,9 +38,6 @@ from app.ingest.loaders.llamaindex_legal_parser import (
     ParserConfig,
     LegalChunk,
     ParseResult,
-)
-# Legacy imports for compatibility (LegalNode, LegalNodeType may still be used elsewhere)
-from app.ingest.loaders.vietnam_legal_docx_parser import (
     LegalNode,
     LegalNodeType,
 )
@@ -53,14 +50,14 @@ class IngestService:
     Service for ingesting Vietnamese legal documents.
     
     Handles:
-    - File parsing with VietnamLegalDocxParser (DOCX/DOC) or LlamaIndexExtractionService (PDF)
+    - File parsing with LlamaIndexLegalParser (DOCX/DOC/PDF)
     - Embedding generation
     - Vector DB indexing (Weaviate or OpenSearch)
     - Neo4j Knowledge Graph building
     - Progress tracking
     
     File type routing:
-    - .docx, .doc: VietnamLegalDocxParser (hierarchical structure extraction)
+    - .docx, .doc: LlamaIndexLegalParser (hierarchical structure extraction)
     - .pdf: LlamaIndexExtractionService (LlamaParse + KG extraction)
     """
     
@@ -230,7 +227,7 @@ class IngestService:
         Start the ingestion process for a document.
         
         Routes to appropriate handler based on file type:
-        - DOCX/DOC: Uses VietnamLegalDocxParser for hierarchical parsing
+        - DOCX/DOC: Uses LlamaIndexLegalParser for hierarchical parsing
         - PDF: Uses LlamaIndexExtractionService for parsing + KG extraction
         
         Progress is tracked via the job store.
@@ -286,9 +283,9 @@ class IngestService:
         run_vector: bool = True,
     ) -> None:
         """
-        Ingest a DOCX/DOC file using VietnamLegalDocxParser.
+        Ingest a DOCX/DOC file using LlamaIndexLegalParser.
         
-        This is the original ingestion flow for Word documents.
+        This is the ingestion flow for Word documents.
         
         Args:
             job_id: ID of the job to process

@@ -281,7 +281,7 @@ async def start_pdf_ingestion(
     Upload any supported legal document (DOCX, DOC, or PDF) for ingestion.
     
     The service automatically detects the file format and routes to the appropriate parser:
-    - DOCX/DOC: VietnamLegalDocxParser (hierarchical chunking)
+    - DOCX/DOC: LlamaIndexLegalParser (hierarchical chunking)
     - PDF: LlamaIndexExtractionService (LlamaParse + KG extraction)
     
     Returns a job_id for tracking progress.

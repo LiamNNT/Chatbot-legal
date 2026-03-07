@@ -114,6 +114,77 @@ class LegalNodeType(str, Enum):
     POINT = "DIEM"
     TABLE = "TABLE"
     DEFINITION = "DEFINITION"
+    DEFINITION_ITEM = "DEFINITION_ITEM"
+
+
+@dataclass
+class LegalNode:
+    """
+    Represents a node in the legal document tree structure.
+    Used for building Knowledge Graph in Neo4j.
+    """
+    node_type: LegalNodeType
+    identifier: str  # e.g., "I", "1", "Điều 1", "a"
+    title: Optional[str] = None
+    content: str = ""
+
+    # Tree relationships
+    parent: Optional["LegalNode"] = field(default=None, repr=False)
+    children: List["LegalNode"] = field(default_factory=list, repr=False)
+    prev_sibling: Optional["LegalNode"] = field(default=None, repr=False)
+    next_sibling: Optional["LegalNode"] = field(default=None, repr=False)
+
+    # Metadata
+    is_definition_article: bool = False
+
+    def get_full_id(self) -> str:
+        """Generate a full hierarchical ID for this node."""
+        parts = []
+        node: Optional[LegalNode] = self
+        while node is not None:
+            parts.append(f"{node.node_type.value}={node.identifier}")
+            node = node.parent
+        return ":".join(reversed(parts))
+
+    def get_lineage(self) -> List[str]:
+        """Get the lineage path from root to this node."""
+        lineage: List[str] = []
+        node: Optional[LegalNode] = self
+        while node is not None:
+            lineage.append(node.node_type.value)
+            node = node.parent
+        return list(reversed(lineage))
+
+    def get_ancestors(self, include_self: bool = True) -> Dict[str, str]:
+        """Get all ancestors as a dict for metadata."""
+        ancestors: Dict[str, str] = {}
+        node: Optional[LegalNode] = self if include_self else self.parent
+        while node is not None:
+            if node.node_type == LegalNodeType.LAW:
+                ancestors["law_id"] = node.identifier
+                ancestors["law_name"] = node.title or ""
+            elif node.node_type == LegalNodeType.CHAPTER:
+                ancestors["chapter"] = f"Chương {node.identifier}"
+                ancestors["chapter_id"] = node.identifier
+                if node.title:
+                    ancestors["chapter"] += f" {node.title}"
+                    ancestors["chapter_title"] = node.title
+            elif node.node_type == LegalNodeType.SECTION:
+                ancestors["section"] = f"Mục {node.identifier}"
+                ancestors["section_id"] = node.identifier
+                if node.title:
+                    ancestors["section"] += f" {node.title}"
+                    ancestors["section_title"] = node.title
+            elif node.node_type == LegalNodeType.ARTICLE:
+                ancestors["article_id"] = f"Điều {node.identifier}"
+                ancestors["article_number"] = node.identifier
+                ancestors["article_title"] = node.title or ""
+            elif node.node_type == LegalNodeType.CLAUSE:
+                ancestors["clause_no"] = node.identifier
+            elif node.node_type == LegalNodeType.POINT:
+                ancestors["point_no"] = node.identifier
+            node = node.parent
+        return ancestors
 
 
 @dataclass
@@ -147,6 +218,7 @@ class ParseResult:
     """Result of parsing a legal document."""
     success: bool
     chunks: List[LegalChunk] = field(default_factory=list)
+    tree: Optional[LegalNode] = None
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     statistics: Dict[str, Any] = field(default_factory=dict)
@@ -428,7 +500,7 @@ class LlamaIndexLegalParser:
             result.tables = self._extract_tables(raw_content)
             
             # Create chunks using LlamaIndex nodes
-            chunks = self._create_chunks(
+            chunks, tree = self._create_chunks(
                 raw_content, 
                 file_path.name, 
                 law_id, 
@@ -436,6 +508,7 @@ class LlamaIndexLegalParser:
                 doc_kind
             )
             result.chunks = chunks
+            result.tree = tree
             
             # Statistics
             result.statistics = {
@@ -499,7 +572,7 @@ class LlamaIndexLegalParser:
             doc_kind = self._detect_doc_kind(law_id, raw_content)
             
             # Create chunks
-            chunks = self._create_chunks(
+            chunks, tree = self._create_chunks(
                 raw_content,
                 file_path.name,
                 law_id,
@@ -507,6 +580,7 @@ class LlamaIndexLegalParser:
                 doc_kind
             )
             result.chunks = chunks
+            result.tree = tree
             
             result.statistics = {
                 "total_tokens": count_tokens(raw_content, self._tokenizer),
@@ -582,7 +656,7 @@ class LlamaIndexLegalParser:
             doc_kind = self._detect_doc_kind(law_id, raw_content)
             
             # Create chunks
-            chunks = self._create_chunks(
+            chunks, tree = self._create_chunks(
                 raw_content,
                 file_path.name,
                 law_id,
@@ -590,6 +664,7 @@ class LlamaIndexLegalParser:
                 doc_kind
             )
             result.chunks = chunks
+            result.tree = tree
             
             # Get statistics from chunking (if available)
             stats = getattr(self, '_last_stats', {})
@@ -648,7 +723,7 @@ class LlamaIndexLegalParser:
         law_id: str,
         law_name: str,
         doc_kind: str,
-    ) -> List[LegalChunk]:
+    ) -> Tuple[List[LegalChunk], Optional[LegalNode]]:
         """
         Create chunks from document content.
         
@@ -656,6 +731,9 @@ class LlamaIndexLegalParser:
         1. Build document tree (Chapter > Section > Article > Clause > Point)
         2. Generate chunks with proper metadata and relationships
         3. Split by token threshold when needed
+
+        Returns:
+            Tuple of (chunks, tree_root)
         """
         # Use hierarchical tree-based chunking (like legacy parser)
         return self._create_hierarchical_chunks(
@@ -669,19 +747,36 @@ class LlamaIndexLegalParser:
         law_id: str,
         law_name: str,
         doc_kind: str,
-    ) -> List[LegalChunk]:
+    ) -> Tuple[List[LegalChunk], Optional[LegalNode]]:
         """
         Create chunks using hierarchical tree structure.
-        This replicates the logic from legacy VietnamLegalDocxParser.
+        Also builds a LegalNode tree for Knowledge Graph construction.
+
+        Returns:
+            Tuple of (chunks, tree_root)
         """
         chunks = []
         lines = content.split('\n')
         
-        # Current context tracking
+        # ── Tree root ────────────────────────────────────────────────────
+        tree_root = LegalNode(
+            node_type=LegalNodeType.LAW,
+            identifier=law_id,
+            title=law_name,
+            content="",
+        )
+        
+        # Current context tracking (dict for chunk metadata)
         current_chapter = None
         current_section = None
         current_article = None
         current_clause = None
+
+        # Current tree nodes
+        current_chapter_node: Optional[LegalNode] = None
+        current_section_node: Optional[LegalNode] = None
+        current_article_node: Optional[LegalNode] = None
+        current_clause_node: Optional[LegalNode] = None
         
         # Statistics tracking
         stats = {
@@ -696,6 +791,15 @@ class LlamaIndexLegalParser:
         article_buffer = []
         article_clauses = []  # Store clause chunks for potential merging
         clause_buffer = []
+
+        def _add_child(parent: LegalNode, child: LegalNode):
+            """Add child node to parent, linking siblings."""
+            child.parent = parent
+            if parent.children:
+                prev = parent.children[-1]
+                prev.next_sibling = child
+                child.prev_sibling = prev
+            parent.children.append(child)
         
         def flush_clause():
             """Flush accumulated clause content - store for article merging."""
@@ -777,6 +881,18 @@ class LlamaIndexLegalParser:
                 current_article = None
                 current_clause = None
                 stats["chapters"] += 1
+
+                # Build tree node
+                current_chapter_node = LegalNode(
+                    node_type=LegalNodeType.CHAPTER,
+                    identifier=chapter_match.group(1).upper(),
+                    title=chapter_match.group(2).strip(),
+                )
+                _add_child(tree_root, current_chapter_node)
+                current_section_node = None
+                current_article_node = None
+                current_clause_node = None
+
                 i += 1
                 continue
             
@@ -791,6 +907,17 @@ class LlamaIndexLegalParser:
                 current_article = None
                 current_clause = None
                 stats["sections"] += 1
+
+                current_section_node = LegalNode(
+                    node_type=LegalNodeType.SECTION,
+                    identifier=section_match.group(1),
+                    title=section_match.group(2).strip(),
+                )
+                parent = current_chapter_node or tree_root
+                _add_child(parent, current_section_node)
+                current_article_node = None
+                current_clause_node = None
+
                 i += 1
                 continue
             
@@ -817,6 +944,17 @@ class LlamaIndexLegalParser:
                 current_clause = None
                 article_buffer = [line]  # Start with article header
                 stats["articles"] += 1
+
+                current_article_node = LegalNode(
+                    node_type=LegalNodeType.ARTICLE,
+                    identifier=article_id,
+                    title=article_title,
+                    is_definition_article=is_definition,
+                )
+                parent = current_section_node or current_chapter_node or tree_root
+                _add_child(parent, current_article_node)
+                current_clause_node = None
+
                 i += 1
                 continue
             
@@ -835,6 +973,15 @@ class LlamaIndexLegalParser:
                         clause_buffer = [line]
                         article_buffer.append(line)  # Also track in article buffer
                         stats["clauses"] += 1
+
+                        current_clause_node = LegalNode(
+                            node_type=LegalNodeType.CLAUSE,
+                            identifier=clause_match.group(1),
+                            content=line,
+                        )
+                        parent = current_article_node or tree_root
+                        _add_child(parent, current_clause_node)
+
                         i += 1
                         continue
             
@@ -845,6 +992,14 @@ class LlamaIndexLegalParser:
                 if point_match:
                     stats["points"] += 1
                     article_buffer.append(line)  # Also track in article buffer
+
+                    point_node = LegalNode(
+                        node_type=LegalNodeType.POINT,
+                        identifier=point_match.group(1).lower(),
+                        content=line,
+                    )
+                    parent = current_clause_node or current_article_node or tree_root
+                    _add_child(parent, point_node)
                     
                     # Check if current clause is getting too large
                     current_tokens = count_tokens(' '.join(clause_buffer), self._tokenizer)
@@ -895,7 +1050,7 @@ class LlamaIndexLegalParser:
         
         logger.info(f"Created {len(chunks)} chunks: {stats['articles']} articles, {stats['clauses']} clauses, {stats['points']} points")
         
-        return chunks
+        return chunks, tree_root
     
     def _create_chunk_from_context(
         self,

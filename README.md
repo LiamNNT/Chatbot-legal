@@ -226,22 +226,71 @@ npm run dev
 
 Frontend sẽ chạy tại: http://localhost:5173
 
-### Khởi động thủ công (từng service)
+### Khởi động thủ công (từng service riêng lẻ)
+
+Mỗi service chạy trong **1 terminal riêng**. Nhấn `Ctrl+C` để dừng service đó.
+
+> **Lưu ý**: Dùng flag `-p <tên>` để đặt project name riêng, tránh xung đột giữa các compose file.
 
 ```bash
-# 1. Docker Services
+# Terminal 1 — Weaviate (Vector DB - port 8090)
 cd infrastructure
-docker compose -f docker-compose.opensearch.yml up -d
-docker compose -f docker-compose.weaviate.yml up -d
-docker compose -f docker-compose.neo4j.yml up -d
+docker compose -p weaviate -f docker-compose.weaviate.yml up
+# Ctrl+C để dừng
 
-# 2. RAG Service
+# Terminal 2 — OpenSearch (BM25 Search - port 9200)
+cd infrastructure
+docker compose -p opensearch -f docker-compose.opensearch.yml up
+# Ctrl+C để dừng
+
+# Terminal 3 — Neo4j (Knowledge Graph - port 7474/7687)
+cd infrastructure
+docker compose -p neo4j -f docker-compose.neo4j.yml up
+# Ctrl+C để dừng
+
+# Terminal 4 — RAG Service (port 8000)
 cd backend/rag
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python start_server.py
+# hoặc: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# 3. Orchestrator Service
+# Terminal 5 — Orchestrator Service (port 8001)
 cd backend/orchestrator
 uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+#### Chạy nền (detached mode)
+
+Nếu không muốn giữ terminal mở, dùng flag `-d`:
+
+```bash
+cd infrastructure
+
+# Khởi động nền (không cần giữ terminal)
+docker compose -p weaviate -f docker-compose.weaviate.yml up -d
+docker compose -p opensearch -f docker-compose.opensearch.yml up -d
+docker compose -p neo4j -f docker-compose.neo4j.yml up -d
+
+# Xem logs
+docker logs -f vietnamese-rag-weaviate   # Weaviate logs
+docker logs -f opensearch-node1          # OpenSearch logs
+docker logs -f neo4j-catrag              # Neo4j logs
+
+# Dừng từng service
+docker compose -p weaviate -f docker-compose.weaviate.yml down
+docker compose -p opensearch -f docker-compose.opensearch.yml down
+docker compose -p neo4j -f docker-compose.neo4j.yml down
+```
+
+#### Kiểm tra trạng thái services
+
+```bash
+# Kiểm tra containers
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Health check
+curl -s http://localhost:8090/v1/.well-known/ready  # Weaviate
+curl -s http://localhost:9200                        # OpenSearch
+curl -s http://localhost:7474                        # Neo4j
 ```
 
 ---

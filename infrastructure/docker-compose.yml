@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Weaviate Vector Database (replacing FAISS/Chroma)
   weaviate:

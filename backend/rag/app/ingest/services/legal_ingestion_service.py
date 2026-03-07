@@ -10,7 +10,7 @@ Architecture:
     ┌─────────────────────────────────────────────────────────────────┐
     │                  LegalIngestionService                          │
     │                                                                 │
-    │  ingest_file(path) ─┬─► DOCX/DOC ─► VietnamLegalDocxParser     │
+    │  ingest_file(path) ─┬─► DOCX/DOC ─► LlamaIndexLegalParser        │
     │                     │                     ↓                     │
     │                     │              ParseResult + LegalChunks    │
     │                     │                     ↓                     │
@@ -61,7 +61,7 @@ class UnifiedChunk:
     """
     Unified chunk representation for both DOCX and PDF sources.
     
-    This normalizes the output from VietnamLegalDocxParser and 
+    This normalizes the output from LlamaIndexLegalParser and 
     LlamaIndexExtractionService into a common format.
     """
     chunk_id: str
@@ -292,7 +292,7 @@ class LegalIngestionService:
     Unified service for ingesting Vietnamese legal documents.
     
     Supports:
-    - DOCX files: Uses VietnamLegalDocxParser for hierarchical chunking
+    - DOCX files: Uses LlamaIndexLegalParser for hierarchical chunking
     - DOC files: Converts to DOCX first, then parses
     - PDF files: Uses LlamaIndexExtractionService for parsing + KG extraction
     
@@ -344,13 +344,18 @@ class LegalIngestionService:
     
     @property
     def docx_parser(self):
-        """Get or create the DOCX parser."""
+        """Get or create the DOCX parser (LlamaIndex-based)."""
         if self._docx_parser is None:
-            from app.ingest.loaders.vietnam_legal_docx_parser import VietnamLegalDocxParser
-            self._docx_parser = VietnamLegalDocxParser(
-                token_threshold=self.config.token_threshold
+            from app.ingest.loaders.llamaindex_legal_parser import (
+                LlamaIndexLegalParser,
+                ParserConfig,
             )
-            logger.info("VietnamLegalDocxParser initialized")
+            config = ParserConfig(
+                llama_cloud_api_key=self.config.llama_cloud_api_key,
+                chunk_size=self.config.token_threshold,
+            )
+            self._docx_parser = LlamaIndexLegalParser(config)
+            logger.info("LlamaIndexLegalParser initialized for DOCX")
         return self._docx_parser
     
     @property
@@ -441,7 +446,7 @@ class LegalIngestionService:
         Ingest a legal document file.
         
         Automatically detects file type and routes to appropriate parser:
-        - .docx/.doc: VietnamLegalDocxParser
+        - .docx/.doc: LlamaIndexLegalParser
         - .pdf: LlamaIndexExtractionService
         
         Args:
@@ -510,47 +515,56 @@ class LegalIngestionService:
         law_id: Optional[str],
         law_name: Optional[str],
     ) -> IngestionResult:
-        """Ingest a DOCX or DOC file using VietnamLegalDocxParser."""
+        """Ingest a DOCX or DOC file using LlamaIndexLegalParser."""
         
         # Convert DOC to DOCX if needed
         if file_path.suffix.lower() == ".doc":
             file_path = await self._convert_doc_to_docx(file_path)
         
-        # Parse with VietnamLegalDocxParser
-        parse_result = await asyncio.to_thread(
-            self.docx_parser.parse, file_path
+        # Parse with LlamaIndexLegalParser (async)
+        parse_result = await self.docx_parser.parse(
+            file_path,
+            law_id=law_id,
+            law_name=law_name,
         )
         
+        if not parse_result.success:
+            return IngestionResult(
+                law_id=law_id or "unknown",
+                law_name=law_name or file_path.stem,
+                source_path=str(file_path),
+                source_type="docx",
+                errors=parse_result.errors,
+            )
+        
         # Use parsed law info if not provided
-        law_id = law_id or parse_result.law_id
-        law_name = law_name or parse_result.law_name
+        law_id = law_id or parse_result.metadata.get("document_number", file_path.stem)
+        law_name = law_name or parse_result.metadata.get("title", file_path.stem)
         
         # Convert LegalChunks to UnifiedChunks
         unified_chunks = []
         total_tokens = 0
         
         for chunk in parse_result.chunks:
+            meta = chunk.metadata
             unified_chunk = UnifiedChunk(
                 chunk_id=chunk.chunk_id,
                 content=chunk.content,
                 embedding_prefix=chunk.embedding_prefix,
                 source_type="docx",
-                law_id=chunk.law_id,
-                law_name=chunk.law_name,
-                chapter_id=chunk.chapter_id,
-                chapter_title=chunk.chapter_title,
-                article_id=chunk.article_id,
-                article_title=chunk.article_title,
-                clause_no=chunk.clause_no,
-                point_no=chunk.point_no,
-                parent_id=chunk.parent_id,
-                prev_sibling_id=chunk.prev_sibling_id,
-                next_sibling_id=chunk.next_sibling_id,
-                metadata=chunk.metadata,
-                token_count=chunk.token_count,
+                law_id=meta.get("law_id"),
+                law_name=meta.get("law_name"),
+                chapter_id=meta.get("chapter_id"),
+                chapter_title=meta.get("chapter_title"),
+                article_id=meta.get("article_id"),
+                article_title=meta.get("article_title"),
+                clause_no=meta.get("clause_no"),
+                point_no=meta.get("point_no"),
+                metadata=meta,
+                token_count=chunk.tokens,
             )
             unified_chunks.append(unified_chunk)
-            total_tokens += chunk.token_count
+            total_tokens += chunk.tokens
         
         return IngestionResult(
             law_id=law_id,
@@ -561,8 +575,8 @@ class LegalIngestionService:
             entities=[],  # DOCX parsing doesn't extract KG entities
             relations=[],
             metadata={
-                "parser": "VietnamLegalDocxParser",
-                "tree_stats": parse_result.metadata.get("tree_stats", {}),
+                "parser": "LlamaIndexLegalParser",
+                "statistics": parse_result.statistics,
             },
             errors=[],
             total_tokens=total_tokens,

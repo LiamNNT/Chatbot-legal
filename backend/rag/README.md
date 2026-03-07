@@ -62,8 +62,7 @@ rag/
 │   │   ├── schemas.py                       #   IngestRequest, IngestResponse
 │   │   │
 │   │   ├── loaders/                         #   Document parsers
-│   │   │   ├── llamaindex_legal_parser.py   #     LlamaParse + GPT-4o extraction
-│   │   │   └── vietnam_legal_docx_parser.py #     Vietnamese legal DOCX structure parser
+│   │   │   └── llamaindex_legal_parser.py   #     LlamaParse + python-docx parser for PDF/DOCX
 │   │   │
 │   │   ├── indexing/                        #   Index builders
 │   │   │   ├── index_semantic_data.py       #     Index → Weaviate (vector)
@@ -190,12 +189,12 @@ User query
 ## 📥 Pipeline ingestion (Document → Index)
 
 ```
-DOCX file upload
+DOCX/PDF file upload
     │
     ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 1: Parse                                          │
-│  • vietnam_legal_docx_parser.py → structured hierarchy  │
+│  • llamaindex_legal_parser.py → structured hierarchy    │
 │  • Detect: Chương, Mục, Điều, Khoản, Điểm             │
 │  • Preserve metadata (article_number, clause, etc.)     │
 └──────────────────────────┬──────────────────────────────┘
@@ -203,7 +202,7 @@ DOCX file upload
 ┌─────────────────────────────────────────────────────────┐
 │  Step 2: Chunk & Embed                                  │
 │  • Semantic chunking (respect article boundaries)       │
-│  • multilingual-e5-base embeddings                      │
+│  • BAAI/bge-m3 embeddings                               │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
          ┌─────────────────┼─────────────────┐
