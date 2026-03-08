@@ -1,383 +1,443 @@
-# 🤖 Chatbot-UIT
+# 🎓 Chatbot-Legal — Vietnamese Legal Document Assistant
 
-<div align="center">
+> An AI-powered chatbot system for querying Vietnamese legal documents, built with a **microservices architecture** combining **Retrieval-Augmented Generation (RAG)**, **Knowledge Graph reasoning**, and **Multi-Agent orchestration**.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Python](https://img.shields.io/badge/python-3.11+-green.svg)
-![Node](https://img.shields.io/badge/node-18+-green.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-
-**Hệ thống Chatbot thông minh hỗ trợ sinh viên Trường Đại học Công nghệ Thông tin (UIT)**
-
-*Sử dụng Retrieval-Augmented Generation (RAG) và Multi-Agent Architecture*
-
-[Tính năng](#-tính-năng) •
-[Kiến trúc](#-kiến-trúc) •
-[Cài đặt](#-cài-đặt) •
-[Sử dụng](#-sử-dụng) •
-[API](#-api-documentation)
-
-</div>
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.117-green.svg)](https://fastapi.tiangolo.com)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Orchestration-orange.svg)](https://langchain-ai.github.io/langgraph/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Frontend-red.svg)](https://streamlit.io)
 
 ---
 
-## 📋 Giới thiệu
+## 📋 Table of Contents
 
-Chatbot-UIT là hệ thống chatbot thông minh được xây dựng để hỗ trợ sinh viên UIT tra cứu thông tin về:
-- 📚 Quy chế đào tạo, học vụ
-- 📝 Thủ tục hành chính
-- 🎓 Thông tin tuyển sinh
-- 📅 Lịch học, lịch thi
-- ❓ Các câu hỏi thường gặp
-
-### Đặc điểm nổi bật
-
-- **🔍 Hybrid RAG**: Kết hợp BM25 (keyword search) + Vector Search + Cross-Encoder Reranking
-- **🤖 Multi-Agent System**: Sử dụng nhiều agent chuyên biệt để xử lý các loại câu hỏi khác nhau
-- **📊 Knowledge Graph**: Tích hợp Neo4j để lưu trữ và truy vấn quan hệ giữa các thực thể
-- **🇻🇳 Vietnamese NLP**: Hỗ trợ tối ưu cho tiếng Việt với custom tokenizer và stopwords
-- **⚡ Real-time Streaming**: Phản hồi theo thời gian thực với SSE
+- [Overview](#-overview)
+- [Architecture](#-architecture)
+- [Tech Stack](#-tech-stack)
+- [Project Structure](#-project-structure)
+- [Getting Started](#-getting-started)
+- [Services](#-services)
+- [API Reference](#-api-reference)
+- [Configuration](#-configuration)
+- [Testing](#-testing)
+- [Troubleshooting](#-troubleshooting)
 
 ---
 
-## 🏗 Kiến trúc
+## 🔍 Overview
+
+**Chatbot-Legal** is an end-to-end system that allows users to ask questions about Vietnamese legal documents (laws, regulations, university policies) and receive accurate, cited answers in Vietnamese.
+
+### Key Features
+
+- 🤖 **Multi-Agent Pipeline** — Smart Planner + Answer Agent architecture with only ~2 LLM calls per request
+- 🔎 **Hybrid Search** — Combines Vector Search (Qdrant) + BM25 Keyword Search (OpenSearch) with RRF fusion
+- 🧠 **Knowledge Graph Reasoning** — Neo4j-based graph with symbolic rules and ReAct agent for complex queries
+- 📄 **Legal Document Parsing** — Structured extraction of Vietnamese legal hierarchy (Chương → Mục → Điều → Khoản → Điểm)
+- 🔄 **IRCoT (Interleaving Retrieval with Chain-of-Thought)** — LangGraph-powered iterative reasoning for complex questions
+- 💬 **Streaming Support** — Real-time Server-Sent Events (SSE) for token-by-token response delivery
+- 📊 **Cross-Encoder Reranking** — Improves retrieval precision with neural reranking
+- 🗂️ **Conversation Management** — Sliding window context with automatic query rewriting for follow-up questions
+
+---
+
+## 🏗 Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              FRONTEND                                    │
-│                    (React + Vite + Tailwind CSS)                        │
-│                         http://localhost:5173                            │
-└─────────────────────────────────┬───────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        ORCHESTRATOR SERVICE                              │
-│                    (FastAPI - Port 8001)                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  Router     │  │  ReAct      │  │  IRCoT      │  │  Graph      │    │
-│  │  Agent      │  │  Agent      │  │  Agent      │  │  Reasoning  │    │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
-└─────────────────────────────────┬───────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          RAG SERVICE                                     │
-│                    (FastAPI - Port 8000)                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  BM25       │  │  Vector     │  │  Hybrid     │  │  Reranker   │    │
-│  │  Search     │  │  Search     │  │  Fusion     │  │             │    │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
-└────────┬────────────────┬────────────────┬──────────────────────────────┘
-         │                │                │
-         ▼                ▼                ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ OpenSearch  │  │  Qdrant     │  │   Neo4j     │
-│ (BM25)      │  │  (Vector)   │  │   (Graph)   │
-│ Port 9200   │  │  Port 6333  │  │  Port 7687  │
-└─────────────┘  └─────────────┘  └─────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         Streamlit Frontend (:8501)                       │
+│                    Chat │ RAG Debug │ System │ Ingestion                  │
+└────────────────────────────────┬─────────────────────────────────────────┘
+                                 │ HTTP / SSE
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     Orchestrator Service (:8002)                         │
+│                                                                          │
+│   ┌─────────────┐    ┌──────────────────┐    ┌───────────────────┐      │
+│   │Smart Planner │───▶│  LangGraph IRCoT │───▶│   Answer Agent    │      │
+│   │(GPT-4o-mini) │    │  Workflow Engine  │    │  (GPT-5.1-chat)  │      │
+│   └─────────────┘    └──────────────────┘    └───────────────────┘      │
+│                              │                         │                 │
+│                    ┌─────────┴─────────┐               │                 │
+│                    ▼                   ▼               │                 │
+│          ┌──────────────┐   ┌──────────────────┐       │                 │
+│          │ RAG Adapter  │   │ Neo4j Graph       │       │                 │
+│          │ (HTTP Client)│   │ Reasoning Agent   │       │                 │
+│          └──────┬───────┘   └──────────────────┘       │                 │
+└─────────────────┼──────────────────────────────────────┘                 │
+                  │ HTTP                                                    │
+                  ▼                                                        │
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        RAG Service (:8000)                               │
+│                                                                          │
+│   ┌──────────┐  ┌────────────┐  ┌──────────┐  ┌──────────────────┐     │
+│   │  Search   │  │  Ingestion │  │Extraction│  │ Knowledge Graph  │     │
+│   │  Module   │  │  Pipeline  │  │ Pipeline │  │    Service       │     │
+│   └─────┬────┘  └────────────┘  └──────────┘  └──────────────────┘     │
+│         │                                                                │
+│    ┌────┴────────────┬─────────────────┐                                │
+│    ▼                 ▼                 ▼                                 │
+│ ┌────────┐    ┌────────────┐    ┌──────────┐                            │
+│ │ Qdrant │    │ OpenSearch  │    │  Neo4j   │                            │
+│ │(Vector)│    │  (BM25)    │    │  (KG)    │                            │
+│ └────────┘    └────────────┘    └──────────┘                            │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Cấu trúc thư mục
+### Request Processing Pipeline
 
 ```
-Chatbot-UIT/
+User Query
+    │
+    ├─ Step 0: Contextual Rewriting (if follow-up question → rewrite to standalone)
+    │
+    ├─ Step 1: Smart Planner (GPT-4o-mini)
+    │     • Intent classification (greeting / informational / complex)
+    │     • Complexity scoring (0-10)
+    │     • Strategy selection: direct | standard_rag | advanced_rag
+    │     • Query expansion & metadata filter extraction
+    │
+    ├─ Step 2: Retrieval
+    │     ├─ Simple (score ≤ 3.5) → Direct response (no LLM needed)
+    │     ├─ Medium → Standard RAG (Vector + BM25 hybrid search)
+    │     └─ Complex (score ≥ 6.5) → IRCoT loop + Graph Reasoning
+    │           ├─ Vector + BM25 search (parallel)
+    │           ├─ Cross-Encoder reranking
+    │           ├─ Neighbor chunk expansion
+    │           └─ Neo4j symbolic rules (R001-R008) + ReAct agent
+    │
+    └─ Step 3: Answer Agent (GPT-5.1-chat)
+          • Evidence-based synthesis in Vietnamese
+          • Citation with character spans
+          • Streaming support (SSE)
+          • Hallucination guardrails
+```
+
+> **Efficiency:** ~2 LLM calls/request (vs. 5 in the original pipeline) → ~60% cost reduction, ~33% latency improvement.
+
+---
+
+## 🛠 Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Streamlit |
+| **Backend Framework** | FastAPI |
+| **Orchestration** | LangGraph (StateGraph) |
+| **LLM Provider** | OpenRouter (GPT-4o-mini, GPT-5.1-chat) |
+| **Vector Database** | Qdrant Cloud (BAAI/bge-m3 embeddings) |
+| **Keyword Search** | OpenSearch 2.12 (BM25) |
+| **Knowledge Graph** | Neo4j Aura |
+| **Reranker** | Cross-Encoder (ms-marco-MiniLM-L-6-v2) |
+| **Language** | Python 3.11+ |
+| **Architecture** | Hexagonal (Ports & Adapters), Microservices |
+
+---
+
+## 📁 Project Structure
+
+```
+Chatbot-Legal/
+├── frontend/                     # Streamlit web interface
+│   ├── app.py                    #   Main app (Chat, RAG Debug, System, Ingestion tabs)
+│   ├── api_client.py             #   HTTP client for backend services
+│   └── config.py                 #   Frontend configuration
+│
 ├── backend/
-│   ├── rag/                     # RAG Service (FastAPI - Port 8000)
+│   ├── orchestrator/             # 🎯 Orchestrator Service (port 8002)
 │   │   ├── app/
-│   │   │   ├── search/          # Hybrid Search (BM25 + Vector + Reranking)
-│   │   │   ├── knowledge_graph/ # Knowledge Graph (Neo4j)
-│   │   │   │   ├── models.py        # Domain models
-│   │   │   │   ├── builders/         # Graph construction strategies
-│   │   │   │   └── stores/           # Graph storage adapters
-│   │   │   ├── embedding/       # Embedding service
-│   │   │   ├── ingest/          # Document ingestion pipeline
-│   │   │   ├── extraction/      # Rule extraction
-│   │   │   ├── llm/             # LLM client adapters
-│   │   │   └── shared/          # Config, DI container
-│   │   └── requirements.txt
+│   │   │   ├── main.py           #     FastAPI entrypoint
+│   │   │   ├── chat/             #     Core chat orchestration
+│   │   │   │   ├── agents/       #       Smart Planner + Answer Agent
+│   │   │   │   ├── adapters/     #       OpenRouter LLM + RAG HTTP adapters
+│   │   │   │   ├── services/     #       Orchestration & context services
+│   │   │   │   └── langgraph/    #       LangGraph IRCoT workflow
+│   │   │   ├── conversation/     #     Conversation management
+│   │   │   ├── admin/            #     Health & debug endpoints
+│   │   │   └── shared/           #     Config, DI container, ports
+│   │   └── config/
+│   │       └── agents_config_optimized.yaml  # Agent models & prompts (YAML-driven)
 │   │
-│   ├── orchestrator/            # Orchestrator Service (FastAPI - Port 8001)
+│   ├── rag/                      # 🔍 RAG Service (port 8000)
 │   │   ├── app/
-│   │   │   ├── chat/            # Chat agents & LangGraph workflow
-│   │   │   ├── reasoning/       # Graph reasoning & symbolic engine
-│   │   │   ├── conversation/    # Conversation management
-│   │   │   ├── admin/           # Admin routes
-│   │   │   └── shared/          # Config, DI container, ports
-│   │   ├── config/              # Agent YAML configs
-│   │   └── requirements.txt
+│   │   │   ├── main.py           #     FastAPI entrypoint
+│   │   │   ├── search/           #     Hybrid search (Vector + BM25 + Reranking)
+│   │   │   ├── ingest/           #     Document ingestion pipeline
+│   │   │   ├── extraction/       #     KG entity extraction (LlamaIndex)
+│   │   │   ├── knowledge_graph/  #     Neo4j KG queries & builders
+│   │   │   ├── embedding/        #     Embedding endpoints
+│   │   │   ├── llm/              #     LLM client adapters
+│   │   │   └── shared/           #     Config, DI container, utilities
+│   │   └── data/                 #     Document storage
 │   │
-│   └── shared/                  # Shared domain models (pip-installable)
-│       └── src/shared/
-│           ├── domain/          # Entities, Value Objects, Exceptions
-│           └── ports/           # Abstract port interfaces
+│   └── shared/                   # 📦 Shared Python package (domain models)
 │
-├── frontend/                    # Streamlit Frontend
-│   ├── app.py
-│   └── api_client.py
-│
-├── infrastructure/              # Docker Compose files
-│   ├── docker-compose.yml
+├── infrastructure/               # 🐳 Docker Compose configs
+│   ├── docker-compose.yml        #     OpenSearch
 │   └── docker-compose.opensearch.yml
 │
-├── scripts/                     # Utility scripts
-│   ├── start_backend.py         # Start all backend services
-│   └── stop_backend.py          # Stop all services
+├── scripts/                      # 🔧 Utility scripts
+│   ├── start_backend.py          #     Start all backend services
+│   ├── stop_backend.py           #     Stop all services
+│   └── ...                       #     DB management scripts
 │
-├── data/                        # Data files (uploads, exports, docs)
-└── docs/                        # Project documentation
+├── data/                         # 📄 Raw documents & exports
+└── requirements-base.txt         # Base Python dependencies
 ```
 
 ---
 
-## 🛠 Cài đặt
+## 🚀 Getting Started
 
-### Yêu cầu hệ thống
+### Prerequisites
 
-- **Python** >= 3.11
-- **Node.js** >= 18.x
-- **Docker** & Docker Compose
-- **Conda** (khuyến nghị)
+- **Python 3.11+**
+- **Qdrant Cloud** account (vector database)
+- **Neo4j Aura** account (knowledge graph) — *optional*
+- **OpenRouter** API key (LLM provider)
+- **Docker & Docker Compose** (for OpenSearch)
 
-### 1. Clone Repository
+### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/LiamNNT/Chatbot-UIT.git
-cd Chatbot-UIT
+git clone https://github.com/LiamNNT/Chatbot-legal.git
+cd Chatbot-legal
 ```
 
-### 2. Tạo Conda Environment
+### 2. Start Infrastructure (OpenSearch)
 
 ```bash
-# Tạo environment
-conda create -n chatbot-UIT python=3.11 -y
-
-# Activate environment
-conda activate chatbot-UIT
+cd infrastructure
+docker compose up -d
 ```
 
-### 3. Cài đặt Dependencies
+> Qdrant Cloud & Neo4j Aura are cloud-hosted — configure via `.env` files.
+
+### 3. Set Up RAG Service
 
 ```bash
-# Backend - RAG Services
 cd backend/rag
+
+# Create virtual environment
+python -m venv venv && source venv/bin/activate
+
+# Install shared package + dependencies
+pip install -e ../shared
 pip install -r requirements.txt
 
-# Backend - Orchestrator
-cd ../orchestrator
+# Configure environment
+cp .env.example .env
+# Edit .env: add Qdrant Cloud URL, OpenSearch, Neo4j credentials
+
+# Start the service
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 4. Set Up Orchestrator Service
+
+```bash
+cd backend/orchestrator
+
+# Create virtual environment
+python -m venv venv && source venv/bin/activate
+
+# Install shared package + dependencies
+pip install -e ../shared
 pip install -r requirements.txt
 
-# Backend - Shared package
-cd ../shared
-pip install -e .
+# Configure environment
+cp .env.example .env
+# Edit .env: add OPENROUTER_API_KEY (required)
 
-# Frontend
-cd ../../frontend
-pip install -r requirements.txt
+# Start the service
+uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 ```
 
-### 4. Cấu hình Environment Variables
-
-```bash
-# RAG Services
-cp backend/rag/.env.example backend/rag/.env
-
-# Orchestrator (cần OPENROUTER_API_KEY)
-cp backend/orchestrator/.env.example backend/orchestrator/.env
-# Chỉnh sửa file .env và thêm API key
-```
-
----
-
-## 🚀 Sử dụng
-
-### Khởi động Backend (Cách nhanh)
-
-```bash
-# Activate conda environment
-conda activate chatbot-UIT
-
-# Chạy script khởi động
-cd scripts
-python start_backend.py
-```
-
-Script sẽ tự động:
-1. ✅ Stop các services đang chạy (nếu có)
-2. ✅ Khởi động Docker services (OpenSearch)
-3. ✅ Khởi động RAG Service (port 8000) — kết nối Qdrant Cloud & Neo4j Cloud
-4. ✅ Khởi động Orchestrator Service (port 8001)
-
-**Options:**
-```bash
-python start_backend.py --skip-docker  # Bỏ qua Docker services
-python start_backend.py --stop         # Chỉ stop services
-```
-
-**Dừng Backend:** Nhấn `Ctrl+C` trong terminal
-
-### Khởi động Frontend
+### 5. Start Frontend
 
 ```bash
 cd frontend
-npm run dev
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Frontend sẽ chạy tại: http://localhost:5173
-
-### Khởi động thủ công (từng service riêng lẻ)
-
-Mỗi service chạy trong **1 terminal riêng**. Nhấn `Ctrl+C` để dừng service đó.
-
-> **Lưu ý**: Dùng flag `-p <tên>` để đặt project name riêng, tránh xung đột giữa các compose file.
+### Quick Start (All Services)
 
 ```bash
-# Terminal 1 — OpenSearch (BM25 Search - port 9200)
-cd infrastructure
-docker compose -p opensearch -f docker-compose.opensearch.yml up
-# Ctrl+C để dừng
-
-# Terminal 2 — RAG Service (port 8000)
-# Qdrant Cloud & Neo4j Cloud được cấu hình qua .env
-cd backend/rag
-python start_server.py
-# hoặc: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 3 — Orchestrator Service (port 8001)
-cd backend/orchestrator
-uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+python scripts/start_backend.py     # Start Docker + RAG + Orchestrator
+cd frontend && streamlit run app.py  # Start frontend
 ```
 
-#### Chạy nền (detached mode)
+Access the application at **http://localhost:8501**.
 
-Nếu không muốn giữ terminal mở, dùng flag `-d`:
+---
+
+## ⚙️ Services
+
+### RAG Service (`:8000`)
+
+Handles document ingestion, indexing, and retrieval.
+
+| Feature | Description |
+|---------|-------------|
+| **Hybrid Search** | Vector (Qdrant) + BM25 (OpenSearch) with RRF fusion |
+| **Cross-Encoder Reranking** | ms-marco-MiniLM-L-6-v2 for precision improvement |
+| **Legal Document Parser** | Structured extraction of Vietnamese legal hierarchy |
+| **Knowledge Graph Builder** | Auto-build Neo4j graph from legal entities |
+| **Neighbor Expansion** | Retrieve adjacent chunks for richer context |
+
+### Orchestrator Service (`:8002`)
+
+Multi-agent pipeline that plans, retrieves, reasons, and generates answers.
+
+| Feature | Description |
+|---------|-------------|
+| **Smart Planner** | GPT-4o-mini for intent classification & routing |
+| **Answer Agent** | GPT-5.1-chat for evidence-based answer synthesis |
+| **IRCoT Workflow** | LangGraph iterative retrieval + reasoning loop |
+| **Graph Reasoning** | Neo4j ReAct agent + symbolic rules (R001-R008) |
+| **Conversation Memory** | Sliding window (max 20 messages) with query rewriting |
+
+### Frontend (`:8501`)
+
+Streamlit-based web interface with multiple tabs.
+
+| Tab | Description |
+|-----|-------------|
+| 💬 **Chat** | Main conversational interface (streaming / non-streaming) |
+| 🔍 **RAG Debug** | Inspect retrieved documents & processing statistics |
+| ⚙️ **System** | Health checks, agent info, conversation management |
+| 📄 **Ingestion** | Upload documents for indexing and KG extraction |
+
+---
+
+## 📡 API Reference
+
+### Orchestrator Service
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/chat` | Multi-agent chat (stream / non-stream) |
+| `POST` | `/api/v1/chat/simple` | Single-agent chat (faster, simpler) |
+| `GET` | `/api/v1/health` | Health check for all components |
+| `GET` | `/api/v1/agents/info` | Agent configuration & pipeline info |
+| `GET` | `/api/v1/conversations` | List active conversations |
+| `DELETE` | `/api/v1/conversations/{session_id}` | Delete a conversation |
+
+### RAG Service
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/search` | Hybrid search (vector / bm25 / hybrid) |
+| `POST` | `/v1/retrieval/retrieve` | Legal retrieval with query parsing |
+| `POST` | `/v1/ingest/docx` | Upload & ingest DOCX document |
+| `GET` | `/v1/ingest/jobs/{job_id}` | Check ingestion job status |
+| `POST` | `/v1/extraction/llamaindex` | Extract entities using LlamaIndex |
+| `GET` | `/v1/kg/stats` | Knowledge Graph statistics |
+| `GET` | `/v1/kg/search` | Search the Knowledge Graph |
+| `GET` | `/v1/health` | Service health check |
+
+### Example Request
 
 ```bash
-cd infrastructure
-
-# Khởi động nền (không cần giữ terminal)
-docker compose -p opensearch -f docker-compose.opensearch.yml up -d
-
-# Xem logs
-docker logs -f opensearch-node1          # OpenSearch logs
-
-# Dừng service
-docker compose -p opensearch -f docker-compose.opensearch.yml down
+curl -X POST http://localhost:8002/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the conditions for course overloading at UIT?",
+    "session_id": "user-123",
+    "use_rag": true,
+    "use_knowledge_graph": true,
+    "rag_top_k": 5,
+    "stream": false
+  }'
 ```
 
-#### Kiểm tra trạng thái services
+### Streaming (SSE)
 
 ```bash
-# Kiểm tra containers
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# Health check
-curl -s http://localhost:9200                        # OpenSearch
+curl -N -X POST http://localhost:8002/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the course registration process?", "stream": true}'
 ```
 
 ---
 
-## 📚 API Documentation
+## ⚙️ Configuration
 
-Sau khi khởi động services, truy cập API documentation tại:
+### Environment Variables
 
-| Service | Swagger UI | ReDoc |
-|---------|------------|-------|
-| RAG Service | http://localhost:8000/docs | http://localhost:8000/redoc |
-| Orchestrator | http://localhost:8001/docs | http://localhost:8001/redoc |
+#### Orchestrator Service
 
-### Các Endpoint chính
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OPENROUTER_API_KEY` | OpenRouter API key | ✅ |
+| `OPENROUTER_BASE_URL` | OpenRouter base URL | No (default: `https://openrouter.ai/api/v1`) |
+| `RAG_SERVICE_URL` | RAG Service URL | No (default: `http://localhost:8000`) |
+| `NEO4J_URI` | Neo4j connection string | No (optional for graph reasoning) |
+| `NEO4J_USERNAME` | Neo4j username | No |
+| `NEO4J_PASSWORD` | Neo4j password | No |
+| `USE_SYMBOLIC_REASONING` | Enable symbolic rules R001-R008 | No (default: `true`) |
+| `LOG_LEVEL` | Logging level | No (default: `INFO`) |
 
-#### Chat API
-```http
-POST /api/v1/chat
-Content-Type: application/json
+#### RAG Service
 
-{
-  "query": "Hướng dẫn đăng ký học phần tại UIT?",
-  "session_id": "user_123",
-  "use_rag": true
-}
-```
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `QDRANT_URL` | Qdrant Cloud URL | ✅ |
+| `QDRANT_API_KEY` | Qdrant Cloud API key | ✅ |
+| `OPENSEARCH_HOST` | OpenSearch host | No (default: `localhost`) |
+| `OPENSEARCH_PORT` | OpenSearch port | No (default: `9200`) |
+| `NEO4J_URI` | Neo4j Aura connection string | No |
+| `EMBEDDING_MODEL` | Embedding model name | No (default: `BAAI/bge-m3`) |
 
-#### RAG Search
-```http
-POST /v1/search
-Content-Type: application/json
+### Agent Configuration
 
-{
-  "query": "quy chế đào tạo",
-  "search_type": "hybrid_rerank",
-  "top_k": 5
-}
-```
-
-#### Health Check
-```http
-GET /api/v1/health
-GET /v1/health
-```
-
----
-
-## 🗄 Database Credentials
-
-| Database | URL | Username | Password |
-|----------|-----|----------|----------|
-| OpenSearch | http://localhost:9200 | - | - |
-| Qdrant Cloud | Configured via `QDRANT_URL` env var | - | API key in `.env` |
-| Neo4j Cloud | Configured via `NEO4J_URI` env var | - | Credentials in `.env` |
+Agent models, system prompts, and parameters are configured in `backend/orchestrator/config/agents_config_optimized.yaml`. No code changes required — just edit the YAML file.
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# RAG Services tests
+# RAG Service tests
 cd backend/rag
-pytest tests/
+pytest
 
-# Orchestrator tests
+# Orchestrator Service tests
 cd backend/orchestrator
-pytest tests/
+pytest
+
+# Run specific tests
+pytest tests/ -k "test_search"
+
+# With coverage
+pytest --cov=app
+
+# Debug mode
+LOG_LEVEL=DEBUG pytest -s
 ```
 
 ---
 
-## 📁 Tài liệu bổ sung
+## 🐛 Troubleshooting
 
-- [RAG Services Documentation](backend/rag/README.md)
-- [Orchestrator Documentation](backend/orchestrator/README.md)
-- [Frontend Documentation](frontend/README.md)
-- [Streaming Implementation](docs/STREAMING_CHANGES_SUMMARY.md)
-- [Quick Start Guide](docs/QUICK_START_GUIDE.md)
-
----
-
-## 👥 Đóng góp
-
-Mọi đóng góp đều được chào đón! Vui lòng:
-
-1. Fork repository
-2. Tạo branch mới (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Tạo Pull Request
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `OPENROUTER_API_KEY is required` | Missing API key | Add it to `backend/orchestrator/.env` |
+| `RAG service connection failed` | RAG Service not running | Start RAG Service first on port 8000 |
+| `Graph Reasoning Agent not initialized` | Neo4j not connected | Check `NEO4J_URI` and credentials in `.env` |
+| `Import error: shared.domain` | Shared package not installed | Run `pip install -e ../shared` |
+| `OpenSearch connection refused` | Docker not running | Run `docker compose up -d` in `infrastructure/` |
+| Port conflict | Port already in use | Change port in `.env` or kill the existing process |
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+This project is developed for academic purposes at the University of Information Technology (UIT), Vietnam National University Ho Chi Minh City.
 
 ---
 
-## 📞 Liên hệ
-
-- **Repository**: [https://github.com/LiamNNT/Chatbot-UIT](https://github.com/LiamNNT/Chatbot-UIT)
-- **Issues**: [https://github.com/LiamNNT/Chatbot-UIT/issues](https://github.com/LiamNNT/Chatbot-UIT/issues)
-
----
-
-<div align="center">
-Made with ❤️ for UIT Students
-</div>
+<p align="center">
+  Built with ❤️ using FastAPI, LangGraph, Qdrant, OpenSearch, and Neo4j
+</p>
