@@ -1,18 +1,18 @@
 # 🎯 Orchestrator Service
 
-> FastAPI microservice điều phối multi-agent pipeline cho Chatbot-UIT.
-> Nhận câu hỏi từ frontend → lên kế hoạch → gọi RAG Service lấy context → sinh câu trả lời bằng LLM.
+> FastAPI microservice that orchestrates the multi-agent pipeline for Chatbot-Legal.
+> Receives questions from the frontend → plans a strategy → calls the RAG Service for context → generates answers via LLM.
 
-| Thông tin | Giá trị |
-|-----------|---------|
+| Info | Value |
+|------|-------|
 | **Port** | `8001` (Docker) / `8002` (local dev) |
 | **Framework** | FastAPI + LangGraph |
 | **LLM Provider** | OpenRouter (GPT-4o-mini, GPT-5.1-chat, …) |
-| **Phụ thuộc runtime** | RAG Service (port 8000), Neo4j (port 7687, optional) |
+| **Runtime Dependencies** | RAG Service (port 8000), Neo4j (port 7687, optional) |
 
 ---
 
-## 📁 Cấu trúc thư mục
+## 📁 Directory Structure
 
 ```
 orchestrator/
@@ -22,7 +22,7 @@ orchestrator/
 │   ├── chat/                            # ★ Core chat orchestration
 │   │   ├── routes.py                    #   POST /chat, /chat/simple, /chat/stream
 │   │   ├── response_mappers.py          #   Map domain → API response
-│   │   ├── exception_handlers.py        #   Fallback khi pipeline lỗi
+│   │   ├── exception_handlers.py        #   Fallback when pipeline fails
 │   │   │
 │   │   ├── agents/                      #   Package-by-feature agents
 │   │   │   ├── base.py                  #     ABC SpecializedAgent, AgentConfig, AnswerResult
@@ -70,7 +70,7 @@ orchestrator/
 │   │   └── routes.py                    #     GET /health, /agents/info, POST /agents/test
 │   │
 │   └── shared/                          #   Cross-cutting concerns
-│       ├── domain.py                    #     Re-export domain entities (từ shared pkg)
+│       ├── domain.py                    #     Re-export domain entities (from shared pkg)
 │       ├── ports.py                     #     AgentPort, RAGServicePort, ConversationManagerPort
 │       ├── schemas.py                   #     Pydantic request/response schemas
 │       ├── exceptions.py                #     Domain exceptions
@@ -91,12 +91,12 @@ orchestrator/
 ├── start_server.sh                      # Dev startup script
 ├── requirements.txt                     # fastapi, langgraph, aiohttp, …
 ├── pytest.ini                           # Test configuration
-└── .env.example                         # Template biến môi trường
+└── .env.example                         # Environment variable template
 ```
 
 ---
 
-## 🔀 Pipeline xử lý
+## 🔀 Processing Pipeline
 
 ```
 User query
@@ -104,15 +104,15 @@ User query
     ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 0: Contextual Rewriting                           │
-│  (Nếu có chat history → rewrite câu hỏi follow-up      │
-│   thành standalone query)                               │
+│  (If chat history exists → rewrite follow-up question   │
+│   into a standalone query)                              │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 1: Smart Planner  (GPT-4o-mini, 1 LLM call)      │
-│  • Phân loại intent (greeting / informational / …)      │
-│  • Chấm complexity score 0-10                           │
-│  • Chọn strategy: direct / standard_rag / advanced_rag  │
+│  • Classify intent (greeting / informational / …)       │
+│  • Score complexity 0-10                                │
+│  • Select strategy: direct / standard_rag / advanced_rag│
 │  • Query rewriting + filter extraction                  │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
@@ -133,28 +133,28 @@ User query
                         ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 3: Answer Agent  (GPT-5.1-chat, 1 LLM call)      │
-│  • Tổng hợp context → câu trả lời tiếng Việt           │
+│  • Synthesize context → Vietnamese answer               │
 │  • Built-in formatting (emoji, structure, greeting)     │
-│  • Citation với char_spans                              │
+│  • Citation with char_spans                             │
 │  • Streaming support (SSE)                              │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
                     Final response → Frontend
 ```
 
-> **Cost:** ~2 LLM calls/request (vs 5 calls ở pipeline gốc) → tiết kiệm ~60 % chi phí, giảm ~33 % latency.
+> **Cost:** ~2 LLM calls/request (vs. 5 in the original pipeline) → saves ~60% cost, reduces ~33% latency.
 
 ---
 
-## 🚀 Khởi chạy
+## 🚀 Getting Started
 
-### Yêu cầu
+### Prerequisites
 
 - Python 3.11+
-- RAG Service đang chạy tại `localhost:8000`
-- Neo4j Cloud *(optional, cho Graph Reasoning)* — cấu hình qua `NEO4J_URI` trong `.env`
+- RAG Service running at `localhost:8000`
+- Neo4j Cloud *(optional, for Graph Reasoning)* — configure via `NEO4J_URI` in `.env`
 
-### Cài đặt
+### Installation
 
 ```bash
 cd backend/orchestrator
@@ -168,16 +168,16 @@ pip install -r requirements.txt
 
 # Config
 cp .env.example .env
-# → Sửa .env: điền OPENROUTER_API_KEY bắt buộc
+# → Edit .env: OPENROUTER_API_KEY is required
 ```
 
-### Chạy
+### Running
 
 ```bash
 # Dev (hot-reload)
 uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 
-# Hoặc dùng script
+# Or use the startup script
 bash start_server.sh
 
 # Docker
@@ -187,30 +187,30 @@ docker run -p 8001:8001 --env-file .env orchestrator
 
 ### Swagger Docs
 
-Khi service chạy → truy cập `http://localhost:8002/docs` (Swagger) hoặc `/redoc`.
+Once the service is running → visit `http://localhost:8002/docs` (Swagger) or `/redoc`.
 
 ---
 
 ## 📡 API Endpoints
 
-| Method | Path | Mô tả |
-|--------|------|--------|
+| Method | Path | Description |
+|--------|------|-------------|
 | `POST` | `/api/v1/chat` | Multi-agent pipeline (stream / non-stream) |
-| `POST` | `/api/v1/chat/simple` | Single-agent pipeline (nhanh hơn, ít phức tạp) |
-| `GET` | `/api/v1/health` | Health check toàn bộ components |
-| `GET` | `/api/v1/agents/info` | Thông tin agents, pipeline, IRCoT config |
+| `POST` | `/api/v1/chat/simple` | Single-agent pipeline (faster, less complex) |
+| `GET` | `/api/v1/health` | Health check for all components |
+| `GET` | `/api/v1/agents/info` | Agent info, pipeline config, IRCoT config |
 | `POST` | `/api/v1/agents/test` | Test multi-agent system end-to-end |
-| `GET` | `/api/v1/conversations` | List conversations đang active |
-| `DELETE` | `/api/v1/conversations/{session_id}` | Xóa conversation |
-| `POST` | `/api/v1/conversations/cleanup` | Dọn dẹp conversations cũ |
+| `GET` | `/api/v1/conversations` | List active conversations |
+| `DELETE` | `/api/v1/conversations/{session_id}` | Delete a conversation |
+| `POST` | `/api/v1/conversations/cleanup` | Clean up old conversations |
 
-### Ví dụ request
+### Example Request
 
 ```bash
 curl -X POST http://localhost:8002/api/v1/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "Điều kiện để học vượt tại UIT là gì?",
+    "query": "What are the conditions for course overloading at UIT?",
     "session_id": "user-123",
     "use_rag": true,
     "use_knowledge_graph": true,
@@ -224,27 +224,27 @@ curl -X POST http://localhost:8002/api/v1/chat \
 ```bash
 curl -N -X POST http://localhost:8002/api/v1/chat \
   -H "Content-Type: application/json" \
-  -d '{"query": "Quy trình đăng ký học phần?", "stream": true}'
+  -d '{"query": "What is the course registration process?", "stream": true}'
 ```
 
 ---
 
-## ⚙️ Biến môi trường chính
+## ⚙️ Key Environment Variables
 
-| Biến | Mô tả | Mặc định |
-|------|--------|----------|
-| `OPENROUTER_API_KEY` | **Bắt buộc** — API key từ openrouter.ai | — |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENROUTER_API_KEY` | **Required** — API key from openrouter.ai | — |
 | `OPENROUTER_BASE_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
-| `RAG_SERVICE_URL` | URL của RAG Service | `http://localhost:8001` |
+| `RAG_SERVICE_URL` | RAG Service URL | `http://localhost:8001` |
 | `NEO4J_URI` | Neo4j Cloud connection string | Neo4j Aura endpoint |
 | `NEO4J_USERNAME` / `NEO4J_PASSWORD` | Neo4j credentials | Set in `.env` |
-| `USE_SYMBOLIC_REASONING` | Bật symbolic rules R001-R008 | `true` |
+| `USE_SYMBOLIC_REASONING` | Enable symbolic rules R001-R008 | `true` |
 | `LOG_LEVEL` | Logging level (`DEBUG` / `INFO` / `WARNING`) | `INFO` |
 | `PORT` | Server port | `8002` |
 
 ---
 
-## 🧩 Kiến trúc chi tiết
+## 🧩 Architecture Details
 
 ### Ports & Adapters (Hexagonal Architecture)
 
@@ -267,17 +267,17 @@ curl -N -X POST http://localhost:8002/api/v1/chat \
 
 ### Agent Config (YAML-driven)
 
-Agent models, system prompts, và parameters được cấu hình trong `config/agents_config_optimized.yaml`.
-Không cần sửa code khi thay đổi model hoặc prompt — chỉ cần sửa YAML.
+Agent models, system prompts, and parameters are configured in `config/agents_config_optimized.yaml`.
+No code changes needed when switching models or prompts — just edit the YAML file.
 
 ### LangGraph Workflow
 
-Cho complex queries, hệ thống dùng LangGraph `StateGraph` với IRCoT loop:
+For complex queries, the system uses a LangGraph `StateGraph` with an IRCoT loop:
 
 ```
 START → plan → retrieve ⟷ reason → answer → END
                   ↑______________|
-              (loop nếu confidence thấp)
+              (loop if confidence is low)
 ```
 
 ---
@@ -287,10 +287,10 @@ START → plan → retrieve ⟷ reason → answer → END
 ```bash
 cd backend/orchestrator
 
-# Chạy tất cả tests
+# Run all tests
 pytest
 
-# Chạy test cụ thể
+# Run specific tests
 pytest tests/ -k "test_planner"
 
 # Coverage
@@ -304,10 +304,10 @@ LOG_LEVEL=DEBUG pytest -s
 
 ## 🐛 Troubleshooting
 
-| Lỗi | Nguyên nhân | Giải pháp |
-|------|-------------|-----------|
-| `OPENROUTER_API_KEY is required` | Chưa set API key | Điền vào `.env` |
-| `RAG service connection failed` | RAG Service chưa chạy | Chạy RAG Service trước (`cd ../rag && python start_server.py`) |
-| `Graph Reasoning Agent not initialized` | Neo4j Cloud không kết nối được | Kiểm tra `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` trong `.env` |
-| `Import error: shared.domain` | Chưa cài shared package | `pip install -e ../shared` |
-| Port conflict | Port 8002 đã bị chiếm | Đổi `PORT` trong `.env` hoặc kill process cũ |
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `OPENROUTER_API_KEY is required` | API key not set | Add it to `.env` |
+| `RAG service connection failed` | RAG Service not running | Start RAG Service first (`cd ../rag && python start_server.py`) |
+| `Graph Reasoning Agent not initialized` | Cannot connect to Neo4j Cloud | Check `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` in `.env` |
+| `Import error: shared.domain` | Shared package not installed | Run `pip install -e ../shared` |
+| Port conflict | Port 8002 already in use | Change `PORT` in `.env` or kill the existing process |

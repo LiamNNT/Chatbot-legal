@@ -1,20 +1,20 @@
 # 🔍 RAG Service (Retrieval-Augmented Generation)
 
-> FastAPI microservice xử lý tìm kiếm, indexing và trích xuất tri thức cho Chatbot-UIT.
-> Kết hợp **Vector Search (Qdrant) + BM25 (OpenSearch) + Cross-Encoder Reranking** với hỗ trợ ngôn ngữ Tiếng Việt.
+> FastAPI microservice handling search, indexing, and knowledge extraction for Chatbot-Legal.
+> Combines **Vector Search (Qdrant) + BM25 (OpenSearch) + Cross-Encoder Reranking** with Vietnamese language support.
 
-| Thông tin | Giá trị |
-|-----------|--------|
+| Info | Value |
+|------|-------|
 | **Port** | `8000` |
 | **Framework** | FastAPI |
-| **Vector DB** | Qdrant (BAAI/bge-m3) |
+| **Vector DB** | Qdrant Cloud (BAAI/bge-m3) |
 | **Keyword Search** | OpenSearch (BM25) |
-| **Knowledge Graph** | Neo4j |
-| **Reranker** | ms-marco-MiniLM-L-6-v2 (cross-encoder) |
+| **Knowledge Graph** | Neo4j Aura |
+| **Reranker** | BAAI/bge-reranker-v2-m3 (cross-encoder) |
 
 ---
 
-## 📁 Cấu trúc thư mục
+## 📁 Directory Structure
 
 ```
 rag/
@@ -29,7 +29,7 @@ rag/
 │   │   │
 │   │   ├── retrieval/                       #   Advanced legal retrieval
 │   │   │   ├── unified_retriever.py         #     UnifiedRetriever (RRF fusion + rerank)
-│   │   │   ├── legal_query_parser.py        #     Parse Điều/Khoản/Điểm references
+│   │   │   ├── legal_query_parser.py        #     Parse article/clause/point references
 │   │   │   ├── metadata_filter_builder.py   #     Build Qdrant/OpenSearch metadata filters
 │   │   │   ├── neighbor_expander.py         #     Expand to neighboring chunks
 │   │   │   └── schemas.py                   #     Internal retrieval schemas
@@ -61,7 +61,7 @@ rag/
 │   │   ├── schemas.py                       #   IngestRequest, IngestResponse
 │   │   │
 │   │   ├── loaders/                         #   Document parsers
-│   │   │   └── llamaindex_legal_parser.py   #     LlamaParse + python-docx parser for PDF/DOCX
+│   │   │   └── llamaindex_legal_parser.py   #     LlamaParse + python-docx for PDF/DOCX
 │   │   │
 │   │   ├── indexing/                        #   Index builders
 │   │   │   ├── index_semantic_data.py       #     Index → Qdrant (vector)
@@ -122,22 +122,21 @@ rag/
 │       │   └── logging.py                   #     Logging configuration
 │       ├── container/
 │       │   ├── container.py                 #     DI container (singleton)
-│       │   └── ingest_factory.py            #     Factory cho ingestion components
+│       │   └── ingest_factory.py            #     Factory for ingestion components
 │       ├── schemas/                         #     Shared Pydantic schemas
 │       └── utils/                           #     Utility functions
 │
 ├── data/                                    # Document storage (uploads, exports)
 ├── start_server.py                          # Dev startup script
-├── Dockerfile                               # Not yet (use manual startup)
 ├── requirements.txt                         # Dependencies
 ├── pytest.ini                               # Test configuration
-├── .env.example                             # Template biến môi trường
+├── .env.example                             # Environment variable template
 └── .env.openrouter                          # OpenRouter-specific config
 ```
 
 ---
 
-## 🔀 Pipeline tìm kiếm (Hybrid Search)
+## 🔀 Search Pipeline (Hybrid Search)
 
 ```
 User query
@@ -145,7 +144,7 @@ User query
     ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 1: Query Parsing                                  │
-│  • Legal query parser (Điều 5, Khoản 2, Điểm a)        │
+│  • Legal query parser (Article 5, Clause 2, Point a)    │
 │  • Extract metadata filters (document, article, clause) │
 │  • Query rewriting (optional)                           │
 └──────────────────────────┬──────────────────────────────┘
@@ -169,14 +168,14 @@ User query
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 3: Cross-Encoder Reranking                        │
-│  • ms-marco-MiniLM-L-6-v2                               │
+│  • BAAI/bge-reranker-v2-m3                              │
 │  • Re-score (query, document) pairs                     │
 │  • Filter by threshold                                  │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 4: Neighbor Expansion (optional)                  │
-│  • Lấy thêm chunks liền kề để tăng context             │
+│  • Fetch adjacent chunks for richer context             │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
                    Ranked documents → Orchestrator
@@ -184,7 +183,7 @@ User query
 
 ---
 
-## 📥 Pipeline ingestion (Document → Index)
+## 📥 Ingestion Pipeline (Document → Index)
 
 ```
 DOCX/PDF file upload
@@ -193,7 +192,7 @@ DOCX/PDF file upload
 ┌─────────────────────────────────────────────────────────┐
 │  Step 1: Parse                                          │
 │  • llamaindex_legal_parser.py → structured hierarchy    │
-│  • Detect: Chương, Mục, Điều, Khoản, Điểm             │
+│  • Detect: Chapter, Section, Article, Clause, Point     │
 │  • Preserve metadata (article_number, clause, etc.)     │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
@@ -214,17 +213,17 @@ DOCX/PDF file upload
 
 ---
 
-## 🚀 Khởi chạy
+## 🚀 Getting Started
 
-### Yêu cầu
+### Prerequisites
 
 - Python 3.11+
 - Qdrant Cloud — vector database
 - OpenSearch (port 9200) — keyword search
-- Neo4j Cloud (Aura) — knowledge graph
+- Neo4j Aura — knowledge graph
 - Redis (port 6379, optional) — background job state
 
-### Cài đặt
+### Installation
 
 ```bash
 cd backend/rag
@@ -238,36 +237,36 @@ pip install -r requirements.txt
 
 # Config
 cp .env.example .env
-# → Sửa .env: điền connection strings cho Qdrant Cloud, OpenSearch, Neo4j Cloud
+# → Edit .env: add connection strings for Qdrant Cloud, OpenSearch, Neo4j Aura
 ```
 
-### Chạy infrastructure (Docker)
+### Running Infrastructure (Docker)
 
 ```bash
 cd infrastructure
 
-# Tất cả services
+# All services
 docker compose up -d
 
-# Hoặc từng service
+# Or individual services
 docker compose -f docker-compose.opensearch.yml up -d
-# Qdrant Cloud & Neo4j Cloud — không cần Docker, cấu hình qua .env
+# Qdrant Cloud & Neo4j Aura — no Docker needed, configure via .env
 ```
 
-### Chạy RAG Service
+### Running the RAG Service
 
 ```bash
 # Dev (hot-reload)
 python start_server.py
-# → mặc định: http://localhost:8000
+# → default: http://localhost:8000
 
-# Hoặc trực tiếp
+# Or directly
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Swagger Docs
 
-Khi service chạy → truy cập `http://localhost:8000/docs` (Swagger) hoặc `/redoc`.
+Once the service is running → visit `http://localhost:8000/docs` (Swagger) or `/redoc`.
 
 ---
 
@@ -275,91 +274,91 @@ Khi service chạy → truy cập `http://localhost:8000/docs` (Swagger) hoặc 
 
 ### Search
 
-| Method | Path | Mô tả |
-|--------|------|--------|
+| Method | Path | Description |
+|--------|------|-------------|
 | `POST` | `/v1/search` | Hybrid search (vector / bm25 / hybrid mode) |
-| `POST` | `/v1/retrieval/retrieve` | Legal retrieval với query parsing + metadata filter |
+| `POST` | `/v1/retrieval/retrieve` | Legal retrieval with query parsing + metadata filter |
 
 ### Ingestion
 
-| Method | Path | Mô tả |
-|--------|------|--------|
+| Method | Path | Description |
+|--------|------|-------------|
 | `POST` | `/v1/ingest/docx` | Upload & ingest DOCX document |
-| `GET` | `/v1/ingest/jobs/{job_id}` | Kiểm tra trạng thái ingestion job |
-| `POST` | `/v1/ingest/opensearch` | Ingest trực tiếp vào OpenSearch |
+| `GET` | `/v1/ingest/jobs/{job_id}` | Check ingestion job status |
+| `POST` | `/v1/ingest/opensearch` | Ingest directly into OpenSearch |
 
 ### Extraction
 
-| Method | Path | Mô tả |
-|--------|------|--------|
-| `POST` | `/v1/extraction/llamaindex` | Extract entities bằng LlamaIndex + LlamaParse |
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/extraction/llamaindex` | Extract entities using LlamaIndex + LlamaParse |
 
 ### Knowledge Graph
 
-| Method | Path | Mô tả |
-|--------|------|--------|
-| `GET` | `/v1/kg/stats` | Thống kê KG (nodes, relations, labels) |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/kg/stats` | KG statistics (nodes, relations, labels) |
 | `GET` | `/v1/kg/graph` | Visualize graph data |
-| `POST` | `/v1/kg/search` | Search entities / relations trong KG |
+| `POST` | `/v1/kg/search` | Search entities / relations in the KG |
 
 ### Embedding & Health
 
-| Method | Path | Mô tả |
-|--------|------|--------|
-| `POST` | `/v1/embedding/embed` | Generate embeddings cho text |
-| `GET` | `/v1/health` | Health check toàn bộ dependencies |
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/embedding/embed` | Generate embeddings for text |
+| `GET` | `/v1/health` | Health check for all dependencies |
 
-### Ví dụ request
+### Example Requests
 
 ```bash
 # Hybrid search
 curl -X POST http://localhost:8000/v1/search \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "Điều kiện đăng ký học phần",
+    "query": "Course registration conditions",
     "mode": "hybrid",
     "top_k": 5
   }'
 
-# Legal retrieval (có query parsing)
+# Legal retrieval (with query parsing)
 curl -X POST http://localhost:8000/v1/retrieval/retrieve \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "Theo Điều 5 Khoản 2 về quy chế đào tạo",
+    "query": "According to Article 5 Clause 2 of the training regulations",
     "top_k": 5,
     "rerank": true
   }'
 
 # Upload document
 curl -X POST http://localhost:8000/v1/ingest/docx \
-  -F "file=@Luật-24-2018-QH14.docx"
+  -F "file=@Legal-Document-24-2018.docx"
 ```
 
 ---
 
-## ⚙️ Biến môi trường chính
+## ⚙️ Key Environment Variables
 
-| Biến | Mô tả | Mặc định |
-|------|--------|----------|
+| Variable | Description | Default |
+|----------|-------------|---------|
 | **Qdrant** | | |
 | `QDRANT_URL` | Qdrant Cloud URL | Qdrant Cloud endpoint |
-| `QDRANT_COLLECTION_NAME` | Tên collection | `vietnamese_documents` |
+| `QDRANT_COLLECTION_NAME` | Collection name | `vietnamese_documents` |
 | **OpenSearch** | | |
 | `OPENSEARCH_URL` | OpenSearch URL | `https://localhost:9200` |
-| `OPENSEARCH_INDEX` | Tên index | `legal_documents` |
+| `OPENSEARCH_INDEX` | Index name | `legal_documents` |
 | `OPENSEARCH_USER` / `OPENSEARCH_PASSWORD` | Credentials | `admin` / `admin` |
 | **Neo4j** | | |
-| `NEO4J_URI` | Neo4j Cloud URI | Neo4j Aura endpoint |
+| `NEO4J_URI` | Neo4j Aura URI | Neo4j Aura endpoint |
 | `NEO4J_USERNAME` / `NEO4J_PASSWORD` | Credentials | Set in `.env` |
 | **Embedding** | | |
 | `EMBEDDING_MODEL` | Sentence-transformer model | `BAAI/bge-m3` |
 | `EMBEDDING_DEVICE` | Device (cpu/cuda) | `cpu` |
 | **Reranking** | | |
 | `RERANKER_MODEL` | Cross-encoder model | `BAAI/bge-reranker-v2-m3` |
-| `RERANKER_TOP_K` | Số documents sau rerank | `5` |
+| `RERANKER_TOP_K` | Number of documents after reranking | `5` |
 | **LLM** | | |
 | `OPENROUTER_API_KEY` | OpenRouter API key | — |
-| `OPENAI_API_KEY` | OpenAI API key (cho extraction) | — |
+| `OPENAI_API_KEY` | OpenAI API key (for extraction) | — |
 | `GEMINI_API_KEY` | Google Gemini API key | — |
 | **General** | | |
 | `LOG_LEVEL` | Logging level | `INFO` |
@@ -367,7 +366,7 @@ curl -X POST http://localhost:8000/v1/ingest/docx \
 
 ---
 
-## 🧩 Kiến trúc chi tiết
+## 🧩 Architecture Details
 
 ### Ports & Adapters
 
@@ -388,25 +387,25 @@ curl -X POST http://localhost:8000/v1/ingest/docx \
 
 ### Legal Query Parser
 
-Vietnamese legal document references được tự động parse:
+Vietnamese legal document references are automatically parsed:
 
 ```
-"Theo Điều 5 Khoản 2 Điểm a Luật 24/2018"
+"According to Article 5 Clause 2 Point a of Law 24/2018"
     → article_number: 5
     → clause_number: 2
     → point: "a"
-    → document_ref: "Luật 24/2018"
+    → document_ref: "Law 24/2018"
 ```
 
-Parser trích xuất metadata → filter trực tiếp trên Qdrant/OpenSearch → precision cao hơn.
+The parser extracts metadata → filters directly on Qdrant/OpenSearch → higher precision.
 
 ### Reciprocal Rank Fusion (RRF)
 
-Kết hợp kết quả từ Vector + BM25 bằng RRF scoring:
+Combines results from Vector + BM25 using RRF scoring:
 
 $$\text{RRF}(d) = \sum_{r \in R} \frac{1}{k + r(d)}$$
 
-Với $k = 60$, $r(d)$ là rank của document $d$ trong mỗi ranking list.
+Where $k = 60$ and $r(d)$ is the rank of document $d$ in each ranking list.
 
 ---
 
@@ -415,10 +414,10 @@ Với $k = 60$, $r(d)$ là rank của document $d$ trong mỗi ranking list.
 ```bash
 cd backend/rag
 
-# Chạy tất cả tests
+# Run all tests
 pytest
 
-# Chạy test cụ thể
+# Run specific tests
 pytest tests/ -k "test_search"
 
 # Coverage
@@ -432,12 +431,12 @@ LOG_LEVEL=DEBUG pytest -s
 
 ## 🐛 Troubleshooting
 
-| Lỗi | Nguyên nhân | Giải pháp |
-|------|-------------|-----------|
-| `Qdrant connection failed` | Qdrant Cloud không truy cập được | Kiểm tra `QDRANT_URL` và `QDRANT_API_KEY` trong .env |
-| `OpenSearch SSL error` | Certificate issue | Set `OPENSEARCH_VERIFY_CERTS=false` trong .env |
-| `Neo4j authentication failed` | Wrong credentials | Kiểm tra `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` trong .env |
-| `CUDA out of memory` | GPU hết RAM cho embedding | Set `EMBEDDING_DEVICE=cpu` |
-| `Import error: shared` | Chưa cài shared package | `pip install -e ../shared` |
-| Collection not found | Chưa tạo Qdrant collection | Chạy ingestion hoặc tạo collection thủ công |
-| Port 8000 already in use | Port bị chiếm | Kill process cũ hoặc đổi port trong `start_server.py` |
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `Qdrant connection failed` | Cannot reach Qdrant Cloud | Check `QDRANT_URL` and `QDRANT_API_KEY` in `.env` |
+| `OpenSearch SSL error` | Certificate issue | Set `OPENSEARCH_VERIFY_CERTS=false` in `.env` |
+| `Neo4j authentication failed` | Wrong credentials | Check `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` in `.env` |
+| `CUDA out of memory` | GPU out of RAM for embedding | Set `EMBEDDING_DEVICE=cpu` |
+| `Import error: shared` | Shared package not installed | Run `pip install -e ../shared` |
+| Collection not found | Qdrant collection not created | Run ingestion or create collection manually |
+| Port 8000 already in use | Port occupied | Kill the existing process or change port in `start_server.py` |
